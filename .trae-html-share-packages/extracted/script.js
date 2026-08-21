@@ -120,6 +120,7 @@
        ============================================================ */
     function init() {
         buildAvatarGrids();
+        buildEmojiGrid();
         bindAuth();
         bindNav();
         bindChat();
@@ -192,20 +193,15 @@
         });
     }
 
-    let emojiGridBuilt = false;
     function buildEmojiGrid() {
-        if (emojiGridBuilt) return;
         const grid = $('#emojiGrid');
-        const frag = document.createDocumentFragment();
         EMOJIS.forEach(e => {
             const b = document.createElement('button');
             b.type = 'button';
             b.textContent = e;
-            b.addEventListener('click', () => insertEmoji(e));
-            frag.appendChild(b);
+            b.onclick = () => insertEmoji(e);
+            grid.appendChild(b);
         });
-        grid.appendChild(frag);
-        emojiGridBuilt = true;
     }
 
     function insertEmoji(e) {
@@ -549,31 +545,26 @@
         });
         $('#sendBtn').onclick = sendText;
 
-        const imgBtn = $('#imgBtn');
-        imgBtn.addEventListener('click', () => $('#imgInput').click());
+        $('#imgBtn').onclick = () => $('#imgInput').click();
         $('#imgInput').onchange = (e) => {
             const file = e.target.files[0];
             if (file) sendImage(file);
             e.target.value = '';
         };
 
-        // 表情面板：缓存引用 + contains 校验，杜绝点击按钮自身时闪退
-        const emojiBtn = $('#emojiBtn');
-        const emojiPanel = $('#emojiPanel');
-        emojiBtn.addEventListener('click', (e) => {
+        $('#emojiBtn').onclick = (e) => {
             e.stopPropagation();
-            e.preventDefault();
-            if (emojiPanel.hidden) buildEmojiGrid();
-            emojiPanel.hidden = !emojiPanel.hidden;
-        });
+            $('#emojiPanel').hidden = !$('#emojiPanel').hidden;
+        };
         document.addEventListener('click', (e) => {
-            if (emojiPanel.hidden) return;
-            if (emojiPanel.contains(e.target) || emojiBtn.contains(e.target)) return;
-            emojiPanel.hidden = true;
+            const panel = $('#emojiPanel');
+            if (!panel.hidden && !panel.contains(e.target) && e.target !== $('#emojiBtn')) {
+                panel.hidden = true;
+            }
         });
 
-        $('#onlineToggle').addEventListener('click', () => $('#onlinePanel').classList.toggle('show'));
-        $('#lightbox').addEventListener('click', () => $('#lightbox').hidden = true);
+        $('#onlineToggle').onclick = () => $('#onlinePanel').classList.toggle('show');
+        $('#lightbox').onclick = () => $('#lightbox').hidden = true;
     }
 
     function setupOtp() {
@@ -930,6 +921,7 @@
             renderOnline();
             cleanupPresence();
         }, 2000);
+        window.addEventListener('beforeunload', onUnload);
     }
 
     function stopPresence() {
@@ -937,6 +929,7 @@
         clearInterval(presenceTimer);
         heartbeatTimer = null;
         presenceTimer = null;
+        window.removeEventListener('beforeunload', onUnload);
     }
 
     function onUnload() {
