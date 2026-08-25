@@ -1,0 +1,8 @@
+name = "stating"
+compatibility_date = "2026-01-01"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "stating_db"
+database_id = "79da801b-300f-4d9a-9497-e51290f48b5d"

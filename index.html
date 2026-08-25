@@ -3,8 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#EEF2F9">
     <title>Stating</title>
+    <!-- 关键资源预加载：首屏必须的 CSS/JS -->
+    <link rel="preload" href="style.css" as="style">
+    <link rel="preload" href="icons.js" as="script">
+    <link rel="preload" href="script.js" as="script">
+    <!-- DNS 预连接：第三方资源 -->
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="dns-prefetch" href="https://server.arcgisonline.com">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="stylesheet" href="style.css">
+    <!-- Leaflet 非首屏：改为懒加载（进入地图页前才注入） -->
 </head>
 <body>
 
@@ -13,13 +23,14 @@
     <span class="blob b1"></span>
     <span class="blob b2"></span>
     <span class="blob b3"></span>
+    <span class="blob b4"></span>
 </div>
 
 <!-- ============ 注册 / 登录 ============ -->
 <div id="authScreen" class="auth-screen">
     <div class="auth-card glass">
         <div class="auth-logo">
-            <div class="logo-badge">S</div>
+            <div class="logo-badge" data-icon="mail"></div>
             <h1>Stating</h1>
             <p>与世界，轻轻对话</p>
         </div>
@@ -32,32 +43,39 @@
         <!-- 登录 -->
         <form id="loginForm" class="auth-form active" autocomplete="off">
             <div class="field glass-field">
-                <span class="field-icon">📱</span>
+                <span class="field-icon" data-icon="phone"></span>
                 <input type="tel" id="loginPhone" placeholder="手机号" maxlength="11" inputmode="numeric">
             </div>
+            <div class="field glass-field">
+                <span class="field-icon" data-icon="lock"></span>
+                <input type="password" id="loginPassword" placeholder="密码" maxlength="32">
+            </div>
             <button type="submit" class="btn-primary">登 录</button>
-            <p class="auth-hint">未注册的手机号将自动创建账号</p>
         </form>
 
         <!-- 注册 -->
         <form id="registerForm" class="auth-form" autocomplete="off">
             <div class="field glass-field">
-                <span class="field-icon">📱</span>
+                <span class="field-icon" data-icon="phone"></span>
                 <input type="tel" id="regPhone" placeholder="手机号" maxlength="11" inputmode="numeric">
             </div>
             <div class="field glass-field">
-                <span class="field-icon">📧</span>
+                <span class="field-icon" data-icon="lock"></span>
+                <input type="password" id="regPassword" placeholder="设置密码（至少4位）" maxlength="32">
+            </div>
+            <div class="field glass-field">
+                <span class="field-icon" data-icon="mail"></span>
                 <input type="text" id="regEmail" placeholder="电子邮件（可填“无”）" maxlength="50">
             </div>
             <div class="field glass-field">
-                <span class="field-icon">✏️</span>
+                <span class="field-icon" data-icon="edit"></span>
                 <input type="text" id="regNickname" placeholder="昵称" maxlength="20">
             </div>
 
             <div class="avatar-section">
                 <div class="avatar-label">选择头像</div>
                 <div class="avatar-grid" id="avatarGrid"></div>
-                <button type="button" class="avatar-upload-btn" id="avatarUploadBtn">📷 上传本地照片</button>
+                <button type="button" class="avatar-upload-btn" id="avatarUploadBtn"><span data-icon="image"></span> 上传本地照片</button>
                 <input type="file" id="avatarUpload" accept="image/*" hidden>
             </div>
 
@@ -68,25 +86,25 @@
     </div>
 </div>
 
-<!-- ============ 管理员密钥验证 ============ -->
-<div id="adminScreen" class="auth-screen" hidden>
+<!-- 管理员密钥验证 -->
+<div id="adminKeyScreen" class="auth-screen" hidden>
     <div class="auth-card glass">
         <div class="auth-logo">
-            <div class="logo-badge admin-badge">🔑</div>
+            <div class="logo-badge">🔐</div>
             <h1>管理员验证</h1>
-            <p>请输入 6 位管理员密钥</p>
+            <p>请输入6位管理员密钥</p>
         </div>
-        <div class="otp-inputs" id="adminOtpInputs">
-            <input type="text" maxlength="1" class="otp-box admin-otp" inputmode="numeric" autocomplete="off">
-            <input type="text" maxlength="1" class="otp-box admin-otp" inputmode="numeric" autocomplete="off">
-            <input type="text" maxlength="1" class="otp-box admin-otp" inputmode="numeric" autocomplete="off">
-            <input type="text" maxlength="1" class="otp-box admin-otp" inputmode="numeric" autocomplete="off">
-            <input type="text" maxlength="1" class="otp-box admin-otp" inputmode="numeric" autocomplete="off">
-            <input type="text" maxlength="1" class="otp-box admin-otp" inputmode="numeric" autocomplete="off">
+        <div class="otp-inputs" id="adminKeyInputs">
+            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
         </div>
-        <div id="adminError" class="invite-error" hidden></div>
-        <button class="btn-primary" id="adminSubmit">验 证</button>
-        <button type="button" class="btn-text" id="adminBack">← 返回登录</button>
+        <div id="adminKeyError" class="auth-error"></div>
+        <button class="btn-primary" id="adminKeySubmit">验证并登录</button>
+        <button type="button" class="btn-text" id="adminKeyCancel">← 返回登录</button>
     </div>
 </div>
 
@@ -115,6 +133,10 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     <span>我的</span>
                 </button>
+                <button class="nav-item" data-view="feedback">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+                    <span>博采</span>
+                </button>
             </div>
         </nav>
     </div>
@@ -131,21 +153,21 @@
                 <button class="btn-ghost" data-goto="chat">开始聊天</button>
             </div>
             <div class="feature-cards">
-                <div class="feature-card glass">
-                    <div class="fc-icon">👨‍💻</div>
+                <button class="feature-card glass fc-btn" id="devTileBtn">
+                    <div class="fc-icon" data-icon="code"></div>
                     <h3>Developer</h3>
                     <p>wzy</p>
-                </div>
-                <div class="feature-card glass">
-                    <div class="fc-icon">💬</div>
+                </button>
+                <button class="feature-card glass fc-btn" id="imsgTileBtn">
+                    <div class="fc-icon" data-icon="brain"></div>
                     <h3>iMessage 信息</h3>
                     <p>一目了然</p>
-                </div>
-                <div class="feature-card glass">
-                    <div class="fc-icon">🍎</div>
+                </button>
+                <button class="feature-card glass fc-btn" id="iosTileBtn">
+                    <div class="fc-icon" data-icon="apple"></div>
                     <h3>iOS</h3>
                     <p>Liquid glass</p>
-                </div>
+                </button>
             </div>
         </section>
 
@@ -157,7 +179,7 @@
                 <div class="gate-wrap">
                     <!-- 输入邀请码 -->
                     <div class="invite-card glass" id="inviteCard">
-                        <div class="invite-icon">🔑</div>
+                        <div class="invite-icon" data-icon="key"></div>
                         <h2>输入邀请码</h2>
                         <p>请输入 6 位邀请码进入群聊</p>
                         <div class="otp-inputs" id="otpInputs">
@@ -179,11 +201,11 @@
                         <h2>创建群聊</h2>
                         <p>设置群聊名称、邀请码和头像</p>
                         <div class="field glass-field">
-                            <span class="field-icon">💬</span>
+                            <span class="field-icon" data-icon="chat"></span>
                             <input type="text" id="groupName" placeholder="群聊名称" maxlength="20">
                         </div>
                         <div class="field glass-field">
-                            <span class="field-icon">🔑</span>
+                            <span class="field-icon" data-icon="key"></span>
                             <input type="text" id="groupCode" placeholder="6 位邀请码（字母或数字）" maxlength="6">
                         </div>
                         <div class="avatar-section">
@@ -209,7 +231,7 @@
                     <div class="op-title">在线 <span class="op-count" id="onlineCount">1</span></div>
                     <div class="online-list" id="onlineList"></div>
                 </aside>
-                <button class="online-toggle" id="onlineToggle" title="在线列表">👥</button>
+                <button class="online-toggle" id="onlineToggle" title="在线列表"><span data-icon="users"></span></button>
 
                 <div class="chat-main">
                     <!-- 聊天头部 -->
@@ -221,7 +243,59 @@
                             <div class="ch-status" id="chatStatus">1 人在线</div>
                         </div>
                         <div class="ch-avatars" id="headerAvatars"></div>
+                        <button class="group-menu-btn" id="groupMenuBtn" title="群设置">⋯</button>
                     </header>
+
+                    <!-- 群设置菜单 -->
+                    <div class="group-menu glass" id="groupMenu" hidden>
+                        <button class="gm-item" id="gmMembers"><span class="gm-icon" data-icon="members"></span> 群成员</button>
+                        <button class="gm-item gm-owner" id="gmEditGroup" hidden><span class="gm-icon" data-icon="edit"></span> 编辑群信息</button>
+                        <button class="gm-item" id="gmPinned"><span class="gm-icon" data-icon="pin"></span> 置顶消息</button>
+                        <button class="gm-item" id="gmSearch"><span class="gm-icon" data-icon="search"></span> 搜索消息</button>
+                        <button class="gm-item" id="gmAnnouncement"><span class="gm-icon" data-icon="announcement"></span> 群公告</button>
+                        <button class="gm-item" id="gmQR"><span class="gm-icon" data-icon="qr"></span> 群二维码</button>
+                        <button class="gm-item" id="gmExport"><span class="gm-icon" data-icon="download"></span> 导出聊天</button>
+                        <button class="gm-item" id="gmPin"><span class="gm-icon" data-icon="pin"></span> 置顶群聊</button>
+                        <button class="gm-item" id="gmMute"><span class="gm-icon" data-icon="bellOff"></span> 消息免打扰</button>
+                        <button class="gm-item" id="gmCopyCode"><span class="gm-icon" data-icon="copy"></span> 复制邀请码</button>
+                        <button class="gm-item gm-leave" id="gmLeaveGroup"><span class="gm-icon" data-icon="leave"></span> 退出群聊</button>
+                        <button class="gm-item gm-dismiss" id="gmDismissGroup" hidden><span class="gm-icon" data-icon="dismiss"></span> 注销群聊</button>
+                    </div>
+
+                    <!-- 置顶消息横幅 -->
+                    <div id="pinnedBanner" class="pinned-banner glass" hidden>
+                        <span class="pb-icon" data-icon="pin"></span>
+                        <span class="pb-text" id="pinnedText"></span>
+                        <button class="pb-close" id="pinnedClose">✕</button>
+                    </div>
+
+                    <!-- 群公告横幅 -->
+                    <div id="announcementBanner" class="announcement-banner glass" hidden>
+                        <span class="ann-icon" data-icon="announcement"></span>
+                        <span class="ann-text" id="annText"></span>
+                        <button class="ann-close" id="annClose">✕</button>
+                    </div>
+
+                    <!-- 通话横幅 -->
+                    <div id="callBanner" class="call-banner" hidden>
+                        <div class="call-banner-avatar" id="callBannerAvatar" data-icon="phone"></div>
+                        <div class="call-banner-info">
+                            <div class="call-banner-title" id="callBannerTitle">语音通话中</div>
+                            <div class="call-banner-sub" id="callBannerSub">点击加入</div>
+                        </div>
+                        <div class="call-banner-timer" id="callBannerTimer">00:00</div>
+                        <button class="call-banner-join" id="callBannerJoin">加入</button>
+                    </div>
+                    <!-- 实时位置共享横幅 -->
+                    <div class="loc-share-banner glass" id="locShareBanner" hidden>
+                        <div class="lsb-avatars" id="lsbAvatars"></div>
+                        <button class="lsb-join-btn" id="lsbJoinBtn">正在共享实时位置，点击加入</button>
+                        <button class="lsb-close-btn" id="lsbCloseBtn" title="停止共享">✕</button>
+                    </div>
+                    <!-- 实时地图 -->
+                    <div class="loc-map-wrap" id="locMapWrap" hidden>
+                        <div id="locMap" class="loc-map"></div>
+                    </div>
 
                     <!-- 消息区 -->
                     <div class="messages" id="messages"></div>
@@ -239,14 +313,41 @@
                         <div class="emoji-panel glass" id="emojiPanel" hidden>
                             <div class="emoji-grid" id="emojiGrid"></div>
                         </div>
+                        <!-- 录音中状态条 -->
+                        <div class="recording-bar glass" id="recordingBar" hidden>
+                            <span class="rec-dot"></span>
+                            <span class="rec-text">正在录音 <span id="recTime">0"</span></span>
+                            <button class="rec-stop-btn" id="recStopBtn">停止发送</button>
+                            <button class="rec-cancel-btn" id="recCancelBtn">取消</button>
+                        </div>
                         <div class="composer glass-pill">
-                            <button class="composer-btn" id="emojiBtn" title="表情">😊</button>
-                            <button class="composer-btn" id="imgBtn" title="图片">🖼️</button>
+                            <button class="composer-btn" id="emojiBtn" title="表情"><span data-icon="smile"></span></button>
+                            <!-- 多功能+键 -->
+                            <div class="multi-btn-wrap">
+                                <button class="composer-btn multi-plus-btn" id="multiPlusBtn" title="更多">+</button>
+                            </div>
                             <input type="file" id="imgInput" accept="image/*" hidden>
+                            <input type="file" id="fileInput" hidden>
                             <div class="composer-input" id="composerInput" contenteditable="true" data-placeholder="iMessage" spellcheck="false"></div>
-                            <button class="send-btn" id="sendBtn" disabled>
+                            <button class="send-btn" id="sendBtn" disabled title="长按发送位置">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                             </button>
+                        </div>
+                        <!-- 多功能菜单（放在composer外避免overflow:hidden裁切） -->
+                        <div class="multi-menu glass" id="multiMenu" hidden>
+                            <button class="multi-menu-item" id="mmImage" title="图片"><span class="mm-icon" data-icon="image"></span><span class="mm-label">图片</span></button>
+                            <button class="multi-menu-item" id="mmFile" title="文件"><span class="mm-icon" data-icon="file"></span><span class="mm-label">文件</span></button>
+                            <button class="multi-menu-item" id="mmVoice" title="语音信箱"><span class="mm-icon" data-icon="mic"></span><span class="mm-label">语音信箱</span></button>
+                            <button class="multi-menu-item" id="mmVoiceCall" title="语音通话"><span class="mm-icon" data-icon="phone"></span><span class="mm-label">语音通话</span></button>
+                        </div>
+                        <!-- 长按位置菜单 -->
+                        <div class="loc-menu glass" id="locMenu" hidden>
+                            <button class="loc-menu-item" id="locSendOnce"><span data-icon="location"></span>发送当前位置</button>
+                        </div>
+                        <!-- 手机端在线成员栏 -->
+                        <div class="mobile-online-bar" id="mobileOnlineBar" hidden>
+                            <span class="mob-online-label">在线</span>
+                            <div class="mob-online-list" id="mobileOnlineList"></div>
                         </div>
                     </div>
                 </div>
@@ -268,33 +369,147 @@
                 <div class="profile-avatar" id="profileAvatar">😀</div>
                 <h2 id="profileNickname">昵称</h2>
                 <p id="profileId">ID: </p>
-                <div id="adminBadge" class="admin-tag" hidden>👑 管理员</div>
+                <div id="adminBadge" class="admin-tag" hidden><span data-icon="crown"></span> 管理员</div>
                 <div class="profile-list">
                     <div class="profile-row">
-                        <span class="pr-label">📱 电话</span>
+                        <span class="pr-label"><span data-icon="phone"></span> 电话</span>
                         <span class="pr-value" id="profilePhone"></span>
                     </div>
                     <div class="profile-row">
-                        <span class="pr-label">📧 邮箱</span>
+                        <span class="pr-label"><span data-icon="mail"></span> 邮箱</span>
                         <span class="pr-value" id="profileEmail"></span>
+                        <button class="pr-edit-btn" id="editEmailBtn" title="修改邮箱"><span data-icon="edit"></span></button>
                     </div>
                     <div class="profile-row">
-                        <span class="pr-label">✏️ 昵称</span>
+                        <span class="pr-label"><span data-icon="edit"></span> 昵称</span>
                         <span class="pr-value" id="profileNickRow"></span>
+                        <button class="pr-edit-btn" id="editNickBtn" title="修改昵称"><span data-icon="edit"></span></button>
                     </div>
                     <div class="profile-row">
-                        <span class="pr-label">🎨 头像</span>
+                        <span class="pr-label"><span data-icon="profile"></span> 头像</span>
                         <span class="pr-value" id="profileAvatarRow"></span>
+                        <button class="pr-edit-btn" id="editAvatarBtn" title="修改头像"><span data-icon="edit"></span></button>
                     </div>
                 </div>
-                <button class="btn-logout" id="logoutBtn">退出登录</button>
-                <button class="btn-delete-account" id="deleteAccountBtn">注销账号</button>
+                <button class="btn-logout" id="logoutBtn"><span data-icon="logout"></span> 退出登录</button>
+                <button class="btn-delete-account" id="deleteAccountBtn"><span data-icon="trash"></span> 注销账号</button>
+                <div class="dark-mode-row glass-pill">
+                    <span class="dm-label"><span data-icon="moon"></span> 深色模式</span>
+                    <label class="dm-switch">
+                        <input type="checkbox" id="darkModeToggle">
+                        <span class="dm-slider"></span>
+                    </label>
+                </div>
+                <div class="dark-mode-row glass-pill">
+                    <span class="dm-label"><span data-icon="bell"></span> 消息通知</span>
+                    <label class="dm-switch">
+                        <input type="checkbox" id="notifyToggle">
+                        <span class="dm-slider"></span>
+                    </label>
+                </div>
+                <button class="btn-sessions" id="sessionsBtn"><span data-icon="monitor"></span> 登录设备管理</button>
+                <button class="btn-sessions" id="savedBtn"><span data-icon="star"></span> 我的收藏</button>
+                <!-- 会话列表弹窗 -->
+                <div id="sessionsDialog" class="confirm-overlay" hidden>
+                    <div class="confirm-card glass">
+                        <h3>登录设备</h3>
+                        <div class="sessions-list" id="sessionsList"></div>
+                        <div class="confirm-btns">
+                            <button class="btn-primary" id="sessionsClose">关闭</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- 收藏列表弹窗 -->
+                <div id="savedDialog" class="confirm-overlay" hidden>
+                    <div class="confirm-card glass" style="max-width:400px;">
+                        <h3>我的收藏</h3>
+                        <div class="saved-list" id="savedList"></div>
+                        <div class="confirm-btns">
+                            <button class="btn-primary" id="savedClose">关闭</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- 我的群聊 -->
             <div class="my-groups glass" id="myGroupsCard">
                 <h3>我的群聊</h3>
                 <div class="my-groups-list" id="myGroupsList"></div>
+            </div>
+        </section>
+
+        <!-- 博采 -->
+        <section id="feedbackView" class="view">
+            <div class="fb-header glass">
+                <h2>博采众长</h2>
+                <p>你的每一条建议都在塑造 Stating 的未来</p>
+            </div>
+            <div class="fb-content">
+                <!-- 功能说明磁贴 -->
+                <div class="fb-tiles">
+                    <div class="fb-tile glass">
+                        <div class="fb-tile-icon" data-icon="lightbulb"></div>
+                        <div class="fb-tile-text">
+                            <h4>征集新功能</h4>
+                            <p>告诉我们你想要什么功能，越具体越好</p>
+                        </div>
+                    </div>
+                    <div class="fb-tile glass">
+                        <div class="fb-tile-icon" data-icon="starFill"></div>
+                        <div class="fb-tile-text">
+                            <h4>评分反馈</h4>
+                            <p>为当前体验打分，满分5星，匿名提交</p>
+                        </div>
+                    </div>
+                    <div class="fb-tile glass">
+                        <div class="fb-tile-icon" data-icon="info"></div>
+                        <div class="fb-tile-text">
+                            <h4>透明公开</h4>
+                            <p>所有建议公开可见，管理员定期回复</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 提交区 -->
+                <div class="fb-submit glass">
+                    <h3>提交你的建议</h3>
+                    <textarea class="fb-input" id="fbInput" placeholder="描述你想要的功能或改进建议..." rows="3"></textarea>
+                    <div class="fb-submit-row">
+                        <div class="fb-stars" id="fbStars">
+                            <span class="fb-star" data-v="1">☆</span>
+                            <span class="fb-star" data-v="2">☆</span>
+                            <span class="fb-star" data-v="3">☆</span>
+                            <span class="fb-star" data-v="4">☆</span>
+                            <span class="fb-star" data-v="5">☆</span>
+                        </div>
+                        <button class="fb-submit-btn" id="fbSubmitBtn">提交</button>
+                    </div>
+                </div>
+
+                <!-- 建议列表 -->
+                <div class="fb-list-wrap glass">
+                    <div class="fb-list-header">
+                        <h3>大家的建议</h3>
+                        <span class="fb-count" id="fbCount">0 条</span>
+                    </div>
+                    <div class="fb-list" id="fbList"></div>
+                </div>
+
+                <!-- 管理员统计（仅管理员可见） -->
+                <div class="fb-admin glass" id="fbAdminPanel" hidden>
+                    <h3>管理员面板</h3>
+                    <div class="fb-admin-stats">
+                        <div class="fb-stat">
+                            <div class="fb-stat-num" id="fbAvgRating">0.0</div>
+                            <div class="fb-stat-label">平均评分</div>
+                        </div>
+                        <div class="fb-stat">
+                            <div class="fb-stat-num" id="fbTotalCount">0</div>
+                            <div class="fb-stat-label">总建议数</div>
+                        </div>
+                    </div>
+                    <div class="fb-admin-list" id="fbAdminList"></div>
+                </div>
             </div>
         </section>
     </main>
@@ -346,10 +561,34 @@
     </div>
 </div>
 
+<!-- 通话弹窗 -->
+<div id="callModal" class="call-overlay" hidden>
+    <div class="call-panel" id="callPanel">
+        <button class="call-pip-btn" id="callPipBtn" title="小窗">⤢</button>
+        <div class="call-bg-gradient"></div>
+        <div class="call-group-tag">
+            <span class="call-group-avatar" id="callGroupAvatar">💬</span>
+            <span class="call-group-name" id="callGroupName">群聊</span>
+        </div>
+        <div class="call-avatar-ring">
+            <div class="call-avatar" id="callAvatar">👥</div>
+        </div>
+        <div class="call-name" id="callName">通话中</div>
+        <div class="call-status" id="callStatus">正在呼叫...</div>
+        <div class="call-members" id="callMembers"></div>
+        <video id="callVideo" autoplay playsinline hidden></video>
+        <div class="call-controls">
+            <button class="call-btn call-mute" id="callMuteBtn" title="麦克风"><span data-icon="mic"></span></button>
+            <button class="call-btn call-speaker" id="callSpeakerBtn" title="免提"><span data-icon="speaker"></span></button>
+            <button class="call-btn call-camera" id="callCameraBtn" title="摄像头"><span data-icon="video"></span></button>
+            <button class="call-btn call-hangup" id="callHangupBtn" title="挂断"><span data-icon="phone"></span></button>
+        </div>
+    </div>
+</div>
 <!-- 确认对话框 -->
 <div id="confirmDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass">
-        <div class="confirm-icon" id="confirmIcon">⚠️</div>
+        <div class="confirm-icon" id="confirmIcon" data-icon="info"></div>
         <h3 id="confirmTitle">确认操作</h3>
         <p id="confirmMsg"></p>
         <div class="confirm-btns">
@@ -359,11 +598,217 @@
     </div>
 </div>
 
+<!-- 博采回复对话框 -->
+<div id="fbReplyModal" class="confirm-overlay" hidden>
+    <div class="confirm-card glass">
+        <div class="confirm-icon" data-icon="chat"></div>
+        <h3>管理员回复</h3>
+        <textarea id="fbReplyInput" class="fb-reply-input" placeholder="输入回复内容..." rows="3"></textarea>
+        <div class="confirm-btns">
+            <button class="btn-ghost" id="fbReplyCancel">取消</button>
+            <button class="btn-primary" id="fbReplySubmit">发送回复</button>
+        </div>
+    </div>
+</div>
+
 <!-- 图片查看器 -->
 <div class="lightbox" id="lightbox" hidden>
     <img id="lightboxImg" src="" alt="图片">
+    <button class="lightbox-save-btn" id="lightboxSaveBtn" hidden><span data-icon="download"></span> 保存图片</button>
 </div>
 
-<script src="script.js"></script>
+<!-- 头像上传 -->
+<input type="file" id="avatarUploadInput" accept="image/*" hidden>
+
+<!-- 二维码结果弹窗 -->
+<div id="qrResultDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass">
+        <div class="confirm-icon" data-icon="qr"></div>
+        <h3>二维码识别结果</h3>
+        <p id="qrResultText" class="qr-result-text"></p>
+        <div class="confirm-btns">
+            <button class="btn-ghost" id="qrResultClose">关闭</button>
+            <button class="btn-primary" id="qrResultAction" hidden>打开链接</button>
+        </div>
+    </div>
+</div>
+
+<!-- iMessage 信息说明弹窗 -->
+<div id="imsgInfoDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass imsg-info-card">
+        <div class="confirm-icon" data-icon="brain"></div>
+        <h3>iMessage 信息</h3>
+        <div class="imsg-info-content">
+            <div class="imsg-info-row">
+                <span class="imsg-label">运行时长</span>
+                <span class="imsg-value" id="imsgUptime">计算中...</span>
+            </div>
+            <div class="imsg-thanks">
+                <p>🙏 感谢 <strong>Cloudflare</strong> 提供网站域名与托管支持</p>
+                <p>🙏 感谢 <strong>GitHub</strong> 提供云端数据库支持</p>
+            </div>
+        </div>
+        <div class="confirm-btns">
+            <button class="btn-primary" id="imsgInfoClose">知道了</button>
+        </div>
+    </div>
+</div>
+
+<!-- 消息右键/长按菜单 -->
+<div id="msgContextMenu" class="msg-ctx-menu glass" hidden>
+    <button class="ctx-item" data-action="reply"><span data-icon="reply"></span>回复</button>
+    <button class="ctx-item" data-action="react"><span data-icon="smile"></span>表情</button>
+    <button class="ctx-item" data-action="forward"><span data-icon="forward"></span>转发</button>
+    <button class="ctx-item" data-action="save"><span data-icon="star"></span>收藏</button>
+    <button class="ctx-item ctx-owner" data-action="pin"><span data-icon="pin"></span>置顶</button>
+    <button class="ctx-item ctx-own" data-action="edit"><span data-icon="edit"></span>编辑</button>
+    <button class="ctx-item ctx-own" data-action="recall"><span data-icon="recall"></span>撤回</button>
+</div>
+
+<!-- 表情选择器 -->
+<div id="reactionPicker" class="reaction-picker glass" hidden>
+    <button class="rp-emoji" data-emoji="👍">👍</button>
+    <button class="rp-emoji" data-emoji="❤️">❤️</button>
+    <button class="rp-emoji" data-emoji="😂">😂</button>
+    <button class="rp-emoji" data-emoji="😮">😮</button>
+    <button class="rp-emoji" data-emoji="😢">😢</button>
+    <button class="rp-emoji" data-emoji="🙏">🙏</button>
+    <button class="rp-emoji" data-emoji="🔥">🔥</button>
+    <button class="rp-emoji" data-emoji="🎉">🎉</button>
+</div>
+
+<!-- 回复预览条 -->
+<div id="replyBar" class="reply-bar glass" hidden>
+    <div class="reply-info">
+        <span class="reply-label">回复</span>
+        <span class="reply-target" id="replyTargetName"></span>
+        <span class="reply-preview" id="replyPreview"></span>
+    </div>
+    <button class="reply-cancel" id="replyCancel">✕</button>
+</div>
+
+<!-- 输入中提示 -->
+<div id="typingIndicator" class="typing-indicator" hidden>
+    <span class="typing-dots"><span></span><span></span><span></span></span>
+    <span id="typingText">有人正在输入...</span>
+</div>
+
+<!-- 用户资料卡 -->
+<div id="profileCard" class="confirm-overlay" hidden>
+    <div class="confirm-card glass profile-card-modal">
+        <div class="pc-avatar" id="pcAvatar">😀</div>
+        <h3 id="pcNickname">用户</h3>
+        <div class="pc-info">
+            <div class="pc-row"><span>手机号</span><span id="pcPhone"></span></div>
+            <div class="pc-row"><span>邮箱</span><span id="pcEmail">未设置</span></div>
+            <div class="pc-row"><span>加入群聊</span><span id="pcGroupCount">0</span></div>
+            <div class="pc-row"><span>注册时间</span><span id="pcCreatedAt"></span></div>
+        </div>
+        <div class="pc-groups" id="pcGroups"></div>
+        <div class="confirm-btns">
+            <button class="btn-primary" id="pcClose">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- 搜索面板 -->
+<div id="searchPanel" class="search-panel glass" hidden>
+    <div class="sp-header">
+        <input type="text" id="searchInput" placeholder="搜索消息..." class="sp-input">
+        <button class="sp-close" id="searchClose">✕</button>
+    </div>
+    <div class="sp-results" id="searchResults"></div>
+</div>
+
+<!-- 转发对话框 -->
+<div id="forwardDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass">
+        <h3>转发到</h3>
+        <div class="forward-list" id="forwardList"></div>
+        <div class="confirm-btns">
+            <button class="btn-ghost" id="forwardCancel">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 群二维码弹窗 -->
+<div id="qrDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass">
+        <h3 id="qrGroupName">群聊邀请</h3>
+        <div class="qr-display" id="qrDisplay"></div>
+        <p class="qr-code-text">邀请码：<strong id="qrCodeText"></strong></p>
+        <div class="confirm-btns">
+            <button class="btn-primary" id="qrClose">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- 群公告编辑 -->
+<div id="announcementDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass">
+        <h3>群公告</h3>
+        <textarea id="announcementInput" class="ann-input" placeholder="输入群公告内容..." rows="4"></textarea>
+        <div class="confirm-btns">
+            <button class="btn-ghost" id="annClear">清除公告</button>
+            <button class="btn-ghost" id="annCancel">取消</button>
+            <button class="btn-primary" id="annSave">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- 群成员弹窗 -->
+<div id="membersDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass" style="max-width:380px;">
+        <h3>群成员 <span id="membersCount" style="font-size:14px;color:var(--ink-3);"></span></h3>
+        <div class="members-list" id="membersList"></div>
+        <div class="confirm-btns">
+            <button class="btn-primary" id="membersClose">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑群信息弹窗 -->
+<div id="editGroupDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass">
+        <h3>编辑群信息</h3>
+        <div style="margin:12px 0;">
+            <label style="font-size:13px;color:var(--ink-2);">群名称</label>
+            <input type="text" id="editGroupName" class="sp-input" style="width:100%;margin-top:6px;">
+        </div>
+        <div style="margin:12px 0;">
+            <label style="font-size:13px;color:var(--ink-2);">群头像 (emoji)</label>
+            <input type="text" id="editGroupAvatar" class="sp-input" style="width:100%;margin-top:6px;" maxlength="4">
+        </div>
+        <div class="confirm-btns">
+            <button class="btn-ghost" id="editGroupCancel">取消</button>
+            <button class="btn-primary" id="editGroupSave">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- 置顶消息弹窗 -->
+<div id="pinnedDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass" style="max-width:400px;">
+        <h3>置顶消息</h3>
+        <div class="pinned-list" id="pinnedList"></div>
+        <div class="confirm-btns">
+            <button class="btn-primary" id="pinnedClose">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- @提及选择器 -->
+<div id="mentionPicker" class="mention-picker glass" hidden>
+    <div class="mp-list" id="mentionList"></div>
+</div>
+
+<!--
+  非首屏 JS：
+  - script.js 放 body 末尾，保证 DOM 就绪，避免解析阻塞
+  - Leaflet 地图库 / jsQR 二维码库：改为按需懒加载（首次进入位置共享/扫描图片时才注入），
+    显著减少首屏 JS 体积与 TTI
+-->
+<script src="icons.js" defer></script>
+<script src="script.js" defer></script>
 </body>
 </html>
