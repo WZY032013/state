@@ -221,6 +221,8 @@
 
             <!-- 聊天室 -->
             <div id="chatRoom" class="chat-room" hidden>
+                <!-- 弹幕遮罩层 -->
+                <div class="danmaku-layer" id="danmakuLayer" hidden></div>
                 <!-- 在线面板 -->
                 <aside class="online-panel glass" id="onlinePanel">
                     <div class="op-header">
@@ -258,6 +260,8 @@
                         <button class="gm-item" id="gmPin"><span class="gm-icon" data-icon="pin"></span> 置顶群聊</button>
                         <button class="gm-item" id="gmMute"><span class="gm-icon" data-icon="bellOff"></span> 消息免打扰</button>
                         <button class="gm-item" id="gmCopyCode"><span class="gm-icon" data-icon="copy"></span> 复制邀请码</button>
+                        <button class="gm-item" id="gmDanmaku"><span class="gm-icon" data-icon="chat"></span> 弹幕模式</button>
+                        <button class="gm-item" id="gmMemories"><span class="gm-icon" data-icon="clock"></span> 去年今日</button>
                         <button class="gm-item gm-leave" id="gmLeaveGroup"><span class="gm-icon" data-icon="leave"></span> 退出群聊</button>
                         <button class="gm-item gm-dismiss" id="gmDismissGroup" hidden><span class="gm-icon" data-icon="dismiss"></span> 注销群聊</button>
                     </div>
@@ -339,6 +343,8 @@
                             <button class="multi-menu-item" id="mmFile" title="文件"><span class="mm-icon" data-icon="file"></span><span class="mm-label">文件</span></button>
                             <button class="multi-menu-item" id="mmVoice" title="语音信箱"><span class="mm-icon" data-icon="mic"></span><span class="mm-label">语音信箱</span></button>
                             <button class="multi-menu-item" id="mmVoiceCall" title="语音通话"><span class="mm-icon" data-icon="phone"></span><span class="mm-label">语音通话</span></button>
+                            <button class="multi-menu-item" id="mmCheckin" title="位置打卡"><span class="mm-icon" data-icon="location"></span><span class="mm-label">打卡</span></button>
+                            <button class="multi-menu-item" id="mmBluetooth" title="蓝牙近场"><span class="mm-icon" data-icon="bluetooth"></span><span class="mm-label">蓝牙</span></button>
                         </div>
                         <!-- 长按位置菜单 -->
                         <div class="loc-menu glass" id="locMenu" hidden>
@@ -393,6 +399,7 @@
                 </div>
                 <button class="btn-logout" id="logoutBtn"><span data-icon="logout"></span> 退出登录</button>
                 <button class="btn-delete-account" id="deleteAccountBtn"><span data-icon="trash"></span> 注销账号</button>
+                <button class="btn-wipe" id="wipeBtn"><span data-icon="dismiss"></span> 紧急擦除</button>
                 <div class="dark-mode-row glass-pill">
                     <span class="dm-label"><span data-icon="moon"></span> 深色模式</span>
                     <label class="dm-switch">
@@ -409,6 +416,15 @@
                 </div>
                 <button class="btn-sessions" id="sessionsBtn"><span data-icon="monitor"></span> 登录设备管理</button>
                 <button class="btn-sessions" id="savedBtn"><span data-icon="star"></span> 我的收藏</button>
+                <button class="btn-sessions" id="bubbleBtn"><span data-icon="chat"></span> 气泡皮肤</button>
+                <div class="focus-mode-row glass-pill">
+                    <span class="dm-label"><span data-icon="moon"></span> 专注模式</span>
+                    <div class="focus-time-inputs">
+                        <input type="time" id="focusStart" class="focus-time" value="">
+                        <span style="color:var(--ink-3);">至</span>
+                        <input type="time" id="focusEnd" class="focus-time" value="">
+                    </div>
+                </div>
                 <!-- 会话列表弹窗 -->
                 <div id="sessionsDialog" class="confirm-overlay" hidden>
                     <div class="confirm-card glass">
@@ -629,6 +645,79 @@
         <div class="confirm-btns">
             <button class="btn-ghost" id="qrResultClose">关闭</button>
             <button class="btn-primary" id="qrResultAction" hidden>打开链接</button>
+        </div>
+    </div>
+</div>
+
+<!-- 打卡对话框 -->
+<div id="checkinDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass" style="max-width:420px;">
+        <h3>位置打卡</h3>
+        <div id="checkinMap" style="width:100%;height:200px;border-radius:12px;background:#e8eef5;margin:12px 0;display:flex;align-items:center;justify-content:center;color:#999;">获取位置中...</div>
+        <div class="field glass-field" style="margin-bottom:12px;">
+            <input type="text" id="checkinAddress" placeholder="地点名称（可选）" maxlength="50">
+        </div>
+        <div class="confirm-btns">
+            <button class="btn-ghost" id="checkinCancel">取消</button>
+            <button class="btn-primary" id="checkinSubmit">打卡</button>
+        </div>
+    </div>
+</div>
+
+<!-- 蓝牙近场通信对话框 -->
+<div id="bluetoothDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass bluetooth-card" style="max-width:440px;">
+        <h3><span class="bt-title-icon">🛜</span> 蓝牙近场</h3>
+        <p class="bt-desc">基于 Web Bluetooth 与附近 BLE 设备互发消息/名片，灵感来自 BitChat 蓝牙网状网络</p>
+        <div id="btSupportNote" class="bt-note">检测浏览器蓝牙支持…</div>
+        <div id="btStatus" class="bt-status"></div>
+        <button class="btn-primary bt-scan-btn" id="btScanBtn" style="width:100%;margin:8px 0;">
+            <span id="btScanLabel">📡 扫描附近设备</span>
+        </button>
+        <div id="btDeviceList" class="bt-device-list"></div>
+        <div id="btConnected" class="bt-connected" hidden>
+            <div class="bt-device-info" id="btDeviceInfo"></div>
+            <div class="field glass-field bt-send-row">
+                <input type="text" id="btSendInput" placeholder="通过蓝牙发送文本…" maxlength="120">
+            </div>
+            <div class="bt-btn-row">
+                <button class="btn-primary" id="btSendTextBtn" style="flex:1;">发送文本</button>
+                <button class="btn-ghost" id="btSendCardBtn" style="flex:1;">📇 发送我的名片</button>
+            </div>
+            <div class="bt-rx-log" id="btRxLog"><div class="bt-rx-title">接收数据</div></div>
+            <button class="btn-text bt-disconnect" id="btDisconnectBtn" style="margin-top:6px;">断开连接</button>
+        </div>
+        <div class="confirm-btns">
+            <button class="btn-ghost" id="btCloseBtn">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- 气泡皮肤选择对话框 -->
+<div id="bubbleDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass" style="max-width:420px;">
+        <h3>选择气泡皮肤</h3>
+        <div class="bubble-grid" id="bubbleGrid">
+            <div class="bubble-option" data-style="default"><div class="bubble-preview bubble-default">默认</div></div>
+            <div class="bubble-option" data-style="gradient"><div class="bubble-preview bubble-gradient">渐变</div></div>
+            <div class="bubble-option" data-style="neon"><div class="bubble-preview bubble-neon">霓虹</div></div>
+            <div class="bubble-option" data-style="paper"><div class="bubble-preview bubble-paper">纸质</div></div>
+            <div class="bubble-option" data-style="glass"><div class="bubble-preview bubble-glass">玻璃</div></div>
+            <div class="bubble-option" data-style="rainbow"><div class="bubble-preview bubble-rainbow">彩虹</div></div>
+        </div>
+        <div class="confirm-btns">
+            <button class="btn-ghost" id="bubbleCancel">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- 群相册回忆 -->
+<div id="memoriesDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass" style="max-width:480px;">
+        <h3>去年今日 <span id="memoriesDate" style="font-size:14px;color:var(--ink-3);"></span></h3>
+        <div class="memories-grid" id="memoriesGrid"></div>
+        <div class="confirm-btns">
+            <button class="btn-ghost" id="memoriesClose">关闭</button>
         </div>
     </div>
 </div>

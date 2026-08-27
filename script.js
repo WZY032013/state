@@ -1205,6 +1205,26 @@ function logout() {
     showAuth();
 }
 
+// 紧急擦除：清除本机所有 Stating 数据（借鉴 BitChat 的三连击擦除）
+function performEmergencyWipe() {
+    try { localStorage.clear(); } catch (e) {}
+    try { sessionStorage.clear(); } catch (e) {}
+    try {
+        if (window.caches && caches.keys) {
+            caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
+        }
+    } catch (e) {}
+    token = '';
+    me = null;
+    msgCache = [];
+    lastMsgCache = {};
+    group = null;
+    try { stopBgPoll(); } catch (e) {}
+    try { if (locWatchId) navigator.geolocation.clearWatch(locWatchId); } catch (e) {}
+    showAuth();
+    showToast('已紧急擦除本机所有 Stating 数据');
+}
+
 // ============ 头像选择 ============
 function initAvatars() {
     const grid = $('#avatarGrid');
@@ -1257,7 +1277,7 @@ function switchView(view) {
     document.body.classList.remove('theme-home', 'theme-chat', 'theme-users', 'theme-profile', 'theme-feedback');
     document.body.classList.add('theme-' + view);
     if (view === 'users' && isAdmin()) renderUsers();
-    if (view === 'profile') renderMyGroups();
+    if (view === 'profile') { renderMyGroups(); initFocusModeUI(); }
     if (view === 'chat') renderChatGate();
     if (view === 'feedback') loadFeedback();
 }
@@ -1451,7 +1471,13 @@ async function refreshGroupData() {
         } else if (data.messages && data.messages.length > 0) {
             const existingIds = new Set(msgCache.map(m => m.id));
             for (const m of data.messages) {
-                if (!existingIds.has(m.id)) msgCache.push(m);
+                if (!existingIds.has(m.id)) {
+                    msgCache.push(m);
+                    // 弹幕模式下显示新消息
+                    if (danmakuMode && m.type === 'text' && m.content) {
+                        addDanmaku((m.senderNickname || m.senderPhone) + ': ' + m.content);
+                    }
+                }
             }
             msgCache.sort((a, b) => a.ts - b.ts);
         }
@@ -1564,7 +1590,11 @@ function renderMessages(msgs, forceFull = false) {
         }
 
         const bubble = document.createElement('div');
-        bubble.className = 'msg-bubble ' + (isMe ? 'mine' : 'theirs');
+        let bubbleClass = 'msg-bubble ' + (isMe ? 'mine' : 'theirs');
+        if (isMe && me?.bubbleStyle && me.bubbleStyle !== 'default') {
+            bubbleClass += ' bubble-' + me.bubbleStyle;
+        }
+        bubble.className = bubbleClass;
 
         // 引用消息
         if (m.replyToId) {
@@ -1885,12 +1915,93 @@ function removeLocalMessage(localId) {
     renderMessages(msgCache, false);
 }
 
+// IRC 风格命令（借鉴 BitChat 的 IRC 氛围）
+function handleIrcCommand(raw) {
+    if (!group || !me) return false;
+    const parts = raw.slice(1).trim().split(/\s+/);
+    const cmd = (parts[0] || '').toLowerCase();
+    const arg = raw.slice(1).trim().slice(parts[0].length).trim();
+    switch (cmd) {
+        case 'help':
+        case 'h':
+        case '?':
+            showToast('IRC 命令：/help 帮助 · /who 在线 · /me 动作 · /slap 拍打 · /ping 测延迟 · /clear 清屏');
+            return true;
+        case 'who': {
+            const members = (group.members || []).map(phone => {
+                const m = group.membersInfo ? group.membersInfo[phone] : null;
+                return m ? m.nickname : phone;
+            });
+            showToast('在线成员：' + (members.join('、') || '无'));
+            return true;
+        }
+        case 'me': {
+            const action = arg || '做了个动作';
+            const text2 = '* ' + (me.nickname || '我') + ' ' + action;
+            sendRawText(text2);
+            return true;
+        }
+        case 'slap': {
+            const target = arg || '空气';
+            const text2 = '👋 ' + (me.nickname || '我') + ' 用力拍了拍 ' + target;
+            sendRawText(text2);
+            return true;
+        }
+        case 'ping': {
+            const t0 = Date.now();
+            api('/groups/' + group.code + '/messages', { method: 'POST', body: { text: '/ping' } })
+                .then(() => showToast('pong！延迟 ' + (Date.now() - t0) + 'ms'))
+                .catch(() => showToast('网络错误，pong 失败'));
+            return true;
+        }
+        case 'clear':
+        case 'cls':
+            msgCache = msgCache.filter(m => m.senderPhone !== me.phone || m._failed || m._local === undefined);
+            renderMessages(msgCache, false);
+            showToast('已清空本地屏幕（消息仍在群中）');
+            return true;
+        default:
+            return false;
+    }
+}
+
+function sendRawText(text2) {
+    if (!text2 || !group) return;
+    const localMsg2 = {
+        id: 'local_' + uid(),
+        senderPhone: me.phone,
+        senderNickname: me.nickname,
+        senderAvatar: me.avatar,
+        type: 'text',
+        content: text2,
+        text: text2,
+        ts: Date.now(),
+        readBy: [me.phone],
+        _local: true
+    };
+    msgCache.push(localMsg2);
+    msgCache.sort((a, b) => a.ts - b.ts);
+    renderMessages(msgCache, false);
+    api('/groups/' + group.code + '/messages', { method: 'POST', body: { text: text2 } })
+        .then(data => replaceLocalMessage(localMsg2.id, data.message))
+        .catch(() => markLocalMessageFailed(localMsg2.id, text2));
+}
+
 async function sendMessage() {
     const input = $('#composerInput');
     if (!input || !group) return;
     const text = input.textContent.trim();
     if (!text) return;
     input.textContent = '';
+    // IRC 风格命令（借鉴 BitChat 的 IRC 氛围）
+    if (text.startsWith('/')) {
+        if (handleIrcCommand(text)) {
+            const sendBtn0 = $('#sendBtn');
+            if (sendBtn0) sendBtn0.disabled = false;
+            try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
+            return;
+        }
+    }
     const sendBtn = $('#sendBtn');
     if (sendBtn) sendBtn.disabled = true;
 
@@ -2679,6 +2790,25 @@ function init() {
     // Profile
     $('#logoutBtn').onclick = logout;
     $('#deleteAccountBtn').onclick = deleteAccount;
+    // 紧急擦除（借鉴 BitChat 三连击擦除）：连续点击3次清除本地数据
+    let wipeClicks = 0, wipeTimer = null;
+    $('#wipeBtn').onclick = () => {
+        wipeClicks++;
+        const btn = $('#wipeBtn');
+        if (wipeClicks === 1) {
+            btn.textContent = '⚠️ 再点2次确认清除本地数据';
+            btn.classList.add('arming');
+            wipeTimer = setTimeout(() => { wipeClicks = 0; btn.textContent = '紧急擦除'; btn.classList.remove('arming'); }, 3000);
+        } else if (wipeClicks === 2) {
+            btn.textContent = '⚠️ 最后1次，立即清除';
+        } else {
+            clearTimeout(wipeTimer);
+            wipeClicks = 0;
+            btn.textContent = '紧急擦除';
+            btn.classList.remove('arming');
+            performEmergencyWipe();
+        }
+    };
     $('#darkModeToggle').onchange = e => toggleDarkMode(e.target.checked);
     $('#notifyToggle').onchange = e => toggleNotify(e.target.checked);
     $('#editNickBtn').onclick = () => startEditProfile('nickname');
@@ -4055,6 +4185,346 @@ async function loadDraft() {
             $('#sendBtn').disabled = false;
         }
     } catch(e) {}
+}
+
+// ============ 第三批新功能JS ============
+
+// 1. 位置打卡
+let checkinPos = null;
+$('#mmCheckin')?.addEventListener('click', () => {
+    closeMultiMenu();
+    $('#checkinDialog').hidden = false;
+    $('#checkinMap').textContent = '获取位置中...';
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                checkinPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                $('#checkinMap').innerHTML = '<div style="text-align:center;"><div style="font-size:32px;">📍</div><div style="font-size:12px;margin-top:4px;">' + checkinPos.lat.toFixed(4) + ', ' + checkinPos.lng.toFixed(4) + '</div></div>';
+            },
+            () => { $('#checkinMap').textContent = '无法获取位置，请检查权限'; }
+        );
+    } else {
+        $('#checkinMap').textContent = '浏览器不支持定位';
+    }
+});
+$('#checkinCancel')?.addEventListener('click', () => { $('#checkinDialog').hidden = true; });
+$('#checkinSubmit')?.addEventListener('click', async () => {
+    if (!checkinPos || !group) { showToast('无法打卡'); return; }
+    const address = $('#checkinAddress').value.trim();
+    try {
+        await api('/groups/' + group.code + '/checkin', { method: 'POST', body: { lat: checkinPos.lat, lng: checkinPos.lng, address } });
+        $('#checkinDialog').hidden = true;
+        $('#checkinAddress').value = '';
+        showToast('打卡成功！');
+    } catch(e) { showToast('打卡失败'); }
+});
+
+// ============ 蓝牙近场通信（借鉴 BitChat 蓝牙网状网络） ============
+let btDevice = null;
+let btServer = null;
+let btCharMap = {};
+let btWriteChar = null;
+
+function btSupported() {
+    return !!(navigator.bluetooth && navigator.bluetooth.requestDevice);
+}
+
+function btSetStatus(msg) {
+    const el = $('#btStatus');
+    if (el) el.textContent = msg || '';
+}
+
+function btOpenDialog() {
+    closeMultiMenu();
+    const dlg = $('#bluetoothDialog');
+    if (!dlg) return;
+    dlg.hidden = false;
+    const note = $('#btSupportNote');
+    if (note) {
+        if (btSupported()) {
+            note.innerHTML = '✅ 浏览器支持 Web Bluetooth。iOS Safari 不支持，请用 Chrome / Edge（需 HTTPS 与蓝牙权限）。';
+        } else if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
+            note.innerHTML = '⚠️ iOS Safari 不支持 Web Bluetooth。请使用电脑 Chrome/Edge 或 Android Chrome 体验蓝牙近场。';
+        } else {
+            note.innerHTML = '⚠️ 当前浏览器不支持 Web Bluetooth，请使用最新版 Chrome / Edge（需 HTTPS）。';
+        }
+    }
+    btSetStatus(btDevice ? '已连接：' + (btDevice.name || '未知设备') : '点击「扫描附近设备」选择蓝牙设备');
+    if (!btDevice) {
+        const list = $('#btDeviceList');
+        if (list) list.innerHTML = '';
+        const conn = $('#btConnected');
+        if (conn) conn.hidden = true;
+    }
+}
+
+$('#mmBluetooth')?.addEventListener('click', btOpenDialog);
+$('#btCloseBtn')?.addEventListener('click', () => { $('#bluetoothDialog').hidden = true; });
+
+async function btScan() {
+    if (!btSupported()) { btSetStatus('浏览器不支持 Web Bluetooth'); return; }
+    const btn = $('#btScanBtn');
+    const label = $('#btScanLabel');
+    if (btn) btn.disabled = true;
+    if (label) label.textContent = '🔍 正在扫描…';
+    btSetStatus('请在弹出的系统窗口中选择附近的蓝牙设备');
+    const list = $('#btDeviceList');
+    if (list) list.innerHTML = '';
+    try {
+        const device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: []
+        });
+        btDevice = device;
+        device.addEventListener('gattserverdisconnected', () => {
+            btServer = null; btCharMap = {}; btWriteChar = null;
+            btSetStatus('设备已断开：' + (device.name || '未知设备'));
+            const conn = $('#btConnected');
+            if (conn) conn.hidden = true;
+            showToast('蓝牙设备已断开');
+        });
+        if (list) {
+            const row = document.createElement('div');
+            row.className = 'bt-device';
+            row.innerHTML = '<span class="bt-dot"></span><span class="bt-device-name">' + escapeHtml(device.name || '未知设备') + '</span>';
+            list.appendChild(row);
+        }
+        btSetStatus('已选择「' + (device.name || '未知设备') + '」，连接中…');
+        await btConnect(device);
+    } catch (e) {
+        if (e && e.name === 'NotFoundError') btSetStatus('未选择设备');
+        else btSetStatus('扫描失败：' + ((e && e.message) || (e && e.name) || '未知错误'));
+    } finally {
+        if (btn) btn.disabled = false;
+        if (label) label.textContent = '📡 扫描附近设备';
+    }
+}
+
+async function btConnect(device) {
+    try {
+        btServer = await device.gatt.connect();
+        btCharMap = {}; btWriteChar = null;
+        let services = [];
+        try { services = await btServer.getPrimaryServices(); } catch (e) { services = []; }
+        // 遍历所有服务/特征，找可写与可通知的特征
+        for (const svc of services) {
+            let chars = [];
+            try { chars = await svc.getCharacteristics(); } catch (e) { chars = []; }
+            for (const c of chars) {
+                btCharMap[c.uuid] = c;
+                if (!btWriteChar && (c.properties.write || c.properties.writeWithoutResponse)) {
+                    btWriteChar = c;
+                }
+            }
+        }
+        const info = $('#btDeviceInfo');
+        if (info) info.innerHTML = escapeHtml(device.name || '未知设备') + '<span class="bt-conn">● 已连接</span>';
+        const conn = $('#btConnected');
+        if (conn) conn.hidden = false;
+        const rx = $('#btRxLog');
+        if (rx) rx.innerHTML = '<div class="bt-rx-title">接收数据</div>';
+        // 对可通知特征启用监听
+        for (const svc of services) {
+            let chars = [];
+            try { chars = await svc.getCharacteristics(); } catch (e) { chars = []; }
+            for (const c of chars) {
+                if (c.properties.notify || c.properties.indicate) {
+                    try {
+                        await c.startNotifications();
+                        c.addEventListener('characteristicvaluechanged', (ev) => {
+                            const val = ev.target.value;
+                            let text = '';
+                            try { text = new TextDecoder().decode(val); } catch (e) { text = ''; }
+                            if (!text) return;
+                            const rxEl = $('#btRxLog');
+                            if (rxEl) {
+                                const line = document.createElement('div');
+                                line.className = 'bt-rx-line';
+                                line.innerHTML = '<span class="bt-rx-tag">收</span>' + escapeHtml(text);
+                                rxEl.appendChild(line);
+                                rxEl.scrollTop = rxEl.scrollHeight;
+                            }
+                        });
+                    } catch (e) {}
+                }
+            }
+        }
+        btSetStatus('已连接：' + (device.name || '未知设备') + '（找到 ' + Object.keys(btCharMap).length + ' 个特征）');
+        showToast('蓝牙设备已连接');
+    } catch (e) {
+        btSetStatus('连接失败：' + ((e && e.message) || (e && e.name) || '未知错误'));
+    }
+}
+
+async function btWriteText(text) {
+    if (!btDevice || !btServer) { btSetStatus('尚未连接蓝牙设备'); return false; }
+    if (!btWriteChar) { btSetStatus('该设备没有可写的特征'); return false; }
+    if (!text) return false;
+    try {
+        const bytes = new TextEncoder().encode(text);
+        if (btWriteChar.properties.writeWithoutResponse) {
+            await btWriteChar.writeValueWithoutResponse(bytes);
+        } else {
+            await btWriteChar.writeValueWithResponse(bytes);
+        }
+        const rxEl = $('#btRxLog');
+        if (rxEl) {
+            const line = document.createElement('div');
+            line.className = 'bt-rx-line bt-rx-out';
+            line.innerHTML = '<span class="bt-rx-tag">发</span>' + escapeHtml(text);
+            rxEl.appendChild(line);
+            rxEl.scrollTop = rxEl.scrollHeight;
+        }
+        return true;
+    } catch (e) {
+        btSetStatus('发送失败：' + ((e && e.message) || (e && e.name) || '未知错误'));
+        return false;
+    }
+}
+
+$('#btScanBtn')?.addEventListener('click', btScan);
+
+$('#btSendTextBtn')?.addEventListener('click', async () => {
+    const input = $('#btSendInput');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    const ok = await btWriteText(text);
+    if (ok) { input.value = ''; }
+});
+
+$('#btSendCardBtn')?.addEventListener('click', async () => {
+    if (!me) { btSetStatus('请先登录 Stating'); return; }
+    const card = JSON.stringify({
+        app: 'Stating', type: 'vcard',
+        nickname: me.nickname || '', phone: me.phone || '',
+        avatar: me.avatar || '', groups: (me.joinedGroups || []).length || 0,
+        ts: Date.now()
+    });
+    const ok = await btWriteText('📇 Stating名片 ' + card);
+    if (ok) btSetStatus('名片已通过蓝牙发送');
+});
+
+$('#btDisconnectBtn')?.addEventListener('click', async () => {
+    try {
+        if (btDevice && btDevice.gatt && btDevice.gatt.connected) {
+            btDevice.gatt.disconnect();
+        }
+    } catch (e) {}
+    btServer = null; btCharMap = {}; btWriteChar = null;
+    const conn = $('#btConnected');
+    if (conn) conn.hidden = true;
+    btSetStatus('已断开');
+    showToast('已断开蓝牙连接');
+});
+
+// 2. 弹幕模式
+let danmakuMode = false;
+$('#gmDanmaku')?.addEventListener('click', () => {
+    $('#groupMenu').hidden = true;
+    danmakuMode = !danmakuMode;
+    $('#chatRoom').classList.toggle('danmaku-mode', danmakuMode);
+    $('#danmakuLayer').hidden = !danmakuMode;
+    showToast(danmakuMode ? '弹幕模式已开启' : '弹幕模式已关闭');
+});
+
+function addDanmaku(text, color) {
+    const layer = $('#danmakuLayer');
+    if (!layer || layer.hidden) return;
+    const item = document.createElement('div');
+    item.className = 'danmaku-item';
+    item.textContent = text;
+    item.style.top = (Math.random() * 70 + 5) + '%';
+    item.style.animationDuration = (6 + Math.random() * 4) + 's';
+    if (color) item.style.color = color;
+    layer.appendChild(item);
+    setTimeout(() => item.remove(), 10000);
+}
+
+// 3. 气泡皮肤
+$('#bubbleBtn')?.addEventListener('click', () => {
+    $('#bubbleDialog').hidden = false;
+    document.querySelectorAll('.bubble-option').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.style === (me?.bubbleStyle || 'default'));
+    });
+});
+$('#bubbleCancel')?.addEventListener('click', () => { $('#bubbleDialog').hidden = true; });
+document.querySelectorAll('.bubble-option').forEach(opt => {
+    opt.addEventListener('click', async () => {
+        const style = opt.dataset.style;
+        document.querySelectorAll('.bubble-option').forEach(o => o.classList.remove('active'));
+        opt.classList.add('active');
+        try {
+            await api('/profile', { method: 'PATCH', body: { bubbleStyle: style } });
+            if (me) me.bubbleStyle = style;
+            showToast('气泡皮肤已更换');
+            forceFullReload = true;
+            refreshGroupData();
+        } catch(e) { showToast('设置失败'); }
+    });
+});
+
+// 4. 专注模式
+$('#focusStart')?.addEventListener('change', saveFocusMode);
+$('#focusEnd')?.addEventListener('change', saveFocusMode);
+async function saveFocusMode() {
+    const start = $('#focusStart').value;
+    const end = $('#focusEnd').value;
+    try {
+        await api('/profile', { method: 'PATCH', body: { focusStart: start, focusEnd: end } });
+        if (me) { me.focusStart = start; me.focusEnd = end; }
+        if (start && end) showToast('专注模式已设置');
+    } catch(e) {}
+}
+function isFocusMode() {
+    if (!me?.focusStart || !me?.focusEnd) return false;
+    const now = new Date();
+    const cur = now.getHours() * 60 + now.getMinutes();
+    const [sh, sm] = me.focusStart.split(':').map(Number);
+    const [eh, em] = me.focusEnd.split(':').map(Number);
+    const start = sh * 60 + sm;
+    const end = eh * 60 + em;
+    if (start <= end) return cur >= start && cur < end;
+    return cur >= start || cur < end; // 跨天
+}
+
+// 5. 群相册回忆
+$('#gmMemories')?.addEventListener('click', async () => {
+    $('#groupMenu').hidden = true;
+    if (!group) return;
+    try {
+        const data = await api('/groups/' + group.code + '/memories', { method: 'GET' });
+        $('#memoriesDate').textContent = data.date || '';
+        const grid = $('#memoriesGrid');
+        grid.innerHTML = '';
+        if (data.memories.length === 0) {
+            grid.innerHTML = '<div class="memories-empty">去年今天没有照片回忆</div>';
+        } else {
+            data.memories.forEach(m => {
+                const item = document.createElement('div');
+                item.className = 'memories-item';
+                if (m.data && m.data.startsWith('data:')) {
+                    item.innerHTML = '<img src="' + m.data + '" alt="回忆">';
+                } else if (m.mediaKey) {
+                    item.innerHTML = '<img src="/api/media/' + m.mediaKey + '" alt="回忆">';
+                } else {
+                    item.style.background = '#eee';
+                    item.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:24px;">🖼️</div>';
+                }
+                grid.appendChild(item);
+            });
+        }
+        $('#memoriesDialog').hidden = false;
+    } catch(e) { showToast('加载回忆失败'); }
+});
+$('#memoriesClose')?.addEventListener('click', () => { $('#memoriesDialog').hidden = true; });
+
+// 初始化专注模式设置
+function initFocusModeUI() {
+    if (me) {
+        if ($('#focusStart')) $('#focusStart').value = me.focusStart || '';
+        if ($('#focusEnd')) $('#focusEnd').value = me.focusEnd || '';
+    }
 }
 
 // 输入中轮询

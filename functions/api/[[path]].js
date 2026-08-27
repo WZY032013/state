@@ -60,11 +60,12 @@ async function getUser(env, phone) {
 
 async function saveUser(env, user) {
   await env.DB.prepare(
-    'INSERT OR REPLACE INTO users (phone, nickname, avatar, email, passHash, passSalt, joinedGroups, createdAt) VALUES (?,?,?,?,?,?,?,?)'
+    'INSERT OR REPLACE INTO users (phone, nickname, avatar, email, passHash, passSalt, joinedGroups, createdAt, bubble_style, focus_start, focus_end) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
   ).bind(
     user.phone, user.nickname, user.avatar || '😀', user.email || '无',
     user.passHash, user.passSalt,
-    JSON.stringify(user.joinedGroups || []), user.createdAt
+    JSON.stringify(user.joinedGroups || []), user.createdAt,
+    user.bubble_style || '', user.focus_start || '', user.focus_end || ''
   ).run();
 }
 
@@ -307,7 +308,8 @@ function publicUser(u) {
   return {
     phone: u.phone, nickname: u.nickname, avatar: u.avatar, email: u.email,
     joinedGroups: u.joinedGroups || [], createdAt: u.createdAt,
-    isAdmin: u.phone === ADMIN_PHONE
+    isAdmin: u.phone === ADMIN_PHONE,
+    bubbleStyle: u.bubble_style || '', focusStart: u.focus_start || '', focusEnd: u.focus_end || ''
   };
 }
 
@@ -485,6 +487,21 @@ async function handleGetGroup(env, user, code, since) {
 
 // ============ 消息 ============
 
+async function handleGetMessages(env, user, code, since) {
+  code = code.toUpperCase();
+  const group = await getGroup(env, code);
+  if (!group) return fail('群聊不存在', 404);
+  if (!group.members.includes(user.phone) && user.phone !== ADMIN_PHONE) return fail('你不是群成员', 403);
+  let msgs;
+  if (since) {
+    const sinceTs = parseInt(since, 10);
+    msgs = isNaN(sinceTs) ? await getMessages(env, code) : await getNewMessages(env, code, sinceTs);
+  } else {
+    msgs = await getMessages(env, code);
+  }
+  return ok({ messages: msgs });
+}
+
 async function handleSendMessage(env, user, code, body) {
   code = code.toUpperCase();
   const group = await getGroup(env, code);
@@ -559,6 +576,9 @@ async function handleUpdateProfile(env, user, body) {
   if (nickname) u.nickname = nickname;
   if (avatar !== undefined) u.avatar = avatar;
   if (email !== undefined) u.email = email;
+  if (body.bubbleStyle !== undefined) u.bubble_style = body.bubbleStyle;
+  if (body.focusStart !== undefined) u.focus_start = body.focusStart;
+  if (body.focusEnd !== undefined) u.focus_end = body.focusEnd;
   await saveUser(env, u);
   return ok({ user: publicUser(u) });
 }
@@ -871,7 +891,22 @@ async function ensureMediaTable(env) {
     ts INTEGER NOT NULL,
     PRIMARY KEY (phone, groupCode)
   )`).run();
-}
+
+  // 位置打卡
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS checkins (
+    id TEXT PRIMARY KEY,
+    groupCode TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    nickname TEXT,
+    avatar TEXT,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    address TEXT,
+    ts INTEGER NOT NULL
+  )`).run();
+  try { await env.DB.prepare('ALTER TABLE users ADD COLUMN bubble_style TEXT').run(); } catch(e) {}
+  try { await env.DB.prepare('ALTER TABLE users ADD COLUMN focus_start TEXT').run(); } catch(e) {}
+  try { await env.DB.prepare('ALTER TABLE users ADD COLUMN focus_end TEXT').run(); } catch(e) {}}
 
 async function handleUpload(env, user, body) {
   const { data, mimeType } = body;
@@ -1374,6 +1409,47 @@ async function handleSaveDraft(env, user, code, body) {
   return ok({ saved: true });
 }
 
+
+// ============ 第三批新功能处理函数 ============
+
+// 位置打卡
+async function handleCheckin(env, user, code, body) {
+  code = code.toUpperCase();
+  const group = await getGroup(env, code);
+  if (!group || !group.members.includes(user.phone)) return fail('不在群聊中', 403);
+  const { lat, lng, address } = body;
+  if (lat == null || lng == null) return fail('缺少位置信息');
+  const id = makeId();
+  await env.DB.prepare(
+    'INSERT INTO checkins (id, groupCode, phone, nickname, avatar, lat, lng, address, ts) VALUES (?,?,?,?,?,?,?,?,?)'
+  ).bind(id, code, user.phone, user.nickname, user.avatar, lat, lng, address || '', Date.now()).run();
+  return ok({ id });
+}
+
+async function handleGetCheckins(env, user, code) {
+  code = code.toUpperCase();
+  const group = await getGroup(env, code);
+  if (!group || !group.members.includes(user.phone)) return fail('不在群聊中', 403);
+  const res = await env.DB.prepare(
+    'SELECT * FROM checkins WHERE groupCode = ? ORDER BY ts DESC LIMIT 100'
+  ).bind(code).all();
+  return ok({ checkins: res.results });
+}
+
+// 群相册回忆（一年前今天的图片消息）
+async function handleMemories(env, user, code) {
+  code = code.toUpperCase();
+  const group = await getGroup(env, code);
+  if (!group || !group.members.includes(user.phone)) return fail('不在群聊中', 403);
+  const now = new Date();
+  const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+  const startTs = new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate()).getTime();
+  const endTs = startTs + 86400000;
+  const res = await env.DB.prepare(
+    "SELECT * FROM messages WHERE groupCode = ? AND type = 'image' AND ts >= ? AND ts < ? ORDER BY ts DESC LIMIT 20"
+  ).bind(code, startTs, endTs).all();
+  return ok({ memories: res.results, date: (oneYearAgo.getMonth()+1) + '月' + oneYearAgo.getDate() + '日' });
+}
 // ============ 路由 ============
 
 export async function onRequest(context) {
@@ -1521,6 +1597,10 @@ export async function onRequest(context) {
       if (parts[2] === 'delete' && method === 'DELETE') {
         return handleDeleteGroup(env, user, parts[1]);
       }
+      // 读取消息列表
+      if (parts[2] === 'messages' && method === 'GET') {
+        return handleGetMessages(env, user, parts[1], url.searchParams.get('since'));
+      }
       // 发送消息
       if (parts[2] === 'messages' && method === 'POST') {
         return handleSendMessage(env, user, parts[1], await request.json().catch(() => ({})));
@@ -1620,6 +1700,17 @@ export async function onRequest(context) {
       }
       if (parts[2] === 'call' && method === 'DELETE') {
         return handleEndCall(env, user, parts[1]);
+      }
+      // 位置打卡
+      if (parts[2] === 'checkin' && method === 'POST') {
+        return handleCheckin(env, user, parts[1], await request.json().catch(() => ({})));
+      }
+      if (parts[2] === 'checkins' && method === 'GET') {
+        return handleGetCheckins(env, user, parts[1]);
+      }
+      // 群相册回忆
+      if (parts[2] === 'memories' && method === 'GET') {
+        return handleMemories(env, user, parts[1]);
       }
     }
 
