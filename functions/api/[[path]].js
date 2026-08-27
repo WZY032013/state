@@ -1452,6 +1452,125 @@ async function handleMemories(env, user, code) {
 }
 // ============ 路由 ============
 
+// ============ 近场 P2P 信令（WebRTC 全浏览器兜底） ============
+
+const NEAR_TTL = 30 * 60 * 1000; // 会话30分钟过期
+
+async function ensureNearTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS near_sessions (
+    code TEXT PRIMARY KEY, createdBy TEXT NOT NULL, updatedAt INTEGER NOT NULL
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS near_signals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL, peer TEXT NOT NULL,
+    data TEXT NOT NULL, ts INTEGER NOT NULL
+  )`).run();
+  await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_near_signal ON near_signals(code, peer)').run();
+}
+
+function nearCode() {
+  const chars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+  let c = '';
+  for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)];
+  return c;
+}
+
+async function handleNearSession(env, user, url, method) {
+  await ensureNearTable(env);
+  // 清理过期会话与信令
+  const cutoff = Date.now() - NEAR_TTL;
+  await env.DB.prepare('DELETE FROM near_sessions WHERE updatedAt < ?').bind(cutoff).run();
+  await env.DB.prepare('DELETE FROM near_signals WHERE ts < ?').bind(cutoff).run();
+
+  if (method === 'POST') {
+    let code = nearCode();
+    let tries = 0;
+    while (tries++ < 5) {
+      const exist = await env.DB.prepare('SELECT code FROM near_sessions WHERE code = ?').bind(code).first();
+      if (!exist) break;
+      code = nearCode();
+    }
+    await env.DB.prepare('INSERT OR REPLACE INTO near_sessions (code, createdBy, updatedAt) VALUES (?,?,?)')
+      .bind(code, user.phone, Date.now()).run();
+    return ok({ code });
+  }
+
+  if (method === 'DELETE') {
+    const code = url.searchParams.get('code');
+    if (!code) return fail('缺少会话码');
+    await env.DB.prepare('DELETE FROM near_sessions WHERE code = ?').bind(code).run();
+    await env.DB.prepare('DELETE FROM near_signals WHERE code = ?').bind(code).run();
+    return ok({ deleted: true });
+  }
+
+  // GET 查询
+  const code = url.searchParams.get('code');
+  if (!code) return fail('缺少会话码');
+  const row = await env.DB.prepare('SELECT * FROM near_sessions WHERE code = ?').bind(code).first();
+  if (!row) return fail('会话不存在或已过期', 404);
+  await env.DB.prepare('UPDATE near_sessions SET updatedAt = ? WHERE code = ?').bind(Date.now(), code).run();
+  return ok({ exists: true });
+}
+
+async function handleNearSignal(env, user, url, method, request) {
+  await ensureNearTable(env);
+
+  if (method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const code = url.searchParams.get('code') || body.code || null;
+    if (!code) return fail('缺少会话码');
+    const to = String(body.to || '');
+    const data = body.data;
+    if (!to || data === undefined || data === null) return fail('缺少信令内容');
+    // 校验会话存在
+    const sess = await env.DB.prepare('SELECT code FROM near_sessions WHERE code = ?').bind(code).first();
+    if (!sess) return fail('会话不存在或已过期', 404);
+    await env.DB.prepare('INSERT INTO near_signals (code, peer, data, ts) VALUES (?,?,?,?)')
+      .bind(code, to, JSON.stringify(data), Date.now()).run();
+    return ok({ queued: true });
+  }
+
+  // GET 拉取（拉取即消费）
+  // wait=1 → 长轮询：内部每 300ms 查一次 DB，最长挂起 18s，信令一到立即返回
+  // 把跨设备信令延迟从 ~1200ms（旧轮询间隔）压到 ~300ms
+  if (method === 'GET') {
+    const code = url.searchParams.get('code');
+    if (!code) return fail('缺少会话码');
+    const peer = url.searchParams.get('peer') || '';
+    if (!peer) return fail('缺少peer');
+    const wantWait = url.searchParams.get('wait') === '1';
+    const pollIntervalMs = 300;     // 内部 DB 轮询步长
+    const maxHoldMs = wantWait ? 18000 : 0; // 长轮询最长挂起 18s（Cloudflare 单请求 30s 内安全）
+    const deadline = Date.now() + maxHoldMs;
+
+    const drain = async () => {
+      const rows = await env.DB.prepare('SELECT id, data FROM near_signals WHERE code = ? AND peer = ? ORDER BY id ASC LIMIT 200')
+        .bind(code, peer).all();
+      if (rows.results && rows.results.length) {
+        const ids = rows.results.map(r => r.id);
+        await env.DB.prepare('DELETE FROM near_signals WHERE code = ? AND peer = ?').bind(code, peer).run();
+        return rows.results.map(r => JSON.parse(r.data));
+      }
+      return null;
+    };
+
+    // 首次立即拉一次（覆盖 wait=0 普通轮询 + wait=1 首检）
+    let first = await drain();
+    if (first) return ok({ signals: first });
+
+    if (!wantWait) return ok({ signals: [] });
+
+    // 长轮询：循环查 DB 直到命中或超时
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, pollIntervalMs));
+      const got = await drain();
+      if (got) return ok({ signals: got });
+    }
+    return ok({ signals: [] });
+  }
+
+  return fail('不支持的请求方法', 405);
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   try {
@@ -1498,6 +1617,14 @@ export async function onRequest(context) {
     if (parts[0] === 'me' && method === 'GET') {
       ensureMediaTable(env).catch(() => {});
       return ok({ user: publicUser(user) });
+    }
+
+    // 近场 P2P 信令（WebRTC 全浏览器兜底）
+    if (parts[0] === 'near' && parts[1] === 'session') {
+      return handleNearSession(env, user, url, method);
+    }
+    if (parts[0] === 'near' && parts[1] === 'signal') {
+      return handleNearSignal(env, user, url, method, request);
     }
 
     // 心跳

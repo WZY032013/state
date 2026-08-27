@@ -95,3 +95,18 @@ CREATE TABLE IF NOT EXISTS group_reads (
   lastReadTs INTEGER NOT NULL,
   PRIMARY KEY (groupCode, phone)
 );
+
+CREATE TABLE IF NOT EXISTS near_sessions (
+  code TEXT PRIMARY KEY,
+  createdBy TEXT NOT NULL,
+  updatedAt INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS near_signals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL,
+  peer TEXT NOT NULL,
+  data TEXT NOT NULL,
+  ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_near_signal ON near_signals(code, peer);

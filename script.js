@@ -54,6 +54,43 @@ function loadJsQR() {
     });
     return _jsqrLoaded;
 }
+// qrcodejs：离线 QR-SDP 方案需要生成二维码，首次进入离线直连 tab 才注入
+let _qrcodeLoaded = null;
+function loadQRCode() {
+    if (_qrcodeLoaded) return _qrcodeLoaded;
+    if (typeof QRCode !== 'undefined') { _qrcodeLoaded = Promise.resolve(); return _qrcodeLoaded; }
+    _qrcodeLoaded = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
+        s.defer = true;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+    });
+    return _qrcodeLoaded;
+}
+// lz-string：压缩 SDP(4KB→~1KB) 适配 10kbps 极弱网
+let _lzLoaded = null;
+function loadLZ() {
+    if (_lzLoaded) return _lzLoaded;
+    if (typeof LZString !== 'undefined') { _lzLoaded = Promise.resolve(); return _lzLoaded; }
+    _lzLoaded = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js';
+        s.defer = true;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+    });
+    return _lzLoaded;
+}
+function sdCompress(obj) {
+    try { return 'lz:' + LZString.compressToUTF16(JSON.stringify(obj)); } catch (e) { return JSON.stringify(obj); }
+}
+function sdDecompress(s) {
+    try { if (typeof s === 'string' && s.startsWith('lz:')) return JSON.parse(LZString.decompressFromUTF16(s.slice(3))); } catch (e) {}
+    return s;
+}
 
 // ============ DOM 工具 ============
 const $ = s => document.querySelector(s);
@@ -4220,10 +4257,45 @@ $('#checkinSubmit')?.addEventListener('click', async () => {
 });
 
 // ============ 蓝牙近场通信（借鉴 BitChat 蓝牙网状网络） ============
+// 注：Web Bluetooth 仅 Chrome/Edge/Android 支持，iOS Safari / Firefox 不可用，
+// 已用「近场 P2P」标签（WebRTC）兜底覆盖全平台。本标签在支持的浏览器上修复后可正常收发。
 let btDevice = null;
 let btServer = null;
 let btCharMap = {};
 let btWriteChar = null;
+
+// 关键修复：acceptAllDevices:true 必须搭配非空 optionalServices，
+// 否则连上后 getPrimaryServices() 拿不到任何服务，发/收全废。
+// 这里列出 SIG 常用 16 位服务号（128 位展开），让任意 BLE 设备的服务都能被访问。
+const BT_OPTIONAL_SERVICES = [
+    '00001800-0000-1000-8000-00805f9b34fb', // Generic Access
+    '00001801-0000-1000-8000-00805f9b34fb', // Generic Attribute
+    '0000180a-0000-1000-8000-00805f9b34fb', // Device Information
+    '0000180f-0000-1000-8000-00805f9b34fb', // Battery
+    '0000180d-0000-1000-8000-00805f9b34fb', // Heart Rate
+    '00001808-0000-1000-8000-00805f9b34fb', // Health Thermometer
+    '00001809-0000-1000-8000-00805f9b34fb', // Blood Pressure
+    '00001802-0000-1000-8000-00805f9b34fb', // Immediate Alert
+    '00001803-0000-1000-8000-00805f9b34fb', // Link Loss
+    '00001804-0000-1000-8000-00805f9b34fb', // Tx Power
+    '00001805-0000-1000-8000-00805f9b34fb', // Current Time
+    '00001811-0000-1000-8000-00805f9b34fb', // Alert Notification
+    '00001812-0000-1000-8000-00805f9b34fb', // Human Interface Device
+    '00001813-0000-1000-8000-00805f9b34fb', // Scan Parameters
+    '00001814-0000-1000-8000-00805f9b34fb', // Running Speed and Cadence
+    '00001815-0000-1000-8000-00805f9b34fb', // Automation IO
+    '00001816-0000-1000-8000-00805f9b34fb', // Cycling Speed and Cadence
+    '00001817-0000-1000-8000-00805f9b34fb', // Cycling Power
+    '00001818-0000-1000-8000-00805f9b34fb', // Location and Navigation
+    '0000181a-0000-1000-8000-00805f9b34fb', // Environmental Sensing
+    '0000181b-0000-1000-8000-00805f9b34fb', // Body Composition
+    '0000181c-0000-1000-8000-00805f9b34fb', // User Data
+    '0000181d-0000-1000-8000-00805f9b34fb', // Weight Scale
+    '0000181e-0000-1000-8000-00805f9b34fb', // Bond Management
+    '0000181f-0000-1000-8000-00805f9b34fb', // Continuous Glucose Monitoring
+    '0000feaa-0000-1000-8000-00805f9b34fb', // Eddystone
+    '0000fe9f-0000-1000-8000-00805f9b34fb'  // 常见厂商自定义
+];
 
 function btSupported() {
     return !!(navigator.bluetooth && navigator.bluetooth.requestDevice);
@@ -4242,12 +4314,19 @@ function btOpenDialog() {
     const note = $('#btSupportNote');
     if (note) {
         if (btSupported()) {
-            note.innerHTML = '✅ 浏览器支持 Web Bluetooth。iOS Safari 不支持，请用 Chrome / Edge（需 HTTPS 与蓝牙权限）。';
+            note.innerHTML = '✅ 浏览器支持 Web Bluetooth。iOS Safari 不支持，可切换到「近场 P2P」标签使用。';
         } else if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
-            note.innerHTML = '⚠️ iOS Safari 不支持 Web Bluetooth。请使用电脑 Chrome/Edge 或 Android Chrome 体验蓝牙近场。';
+            note.innerHTML = '⚠️ iOS Safari 不支持 Web Bluetooth，已自动切换到「近场 P2P」，任何浏览器都能近场传信息。';
         } else {
-            note.innerHTML = '⚠️ 当前浏览器不支持 Web Bluetooth，请使用最新版 Chrome / Edge（需 HTTPS）。';
+            note.innerHTML = '⚠️ 当前浏览器不支持 Web Bluetooth，已自动切换到「近场 P2P」标签。';
         }
+    }
+    // 自动降级：不支持 Web Bluetooth 时切到近场 P2P
+    if (!btSupported()) {
+        nearSwitchTab('near');
+        nearSetStatus(nearCode ? '近场会话进行中…' : '创建会话或输入 6 位配对码开始近场传输');
+    } else {
+        nearSwitchTab('bt');
     }
     btSetStatus(btDevice ? '已连接：' + (btDevice.name || '未知设备') : '点击「扫描附近设备」选择蓝牙设备');
     if (!btDevice) {
@@ -4273,7 +4352,7 @@ async function btScan() {
     try {
         const device = await navigator.bluetooth.requestDevice({
             acceptAllDevices: true,
-            optionalServices: []
+            optionalServices: BT_OPTIONAL_SERVICES
         });
         btDevice = device;
         device.addEventListener('gattserverdisconnected', () => {
@@ -4417,6 +4496,847 @@ $('#btDisconnectBtn')?.addEventListener('click', async () => {
     btSetStatus('已断开');
     showToast('已断开蓝牙连接');
 });
+
+// ============ 近场 P2P 传输（WebRTC 全浏览器兜底，含 iOS Safari/Firefox） ============
+let nearPC = null;
+let nearDC = null;
+let nearCode = null;
+let nearRole = null; // 'A' 创建者(发起offer) / 'B' 加入者(应答)
+let nearIceQueue = [];
+// 长轮询循环控制（取代旧的 setInterval 1200ms 轮询）
+let nearLooping = false;
+// 当前挂起的长轮询 AbortController：断开时立即中止，避免连接 lingering 最多 18s
+let nearPollCtrl = null;
+// 同浏览器零延迟快路径：两个标签页/同机浏览器走 BroadcastChannel，跨设备仍走服务器长轮询
+let nearBC = null;
+// 信令去重：同一条信号可能被 BC 和服务器各投递一次，按 sid 去重
+const nearSeenSid = new Set();
+
+const nearSTUN = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+];
+
+// ICE 批量打包：onicecandidate 推入数组，50ms 窗口聚成一条 ice-batch 信令发出，减少往返
+let nearIceBatch = [];
+let nearIceFlushTimer = null;
+// 极弱网开关：纯 host 模式跳过 STUN，仅同局域网候选（省流量）
+let nearHostOnly = false;
+// 心跳 + RTT
+let nearHeartbeatTimer = null;
+let nearPingTs = 0;
+// 应用层 ACK：mid -> { payload, retries, nextTimer }
+const nearPendingAck = new Map();
+let nearMidSeq = 0;
+// 统计：发送业务消息数 / 已送达数
+const nearStats = { sent: 0, acked: 0 };
+
+function nearBumpStat() {
+    const s = $('#nearSentCnt'), a = $('#nearAckCnt');
+    if (s) s.textContent = String(nearStats.sent);
+    if (a) a.textContent = String(nearStats.acked);
+    const ok = document.querySelector('#nearRttPanel .bt-rtt-ok');
+    if (ok) ok.classList.toggle('warn', nearStats.sent > nearStats.acked);
+}
+
+function nearSwitchTab(tab) {
+    const bt = $('#btTabBt'), nr = $('#btTabNear'), of = $('#btTabOffline');
+    if (bt) bt.classList.toggle('active', tab === 'bt');
+    if (nr) nr.classList.toggle('active', tab === 'near');
+    if (of) of.classList.toggle('active', tab === 'offline');
+    const pb = $('#btPanelBt'), pn = $('#btPanelNear'), po = $('#btPanelOffline');
+    if (pb) pb.hidden = tab !== 'bt';
+    if (pn) pn.hidden = tab !== 'near';
+    if (po) po.hidden = tab !== 'offline';
+    // 滑块动效
+    const thumb = $('#btSegThumb');
+    if (thumb) {
+        thumb.classList.remove('tab-near', 'tab-offline');
+        if (tab === 'near') thumb.classList.add('tab-near');
+        else if (tab === 'offline') thumb.classList.add('tab-offline');
+    }
+    // hero 方案徽章
+    const badge = $('#btSchemeBadge');
+    if (badge) {
+        badge.textContent = tab === 'bt' ? 'BLE 外设' : tab === 'near' ? '远程直连' : '离线直连';
+    }
+    // 进入离线 tab 时预加载 QR/jsQR/LZ
+    if (tab === 'offline') { try { loadQRCode(); loadJsQR(); loadLZ(); } catch (e) {} }
+}
+
+function nearSetStatus(msg) { const el = $('#nearStatus'); if (el) el.textContent = msg || ''; }
+
+function nearLogLine(tag, text, out) {
+    const log = $('#nearRxLog');
+    if (!log) return;
+    const line = document.createElement('div');
+    line.className = 'bt-rx-line' + (out ? ' bt-rx-out' : '');
+    line.innerHTML = '<span class="bt-rx-tag">' + tag + '</span>' + escapeHtml(text);
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+}
+
+async function nearApi(path, opts = {}) {
+    return api('/near/' + path, opts);
+}
+
+async function nearCreate() {
+    try {
+        nearDisconnect(true);
+        const data = await nearApi('session', { method: 'POST' });
+        nearCode = data.code;
+        nearRole = 'A';
+        nearSetStatus('✅ 会话已创建，配对码：' + nearCode + '\n（对方输入该码即可加入，等待中…）');
+        nearStartPoll();
+    } catch (e) {
+        nearSetStatus('创建失败：' + (e.message || '未知错误'));
+    }
+}
+
+async function nearJoin() {
+    const input = $('#nearCodeInput');
+    const code = (input?.value || '').trim().toUpperCase();
+    if (code.length < 6) { nearSetStatus('请输入 6 位配对码'); return; }
+    try {
+        await nearApi('session?code=' + encodeURIComponent(code));
+    } catch (e) {
+        nearSetStatus('无法加入：' + (e.message || '会话不存在'));
+        return;
+    }
+    nearDisconnect(true);
+    nearCode = code;
+    nearRole = 'B';
+    nearSetStatus('已加入会话 ' + code + '，正在建立连接…');
+    nearStartPoll(); // 先建 BC + 启动长轮询，再发 hello → 同浏览器走 BC 零延迟
+    try { await nearSendSignal({ type: 'hello', role: 'B' }); } catch (e) {}
+}
+
+function nearStartPoll() {
+    nearStopPoll();
+    nearLooping = true;
+    nearEnsureBC();
+    nearLoop(); // 立即发起首轮长轮询
+}
+function nearStopPoll() {
+    nearLooping = false;
+    // 立即中止挂起的长轮询 fetch，让循环 promptly 退出、对话框干净关闭
+    if (nearPollCtrl) { try { nearPollCtrl.abort(); } catch (e) {} nearPollCtrl = null; }
+    if (nearBC) { try { nearBC.close(); } catch (e) {} nearBC = null; }
+    nearSeenSid.clear();
+}
+
+// 同浏览器零延迟快路径：同 origin 的两个标签页经 BroadcastChannel 直传信令，跳过服务器
+function nearEnsureBC() {
+    if (nearBC || typeof BroadcastChannel === 'undefined') return;
+    nearBC = new BroadcastChannel('stating_near_' + nearCode);
+    nearBC.onmessage = (ev) => {
+        const sig = ev && ev.data;
+        if (sig && sig.type) nearHandleSignal(sig);
+    };
+}
+
+// 长轮询循环：直连 fetch（绕过 api() 的缓存/去重，否则会把挂起的请求错当可复用），
+// 服务器最长挂 18s，信令一到立即返回；发送方 POST 后，接收方最长 ~300ms 内拿到。
+async function nearLoop() {
+    while (nearLooping && nearCode && nearRole) {
+        const signals = await nearLongPoll();
+        if (!nearLooping) break; // 期间可能已 nearDisconnect
+        if (signals === null) {
+            // 网络异常：短暂退避后重连
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+        }
+        for (const sig of signals) {
+            if (nearLooping) await nearHandleSignal(sig);
+        }
+        // 长轮询正常返回（含空数组超时）后立即发起下一轮，无固定间隔 → 实时性最大化
+    }
+}
+
+async function nearLongPoll() {
+    const url = API + '/near/signal?code=' + encodeURIComponent(nearCode) + '&peer=' + nearRole + '&wait=1';
+    const opts = { headers: {} };
+    if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+    const ctrl = new AbortController();
+    nearPollCtrl = ctrl; // 供 nearStopPoll 立即中止
+    // 客户端 25s 超时兜底（服务器 18s 内必返回）
+    const timer = setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, 25000);
+    try {
+        const res = await fetch(url, { ...opts, signal: ctrl.signal });
+        clearTimeout(timer);
+        if (nearPollCtrl === ctrl) nearPollCtrl = null;
+        const data = await res.json().catch(() => ({ ok: false, signals: [] }));
+        if (data && data.ok && Array.isArray(data.signals)) return data.signals;
+        return [];
+    } catch (e) {
+        clearTimeout(timer);
+        if (nearPollCtrl === ctrl) nearPollCtrl = null;
+        if (e && e.name === 'AbortError') return []; // 主动中止：循环会因 !nearLooping 退出
+        return null; // null 表示网络错误，外层退避
+    }
+}
+
+async function nearHandleSignal(sig) {
+    if (!sig || !sig.type) return;
+    // 去重：BC 与服务器可能各投递一次同一条信号
+    if (sig.sid) {
+        if (nearSeenSid.has(sig.sid)) return;
+        nearSeenSid.add(sig.sid);
+        // 防止 Set 无限增长
+        if (nearSeenSid.size > 500) { const it = nearSeenSid.values(); for (let i = 0; i < 250; i++) nearSeenSid.delete(it.next().value); }
+    }
+    try {
+        if (sig.type === 'hello') {
+            if (nearRole === 'A' && !nearPC) await nearSetupPC(true);
+            return;
+        }
+        if (sig.type === 'offer') {
+            if (nearRole === 'B' && !nearPC) await nearSetupPC(false);
+            if (nearPC && nearPC.signalingState === 'stable') {
+                let sdp = sig.sdp;
+                try { sdp = sdDecompress(sdp); } catch (e) {}
+                await nearPC.setRemoteDescription(sdp);
+                const answer = await nearPC.createAnswer();
+                await nearPC.setLocalDescription(answer);
+                await nearWaitIceComplete(); // 预热 ICE：等收集完再回送，减少对端等待
+                await nearSendSignal({ type: 'answer', sdp: nearPC.localDescription });
+            }
+            return;
+        }
+        if (sig.type === 'answer') {
+            if (nearPC && nearPC.signalingState === 'have-local-offer') {
+                let sdp = sig.sdp;
+                try { sdp = sdDecompress(sdp); } catch (e) {}
+                await nearPC.setRemoteDescription(sdp);
+            }
+            return;
+        }
+        if (sig.type === 'ice') {
+            if (nearPC && nearPC.remoteDescription) {
+                try { await nearPC.addIceCandidate(sig.candidate); } catch (e) {}
+            } else {
+                nearIceQueue.push(sig.candidate);
+            }
+            return;
+        }
+        if (sig.type === 'ice-batch') {
+            const items = Array.isArray(sig.items) ? sig.items : [];
+            for (const it of items) {
+                const c = it && it.candidate;
+                if (!c) continue;
+                if (nearPC && nearPC.remoteDescription) {
+                    try { await nearPC.addIceCandidate(c); } catch (e) {}
+                } else {
+                    nearIceQueue.push(c);
+                }
+            }
+        }
+    } catch (e) { /* 信令处理失败忽略 */ }
+}
+
+// 预热 ICE：等 iceGatheringState === 'complete' 或 800ms 超时，避免对端拿到半套候选
+function nearWaitIceComplete(timeoutMs = 800) {
+    if (!nearPC) return Promise.resolve();
+    if (nearPC.iceGatheringState === 'complete') return Promise.resolve();
+    return new Promise(resolve => {
+        let done = false;
+        const finish = () => { if (done) return; done = true; clearTimeout(t); try { nearPC && nearPC.removeEventListener('icegatheringstatechange', onChange); } catch (e) {} resolve(); };
+        const t = setTimeout(finish, timeoutMs);
+        const onChange = () => { if (nearPC && nearPC.iceGatheringState === 'complete') finish(); };
+        try { nearPC.addEventListener('icegatheringstatechange', onChange); } catch (e) {}
+    });
+}
+
+async function nearSendSignal(data) {
+    if (!nearCode) return;
+    // 为每条信令打 sid，便于接收端按 sid 去重（BC 与服务器双投递）
+    const sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const payload = Object.assign({ sid }, data);
+
+    // SDP 压缩：offer/answer 的 sdp 字段走 LZString（4KB→~1KB），适配 10kbps 极弱网
+    if ((payload.type === 'offer' || payload.type === 'answer') && payload.sdp) {
+        try { await loadLZ(); payload.sdp = sdCompress(payload.sdp); } catch (e) {}
+    }
+
+    // ICE 批量：单条 ice 累积 50ms 窗口，聚成一条 ice-batch 信令发出，减少 N 次往返
+    if (payload.type === 'ice') {
+        nearIceBatch.push(payload);
+        if (!nearIceFlushTimer) {
+            nearIceFlushTimer = setTimeout(() => {
+                nearIceFlushTimer = null;
+                const batch = nearIceBatch; nearIceBatch = [];
+                if (batch.length) nearDispatchSignal({ type: 'ice-batch', items: batch });
+            }, 50);
+        }
+        return;
+    }
+
+    nearDispatchSignal(payload);
+}
+
+// 实际投递：BC 即时 + 服务器长轮询兜底
+function nearDispatchSignal(payload) {
+    if (nearBC) { try { nearBC.postMessage(payload); } catch (e) {} }
+    try {
+        nearApi('signal', { method: 'POST', body: { code: nearCode, to: nearRole === 'A' ? 'B' : 'A', data: payload } });
+    } catch (e) {}
+}
+
+async function nearSetupPC(asOfferer) {
+    // 极弱网 host 模式：跳过 STUN，仅产 host 候选（同局域网直连，省流量）
+    const pcOpts = nearHostOnly
+        ? { iceServers: [], iceTransportPolicy: 'public' }
+        : { iceServers: nearSTUN };
+    nearPC = new RTCPeerConnection(pcOpts);
+    nearPC.onicecandidate = (e) => {
+        if (e.candidate) nearSendSignal({ type: 'ice', candidate: e.candidate });
+    };
+    nearPC.onconnectionstatechange = () => {
+        if (!nearPC) return;
+        if (nearPC.connectionState === 'failed') {
+            nearSetStatus('连接失败：请确保两台设备能互通网络后重试');
+            nearSetChip('fail');
+        } else if (nearPC.connectionState === 'connected') {
+            nearSetStatus('✅ 已连接对方设备');
+            nearSetChip('ok');
+            const metric = $('#btMetric'); if (metric) metric.hidden = false;
+        } else if (nearPC.connectionState === 'connecting' || nearPC.connectionState === 'new') {
+            nearSetChip();
+        }
+    };
+    nearPC.ondatachannel = (e) => { nearDC = e.channel; nearBindDC(nearDC); };
+    if (asOfferer) {
+        // 显式 reliable：ordered + 无限重传 = 0 丢包
+        nearDC = nearPC.createDataChannel('stating', { ordered: true, maxRetransmits: Infinity });
+        nearBindDC(nearDC);
+        const offer = await nearPC.createOffer();
+        await nearPC.setLocalDescription(offer);
+        await nearWaitIceComplete(); // 预热 ICE：等收集完再发 offer，减少对端半套候选等待
+        await nearSendSignal({ type: 'offer', sdp: nearPC.localDescription });
+    }
+    if (nearIceQueue.length) {
+        const q = nearIceQueue; nearIceQueue = [];
+        for (const c of q) { try { await nearPC.addIceCandidate(c); } catch (e) {} }
+    }
+}
+
+// 状态 chip 三态切换：ok/wait/fail/idle
+function nearSetChip(state) {
+    const chip = $('#nearStatusChip');
+    if (!chip) return;
+    chip.classList.remove('ok', 'fail', 'idle');
+    let txt = '等待中';
+    if (state === 'ok') { chip.classList.add('ok'); txt = '已连接'; }
+    else if (state === 'fail') { chip.classList.add('fail'); txt = '失败'; }
+    else if (state === 'idle') { chip.classList.add('idle'); txt = '待机'; }
+    chip.textContent = txt;
+}
+
+function nearBindDC(dc) {
+    dc.onopen = () => {
+        nearSetStatus('✅ 近场连接已建立');
+        const conn = $('#nearConnected');
+        if (conn) conn.hidden = false;
+        nearSetChip('ok');
+        // 心跳：每 2s 发 ping，对端回 pong，算 RTT 实时显示
+        if (nearHeartbeatTimer) clearInterval(nearHeartbeatTimer);
+        nearHeartbeatTimer = setInterval(() => {
+            if (!nearDC || nearDC.readyState !== 'open') return;
+            nearPingTs = Date.now();
+            try { nearDC.send(JSON.stringify({ type: 'ping', t: nearPingTs })); } catch (e) {}
+        }, 2000);
+    };
+    dc.onmessage = (ev) => {
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (e) { nearLogLine('近场 ·', String(ev.data)); return; }
+        // 协议消息：ping / pong / ack
+        if (msg.type === 'ping') { try { dc.send(JSON.stringify({ type: 'pong', t: msg.t })); } catch (e) {} return; }
+        if (msg.type === 'pong') {
+            if (msg.t) {
+                const rtt = Date.now() - msg.t;
+                const r = $('#nearRttVal'); if (r) r.textContent = String(rtt);
+                const m = $('#btMetricRtt'); if (m) m.textContent = rtt + 'ms';
+            }
+            return;
+        }
+        if (msg.type === 'ack') {
+            const entry = nearPendingAck.get(msg.mid);
+            if (entry) { clearTimeout(entry.nextTimer); nearPendingAck.delete(msg.mid); nearStats.acked++; nearBumpStat(); }
+            return;
+        }
+        // 业务消息：收达立即回 ACK
+        if (msg.mid) { try { dc.send(JSON.stringify({ type: 'ack', mid: msg.mid })); } catch (e) {} }
+        if (msg.type === 'text') nearLogLine('近场 ·', msg.text);
+        else if (msg.type === 'card') nearLogLine('名片 ·', (msg.nickname || '对方') + '（' + (msg.phone || '') + '）');
+        else nearLogLine('近场 ·', JSON.stringify(msg));
+    };
+    dc.onclose = () => {
+        nearSetStatus('近场连接已断开');
+        const conn = $('#nearConnected');
+        if (conn) conn.hidden = true;
+        if (nearHeartbeatTimer) { clearInterval(nearHeartbeatTimer); nearHeartbeatTimer = null; }
+        // 清理未送达重传
+        for (const [, v] of nearPendingAck) { if (v.nextTimer) clearTimeout(v.nextTimer); }
+        nearPendingAck.clear();
+    };
+    dc.onerror = () => { nearSetStatus('近场连接错误'); };
+}
+
+// 发送业务消息（带 mid + 应用层 ACK 重传）：2s 未收 ACK 重发，最多 3 次
+function nearDcSend(msg) {
+    if (!nearDC || nearDC.readyState !== 'open') { nearSetStatus('尚未建立近场连接'); return false; }
+    const mid = 'm' + (++nearMidSeq) + '_' + Date.now().toString(36);
+    msg = Object.assign({ mid }, msg);
+    const entry = { payload: msg, retries: 0, nextTimer: null };
+    const fire = () => { try { nearDC.send(JSON.stringify(entry.payload)); } catch (e) {} };
+    entry.nextTimer = setTimeout(function retry() {
+        const cur = nearPendingAck.get(mid);
+        if (!cur) return; // 已 ACK
+        if (cur.retries >= 3) { nearPendingAck.delete(mid); nearBumpStat(); return; } // 放弃
+        cur.retries++;
+        try { nearDC.send(JSON.stringify(cur.payload)); } catch (e) {}
+        cur.nextTimer = setTimeout(retry, 2000);
+    }, 2000);
+    nearPendingAck.set(mid, entry);
+    fire();
+    nearStats.sent++; nearBumpStat();
+    return true;
+}
+
+function nearSendText() {
+    const input = $('#nearSendInput');
+    const text = (input?.value || '').trim();
+    if (!text) return;
+    if (!nearDcSend({ type: 'text', text })) return;
+    nearLogLine('近场 ·', text, true);
+    if (input) input.value = '';
+}
+
+function nearSendCard() {
+    const nickname = (me && me.nickname) || '我';
+    const phone = (me && me.phone) || '';
+    if (!nearDcSend({ type: 'card', nickname, phone })) return;
+    nearLogLine('名片 ·', nickname + '（' + phone + '）', true);
+}
+
+function nearDisconnect(silent) {
+    nearStopPoll();
+    // 清理心跳 + ICE 批量定时器 + 重传
+    if (nearHeartbeatTimer) { clearInterval(nearHeartbeatTimer); nearHeartbeatTimer = null; }
+    if (nearIceFlushTimer) { clearTimeout(nearIceFlushTimer); nearIceFlushTimer = null; }
+    nearIceBatch = [];
+    for (const [, v] of nearPendingAck) { if (v.nextTimer) clearTimeout(v.nextTimer); }
+    nearPendingAck.clear();
+    nearStats.sent = 0; nearStats.acked = 0; nearBumpStat();
+    if (nearDC) { try { nearDC.close(); } catch (e) {} nearDC = null; }
+    if (nearPC) { try { nearPC.close(); } catch (e) {} nearPC = null; }
+    nearCode = null; nearRole = null; nearIceQueue = [];
+    const conn = $('#nearConnected');
+    if (conn) conn.hidden = true;
+    const metric = $('#btMetric'); if (metric) metric.hidden = true;
+    nearSetChip('idle');
+    if (!silent) nearSetStatus('已断开近场连接');
+}
+
+$('#btTabBt')?.addEventListener('click', () => nearSwitchTab('bt'));
+$('#btTabNear')?.addEventListener('click', () => nearSwitchTab('near'));
+$('#btTabOffline')?.addEventListener('click', () => nearSwitchTab('offline'));
+$('#nearCreateBtn')?.addEventListener('click', nearCreate);
+
+// ============ 离线直连 QR-SDP（同局域网 · 无服务器 · 无流量） ============
+// 流程：A 生成 offer → 压缩 → QR 分片轮播 → B 扫码重组 → B 出 answer QR → A 扫码 → 建连
+let offlinePC = null;
+let offlineDC = null;
+let offlineRole = null; // 'offerer' / 'answerer'
+const offlinePendingAck = new Map();
+let offlineMidSeq = 0;
+let offlineHeartbeatTimer = null;
+let offlinePingTs = 0;
+const offlineStats = { sent: 0, acked: 0 };
+let offlineQRChunks = [];      // offerer/answerer 待显示的 QR 分片
+let offlineQRIdx = 0;
+let offlineQRTimer = null;
+let offlineScanStream = null;
+let offlineScanTimer = null;
+const offlineScanPieces = [];  // 扫码方收集到的分片 {i,n,payload}
+const OFFLINE_QR_MAX = 800;    // 单 QR 最大字符数
+
+function offlineSetStatus(msg) { const el = $('#offlineStatus'); if (el) el.textContent = msg || ''; }
+function offlineSetChip(state) {
+    const chip = $('#offlineStatusChip');
+    if (!chip) return;
+    chip.classList.remove('ok', 'fail', 'idle');
+    let txt = '等待中';
+    if (state === 'ok') { chip.classList.add('ok'); txt = '已连接'; }
+    else if (state === 'fail') { chip.classList.add('fail'); txt = '失败'; }
+    else if (state === 'idle') { chip.classList.add('idle'); txt = '待机'; }
+    chip.textContent = txt;
+}
+function offlineBumpStat() {
+    const s = $('#offlineSentCnt'), a = $('#offlineAckCnt');
+    if (s) s.textContent = String(offlineStats.sent);
+    if (a) a.textContent = String(offlineStats.acked);
+    const ok = document.querySelector('#offlineRttPanel .bt-rtt-ok') || document.querySelector('#offlineRttPanel .bt-rtt-item:nth-child(3)');
+    if (ok) ok.classList.toggle('warn', offlineStats.sent > offlineStats.acked);
+}
+function offlineLogLine(tag, text, out) {
+    const log = $('#offlineRxLog');
+    if (!log) return;
+    const line = document.createElement('div');
+    line.className = 'bt-rx-line' + (out ? ' bt-rx-out' : '');
+    line.innerHTML = '<span class="bt-rx-tag">' + tag + '</span>' + escapeHtml(text);
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+}
+
+// A 端：生成 offer → 分片 → 轮播 QR
+async function offlineStartOfferer() {
+    try {
+        offlineDisconnect(true);
+        await loadQRCode(); await loadLZ();
+        offlineRole = 'offerer';
+        offlinePC = new RTCPeerConnection({ iceServers: [], iceTransportPolicy: 'public' }); // 纯 host 候选
+        offlineDC = offlinePC.createDataChannel('stating', { ordered: true, maxRetransmits: Infinity });
+        offlineBindDC(offlineDC);
+        const offer = await offlinePC.createOffer();
+        await offlinePC.setLocalDescription(offer);
+        await offlineWaitIceComplete(offlinePC, 1500);
+        const compressed = sdCompress(offlinePC.localDescription);
+        offlineQRChunks = offlineChunkString(JSON.stringify(compressed), OFFLINE_QR_MAX);
+        offlineQRIdx = 0;
+        offlineShowQR();
+        offlineSetStatus('请对方用「加入方」扫描此码（共 ' + offlineQRChunks.length + ' 片）');
+        offlineSetChip();
+    } catch (e) {
+        offlineSetStatus('生成失败：' + (e.message || '未知错误'));
+        offlineSetChip('fail');
+    }
+}
+
+// B 端：启动摄像头扫码
+async function offlineStartScanner() {
+    try {
+        offlineDisconnect(true);
+        await loadJsQR();
+        offlineRole = 'answerer';
+        offlineScanPieces.length = 0;
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } }, audio: false
+        });
+        offlineScanStream = stream;
+        const v = $('#offlineScanVideo');
+        const box = $('#offlineScanBox');
+        if (v) { v.srcObject = stream; v.play().catch(() => {}); }
+        if (box) box.hidden = false;
+        const hint = $('#offlineScanHint');
+        if (hint) hint.textContent = '将对方的二维码对准摄像头…';
+        offlineSetStatus('摄像头已启动，对准对方二维码…');
+        offlineSetChip();
+        offlineScanTimer = setInterval(offlineScanTick, 200);
+    } catch (e) {
+        offlineSetStatus('摄像头不可用：' + (e.message || '权限被拒') + '。需 HTTPS 且用户授权。');
+        offlineSetChip('fail');
+    }
+}
+
+// 单帧扫码
+async function offlineScanTick() {
+    const v = $('#offlineScanVideo');
+    if (!v || v.readyState < 2) return;
+    if (typeof jsQR !== 'function') return;
+    const w = v.videoWidth || 480, h = v.videoHeight || 360;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(v, 0, 0, w, h);
+    const img = ctx.getImageData(0, 0, w, h);
+    const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if (!code || !code.data) return;
+    let piece;
+    try { piece = JSON.parse(code.data); } catch (e) { return; }
+    if (!piece || typeof piece.i !== 'number' || typeof piece.n !== 'number' || typeof piece.payload !== 'string') return;
+    // 去重
+    if (offlineScanPieces.some(p => p.i === piece.i)) return;
+    offlineScanPieces.push(piece);
+    const hint = $('#offlineScanHint');
+    if (hint) hint.textContent = '已扫 ' + offlineScanPieces.length + ' / ' + piece.n;
+    if (offlineScanPieces.length < piece.n) return;
+    // 全部到齐 → 重组 → setRemoteDescription → 生成 answer → 出码
+    clearInterval(offlineScanTimer); offlineScanTimer = null;
+    offlineStopCamera();
+    offlineScanPieces.sort((a, b) => a.i - b.i);
+    const compressedStr = offlineScanPieces.map(p => p.payload).join('');
+    const sdp = sdDecompress(JSON.parse(compressedStr));
+    offlineScanPieces.length = 0;
+    try {
+        if (!offlinePC) {
+            offlinePC = new RTCPeerConnection({ iceServers: [], iceTransportPolicy: 'public' });
+            offlinePC.ondatachannel = (e) => { offlineDC = e.channel; offlineBindDC(offlineDC); };
+        }
+        await offlinePC.setRemoteDescription(sdp);
+        const ans = await offlinePC.createAnswer();
+        await offlinePC.setLocalDescription(ans);
+        await offlineWaitIceComplete(offlinePC, 1500);
+        // 同样分片回传给 A
+        offlineQRChunks = offlineChunkString(JSON.stringify(sdCompress(offlinePC.localDescription)), OFFLINE_QR_MAX);
+        offlineQRIdx = 0;
+        offlineShowQR();
+        offlineSetStatus('已收到对方请求，请对方用「发起方」重新扫描此回执码（共 ' + offlineQRChunks.length + ' 片）');
+    } catch (e) {
+        offlineSetStatus('建立连接失败：' + (e.message || '未知错误'));
+        offlineSetChip('fail');
+    }
+}
+
+// 等待 ICE 收集完成（无 STUN 时极快，纯 host 候选）
+function offlineWaitIceComplete(pc, timeoutMs = 1500) {
+    if (!pc) return Promise.resolve();
+    if (pc.iceGatheringState === 'complete') return Promise.resolve();
+    return new Promise(resolve => {
+        let done = false;
+        const finish = () => { if (done) return; done = true; clearTimeout(t); try { pc.removeEventListener('icegatheringstatechange', onChange); } catch (e) {} resolve(); };
+        const t = setTimeout(finish, timeoutMs);
+        const onChange = () => { if (pc.iceGatheringState === 'complete') finish(); };
+        try { pc.addEventListener('icegatheringstatechange', onChange); } catch (e) {}
+    });
+}
+
+// 字符串按长度分片，每片包成 {i,n,payload}
+function offlineChunkString(str, max) {
+    const n = Math.ceil(str.length / max);
+    const out = [];
+    for (let i = 0; i < n; i++) {
+        out.push({ i: i, n: n, payload: str.slice(i * max, (i + 1) * max) });
+    }
+    return out;
+}
+
+// 渲染当前分片 QR，2s 后翻页
+function offlineShowQR() {
+    const box = $('#offlineQRBox');
+    if (!box || !offlineQRChunks.length) return;
+    box.hidden = false;
+    const piece = offlineQRChunks[offlineQRIdx];
+    box.innerHTML = '';
+    const holder = document.createElement('div');
+    box.appendChild(holder);
+    try {
+        // qrcodejs 把 canvas/img 渲染进 holder
+        new QRCode(holder, { text: JSON.stringify(piece), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+    } catch (e) {
+        holder.textContent = 'QR 库未就绪';
+    }
+    const prog = document.createElement('div');
+    prog.className = 'offline-qr-progress';
+    prog.textContent = (offlineQRIdx + 1) + ' / ' + offlineQRChunks.length;
+    box.appendChild(prog);
+    if (offlineQRChunks.length > 1) {
+        const hint = document.createElement('div');
+        hint.className = 'offline-qr-hint';
+        hint.textContent = '自动轮播 · 请扫码方依次扫完';
+        box.appendChild(hint);
+    }
+    if (offlineQRTimer) clearTimeout(offlineQRTimer);
+    if (offlineQRChunks.length > 1) {
+        offlineQRTimer = setTimeout(() => {
+            offlineQRIdx = (offlineQRIdx + 1) % offlineQRChunks.length;
+            offlineShowQR();
+        }, 2000);
+    }
+}
+
+// A 端扫到 B 的 answer QR 后建连：监听 ondatachannel(其实 A 是 offerer,A 创建了 DC 不需要监听)
+// 注意：A 是 offerer,A 创建了 DC,扫描 answer 后 setRemoteDescription,DC 自动 open
+// 但为支持「A 也能扫 B 的回执」，A 切到「发起方」二次扫码模式时，复用 offlineScanTick，但识别为 answer 类型
+// —— 简化：让 offlineScanTick 同时支持 offerer 收 answer 和 answerer 收 offer。
+// 上方 offlineScanTick 是 answerer 流程；offerer 扫 answer 需单独函数 offlineScanAnswer()
+
+async function offlineScanAnswer() {
+    // 复用扫码循环，但目标改为 setRemoteDescription(answer)
+    // 启动摄像头
+    try {
+        await loadJsQR();
+        offlineScanPieces.length = 0;
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } }, audio: false
+        });
+        offlineScanStream = stream;
+        const v = $('#offlineScanVideo');
+        const box = $('#offlineScanBox');
+        if (v) { v.srcObject = stream; v.play().catch(() => {}); }
+        if (box) box.hidden = false;
+        const hint = $('#offlineScanHint');
+        if (hint) hint.textContent = '对准对方回执二维码…';
+        offlineSetStatus('请扫描对方的回执码（answer）…');
+        offlineScanTimer = setInterval(offlineScanAnswerTick, 200);
+    } catch (e) {
+        offlineSetStatus('摄像头不可用：' + (e.message || '权限被拒'));
+        offlineSetChip('fail');
+    }
+}
+
+async function offlineScanAnswerTick() {
+    const v = $('#offlineScanVideo');
+    if (!v || v.readyState < 2) return;
+    if (typeof jsQR !== 'function') return;
+    const w = v.videoWidth || 480, h = v.videoHeight || 360;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(v, 0, 0, w, h);
+    const img = ctx.getImageData(0, 0, w, h);
+    const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if (!code || !code.data) return;
+    let piece;
+    try { piece = JSON.parse(code.data); } catch (e) { return; }
+    if (!piece || typeof piece.i !== 'number' || typeof piece.n !== 'number' || typeof piece.payload !== 'string') return;
+    if (offlineScanPieces.some(p => p.i === piece.i)) return;
+    offlineScanPieces.push(piece);
+    const hint = $('#offlineScanHint');
+    if (hint) hint.textContent = '已扫 ' + offlineScanPieces.length + ' / ' + piece.n;
+    if (offlineScanPieces.length < piece.n) return;
+    clearInterval(offlineScanTimer); offlineScanTimer = null;
+    offlineStopCamera();
+    offlineScanPieces.sort((a, b) => a.i - b.i);
+    const compressedStr = offlineScanPieces.map(p => p.payload).join('');
+    const sdp = sdDecompress(JSON.parse(compressedStr));
+    offlineScanPieces.length = 0;
+    try {
+        if (offlinePC && offlinePC.signalingState === 'have-local-offer') {
+            await offlinePC.setRemoteDescription(sdp);
+            offlineSetStatus('✅ 已收到对方回执，连接建立中…');
+            // DC 在 setRemoteDescription 后自动 open
+        }
+    } catch (e) {
+        offlineSetStatus('设置 answer 失败：' + (e.message || '未知错误'));
+        offlineSetChip('fail');
+    }
+}
+
+function offlineStopCamera() {
+    if (offlineScanStream) {
+        offlineScanStream.getTracks().forEach(t => t.stop());
+        offlineScanStream = null;
+    }
+    const v = $('#offlineScanVideo');
+    if (v) v.srcObject = null;
+    const box = $('#offlineScanBox');
+    if (box) box.hidden = true;
+}
+
+// 数据通道：复用 nearBindDC 模式，仅 id 前缀不同
+function offlineBindDC(dc) {
+    dc.onopen = () => {
+        offlineSetStatus('✅ 离线直连已建立');
+        const conn = $('#offlineConnected');
+        if (conn) conn.hidden = false;
+        offlineSetChip('ok');
+        // 隐藏 QR/扫码框
+        const qb = $('#offlineQRBox'); if (qb) qb.hidden = true;
+        offlineStopCamera();
+        if (offlineHeartbeatTimer) clearInterval(offlineHeartbeatTimer);
+        offlineHeartbeatTimer = setInterval(() => {
+            if (!offlineDC || offlineDC.readyState !== 'open') return;
+            offlinePingTs = Date.now();
+            try { offlineDC.send(JSON.stringify({ type: 'ping', t: offlinePingTs })); } catch (e) {}
+        }, 2000);
+    };
+    dc.onmessage = (ev) => {
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (e) { offlineLogLine('离线 ·', String(ev.data)); return; }
+        if (msg.type === 'ping') { try { dc.send(JSON.stringify({ type: 'pong', t: msg.t })); } catch (e) {} return; }
+        if (msg.type === 'pong') {
+            if (msg.t) {
+                const rtt = Date.now() - msg.t;
+                const r = $('#offlineRttVal'); if (r) r.textContent = String(rtt);
+            }
+            return;
+        }
+        if (msg.type === 'ack') {
+            const entry = offlinePendingAck.get(msg.mid);
+            if (entry) { clearTimeout(entry.nextTimer); offlinePendingAck.delete(msg.mid); offlineStats.acked++; offlineBumpStat(); }
+            return;
+        }
+        if (msg.mid) { try { dc.send(JSON.stringify({ type: 'ack', mid: msg.mid })); } catch (e) {} }
+        if (msg.type === 'text') offlineLogLine('离线 ·', msg.text);
+        else if (msg.type === 'card') offlineLogLine('名片 ·', (msg.nickname || '对方') + '（' + (msg.phone || '') + '）');
+        else offlineLogLine('离线 ·', JSON.stringify(msg));
+    };
+    dc.onclose = () => {
+        offlineSetStatus('离线连接已断开');
+        const conn = $('#offlineConnected');
+        if (conn) conn.hidden = true;
+        if (offlineHeartbeatTimer) { clearInterval(offlineHeartbeatTimer); offlineHeartbeatTimer = null; }
+        for (const [, v] of offlinePendingAck) { if (v.nextTimer) clearTimeout(v.nextTimer); }
+        offlinePendingAck.clear();
+    };
+    dc.onerror = () => { offlineSetStatus('离线连接错误'); };
+}
+
+function offlineDcSend(msg) {
+    if (!offlineDC || offlineDC.readyState !== 'open') { offlineSetStatus('尚未建立离线连接'); return false; }
+    const mid = 'o' + (++offlineMidSeq) + '_' + Date.now().toString(36);
+    msg = Object.assign({ mid }, msg);
+    const entry = { payload: msg, retries: 0, nextTimer: null };
+    const fire = () => { try { offlineDC.send(JSON.stringify(entry.payload)); } catch (e) {} };
+    entry.nextTimer = setTimeout(function retry() {
+        const cur = offlinePendingAck.get(mid);
+        if (!cur) return;
+        if (cur.retries >= 3) { offlinePendingAck.delete(mid); offlineBumpStat(); return; }
+        cur.retries++;
+        try { offlineDC.send(JSON.stringify(cur.payload)); } catch (e) {}
+        cur.nextTimer = setTimeout(retry, 2000);
+    }, 2000);
+    offlinePendingAck.set(mid, entry);
+    fire();
+    offlineStats.sent++; offlineBumpStat();
+    return true;
+}
+
+function offlineSendText() {
+    const input = $('#offlineSendInput');
+    const text = (input?.value || '').trim();
+    if (!text) return;
+    if (!offlineDcSend({ type: 'text', text })) return;
+    offlineLogLine('离线 ·', text, true);
+    if (input) input.value = '';
+}
+function offlineSendCard() {
+    const nickname = (me && me.nickname) || '我';
+    const phone = (me && me.phone) || '';
+    if (!offlineDcSend({ type: 'card', nickname, phone })) return;
+    offlineLogLine('名片 ·', nickname + '（' + phone + '）', true);
+}
+
+function offlineDisconnect(silent) {
+    if (offlineQRTimer) { clearTimeout(offlineQRTimer); offlineQRTimer = null; }
+    if (offlineScanTimer) { clearInterval(offlineScanTimer); offlineScanTimer = null; }
+    offlineStopCamera();
+    if (offlineHeartbeatTimer) { clearInterval(offlineHeartbeatTimer); offlineHeartbeatTimer = null; }
+    for (const [, v] of offlinePendingAck) { if (v.nextTimer) clearTimeout(v.nextTimer); }
+    offlinePendingAck.clear();
+    offlineStats.sent = 0; offlineStats.acked = 0; offlineBumpStat();
+    if (offlineDC) { try { offlineDC.close(); } catch (e) {} offlineDC = null; }
+    if (offlinePC) { try { offlinePC.close(); } catch (e) {} offlinePC = null; }
+    offlineRole = null; offlineQRChunks = []; offlineQRIdx = 0; offlineScanPieces.length = 0;
+    const conn = $('#offlineConnected'); if (conn) conn.hidden = true;
+    const qb = $('#offlineQRBox'); if (qb) { qb.hidden = true; qb.innerHTML = ''; }
+    offlineSetChip('idle');
+    if (!silent) offlineSetStatus('已断开离线连接');
+}
+
+// 事件绑定
+$('#offlineCreateBtn')?.addEventListener('click', offlineStartOfferer);
+$('#offlineScanBtn')?.addEventListener('click', offlineStartScanner);
+$('#offlineSendTextBtn')?.addEventListener('click', offlineSendText);
+$('#offlineSendCardBtn')?.addEventListener('click', offlineSendCard);
+$('#offlineDisconnectBtn')?.addEventListener('click', () => offlineDisconnect(false));
+$('#nearJoinBtn')?.addEventListener('click', nearJoin);
+$('#nearCodeInput')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') nearJoin(); });
+$('#nearSendTextBtn')?.addEventListener('click', nearSendText);
+$('#nearSendCardBtn')?.addEventListener('click', nearSendCard);
+$('#nearDisconnectBtn')?.addEventListener('click', () => nearDisconnect(false));
+$('#btCloseBtn')?.addEventListener('click', () => { nearDisconnect(true); offlineDisconnect(true); });
 
 // 2. 弹幕模式
 let danmakuMode = false;

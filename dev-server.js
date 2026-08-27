@@ -64,7 +64,7 @@ function authUser(req) {
   return kvGet('user:' + data.phone);
 }
 
-async function handleAPI(req, parts, body) {
+async function handleAPI(req, parts, body, url) {
   if (parts[0] === 'register' && req.method === 'POST') return handleRegister(body);
   if (parts[0] === 'login' && req.method === 'POST') return handleLogin(body);
 
@@ -226,10 +226,104 @@ async function handleAPI(req, parts, body) {
       return { ok: true };
     }
 
+    // 近场 P2P 信令（与 functions/api/[[path]].js 行为一致，含长轮询）
+    if (parts[0] === 'near' && parts[1] === 'session') {
+      return handleNearSession(req, url, user);
+    }
+    if (parts[0] === 'near' && parts[1] === 'signal') {
+      return handleNearSignal(req, url, user, body);
+    }
+
     return { ok: false, error: '未知路径' };
   } catch (e) {
     return { ok: false, error: e.message };
   }
+}
+
+// ============ 近场 P2P 信令（与 Cloudflare 后端行为一致，含长轮询） ============
+const NEAR_TTL = 30 * 60 * 1000;
+function nearCode() {
+  const chars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+  let c = ''; for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)];
+  return c;
+}
+function nearCleanup() {
+  const cutoff = Date.now() - NEAR_TTL;
+  for (const k of Object.keys(KV)) {
+    if (k.startsWith('near_session:') || k.startsWith('near_signals:')) {
+      try { const v = JSON.parse(KV[k]); if ((v.ts || 0) < cutoff) { delete KV[k]; } } catch (e) { delete KV[k]; }
+    }
+  }
+}
+
+async function handleNearSession(req, url, user) {
+  nearCleanup();
+  if (req.method === 'POST') {
+    let code; let tries = 0;
+    do { code = nearCode(); tries++; } while (kvGet('near_session:' + code) && tries < 5);
+    kvSet('near_session:' + code, { createdBy: user.phone, ts: Date.now() });
+    return { ok: true, code };
+  }
+  if (req.method === 'DELETE') {
+    const code = url.searchParams.get('code');
+    if (!code) return { ok: false, error: '缺少会话码' };
+    kvDel('near_session:' + code); kvDel('near_signals:' + code);
+    return { ok: true, deleted: true };
+  }
+  const code = url.searchParams.get('code');
+  if (!code) return { ok: false, error: '缺少会话码' };
+  const s = kvGet('near_session:' + code);
+  if (!s) return { ok: false, error: '会话不存在或已过期', status: 404 };
+  s.ts = Date.now(); kvSet('near_session:' + code, s);
+  return { ok: true, exists: true };
+}
+
+async function handleNearSignal(req, url, user, body) {
+  nearCleanup();
+  if (req.method === 'POST') {
+    const code = url.searchParams.get('code') || body.code;
+    if (!code) return { ok: false, error: '缺少会话码' };
+    const to = String(body.to || '');
+    const data = body.data;
+    if (!to || data === undefined || data === null) return { ok: false, error: '缺少信令内容' };
+    if (!kvGet('near_session:' + code)) return { ok: false, error: '会话不存在或已过期', status: 404 };
+    const key = 'near_signals:' + code;
+    const q = kvGet(key) || {};
+    q[to] = q[to] || [];
+    q[to].push({ data, ts: Date.now() });
+    q.ts = Date.now();
+    kvSet(key, q);
+    return { ok: true, queued: true };
+  }
+  // GET（含长轮询 wait=1）
+  const code = url.searchParams.get('code');
+  if (!code) return { ok: false, error: '缺少会话码' };
+  const peer = url.searchParams.get('peer') || '';
+  if (!peer) return { ok: false, error: '缺少peer' };
+  const wantWait = url.searchParams.get('wait') === '1';
+  const pollMs = 300, maxHold = wantWait ? 18000 : 0;
+  const deadline = Date.now() + maxHold;
+  const drain = () => {
+    const key = 'near_signals:' + code;
+    const q = kvGet(key) || {};
+    const arr = q[peer] || [];
+    if (arr.length) {
+      const out = arr.splice(0, arr.length);
+      q[peer] = [];
+      q.ts = Date.now(); kvSet(key, q);
+      return out.map(r => r.data);
+    }
+    return null;
+  };
+  let first = drain();
+  if (first) return { ok: true, signals: first };
+  if (!wantWait) return { ok: true, signals: [] };
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, pollMs));
+    const got = drain();
+    if (got) return { ok: true, signals: got };
+  }
+  return { ok: true, signals: [] };
 }
 
 // MIME types
@@ -245,7 +339,7 @@ const server = http.createServer(async (req, res) => {
       body = await new Promise(r => { let d = ''; req.on('data', c => d += c); req.on('end', () => { try { r(JSON.parse(d || '{}')); } catch { r({}); } }); });
     }
     const parts = url.pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean);
-    const result = await handleAPI(req, parts, body);
+    const result = await handleAPI(req, parts, body, url);
     res.writeHead(result.status || 200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify(result));
     return;
