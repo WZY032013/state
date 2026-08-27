@@ -344,7 +344,7 @@
                             <button class="multi-menu-item" id="mmVoice" title="语音信箱"><span class="mm-icon" data-icon="mic"></span><span class="mm-label">语音信箱</span></button>
                             <button class="multi-menu-item" id="mmVoiceCall" title="语音通话"><span class="mm-icon" data-icon="phone"></span><span class="mm-label">语音通话</span></button>
                             <button class="multi-menu-item" id="mmCheckin" title="位置打卡"><span class="mm-icon" data-icon="location"></span><span class="mm-label">打卡</span></button>
-                            <button class="multi-menu-item" id="mmBluetooth" title="蓝牙近场"><span class="mm-icon" data-icon="bluetooth"></span><span class="mm-label">蓝牙</span></button>
+                            <button class="multi-menu-item" id="mmBluetooth" title="蓝牙 / 低数据模式"><span class="mm-icon" data-icon="bluetooth"></span><span class="mm-label">蓝牙</span></button>
                         </div>
                         <!-- 长按位置菜单 -->
                         <div class="loc-menu glass" id="locMenu" hidden>
@@ -664,14 +664,13 @@
     </div>
 </div>
 
-<!-- 蓝牙近场通信对话框 -->
+<!-- 蓝牙 / 低数据通信对话框 -->
 <div id="bluetoothDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass bluetooth-card" style="max-width:460px;">
+    <div class="confirm-card glass bluetooth-card" style="max-width:440px;">
         <div class="bt-hero">
-            <div class="bt-hero-wave" aria-hidden="true"><span></span><span></span><span></span></div>
             <div class="bt-hero-text">
-                <h3><span class="bt-title-icon">🛜</span> 近场传输</h3>
-                <div class="bt-scheme-badge" id="btSchemeBadge">选择方案</div>
+                <h3>传输</h3>
+                <div class="bt-hero-sub" id="btHeroSub">跨设备文本 / 名片交换</div>
             </div>
             <div class="bt-metric" id="btMetric" hidden>
                 <div class="bt-metric-rtt" id="btMetricRtt">--ms</div>
@@ -679,87 +678,74 @@
             </div>
         </div>
         <div class="bt-seg" id="btTabs">
-            <button class="bt-seg-btn active" id="btTabBt">📡 蓝牙外设</button>
-            <button class="bt-seg-btn" id="btTabNear">🌍 远程</button>
-            <button class="bt-seg-btn" id="btTabOffline">📶 离线直连</button>
+            <button class="bt-seg-btn active" id="btTabNear">📶 低数据模式</button>
+            <button class="bt-seg-btn" id="btTabBt">📡 蓝牙</button>
             <div class="bt-seg-thumb" id="btSegThumb"></div>
         </div>
-        <div id="btPanelBt">
-            <p class="bt-desc">连接 BLE 传感器/外设互发数据。<strong>手机间直连请用「远程」或「离线直连」</strong>（浏览器只能当蓝牙主机，无法手机间直连）。</p>
-            <div id="btSupportNote" class="bt-note">检测浏览器蓝牙支持…</div>
+        <!-- 低数据模式 -->
+        <div id="btPanelNear">
+            <div class="bt-desc-box">
+                <div class="bt-desc-title">低数据模式</div>
+                <div class="bt-desc-body">两端都需要打开 Stating。通过服务器交换信令（约 10KB），之后点对点直连传输数据。<strong>仅需能打开网页的最低流量，距离不限</strong>。全浏览器兼容。</div>
+                <div class="bt-desc-steps">
+                    <span class="bt-step"><b>1</b> 一方创建会话获取 6 位配对码</span>
+                    <span class="bt-step"><b>2</b> 另一方输入配对码加入</span>
+                    <span class="bt-step"><b>3</b> 自动建立加密直连，互发文本和名片</span>
+                </div>
+            </div>
+            <div id="nearSupportNote" class="bt-note">全浏览器支持 · 需 HTTPS · 仅需最低流量打开页面</div>
+            <div class="bt-status-row"><span class="bt-chip" id="nearStatusChip">待机</span><span class="bt-status" id="nearStatus">创建会话或输入配对码开始</span></div>
+            <div class="near-code-row">
+                <button class="btn-primary" id="nearCreateBtn" style="flex:1.2;">创建会话</button>
+                <input type="text" id="nearCodeInput" class="near-code-input" placeholder="6 位码" maxlength="6" autocomplete="off">
+                <button class="btn-ghost" id="nearJoinBtn">加入</button>
+            </div>
+            <div id="nearConnected" hidden>
+                <div class="bt-rtt-panel" id="nearRttPanel">
+                    <span class="bt-rtt-item">延迟 <b id="nearRttVal">--</b>ms</span>
+                    <span class="bt-rtt-item">已发 <b id="nearSentCnt">0</b></span>
+                    <span class="bt-rtt-item">已送达 <b id="nearAckCnt">0</b></span>
+                    <span class="bt-rtt-item bt-rtt-ok">0丢包</span>
+                </div>
+                <div class="field glass-field bt-send-row">
+                    <input type="text" id="nearSendInput" placeholder="输入文本，回车发送…" maxlength="500">
+                </div>
+                <div class="bt-btn-row">
+                    <button class="btn-primary" id="nearSendTextBtn" style="flex:1;">发送</button>
+                    <button class="btn-ghost" id="nearSendCardBtn" style="flex:1;">📇 名片</button>
+                </div>
+                <div class="bt-rx-log" id="nearRxLog"><div class="bt-rx-title">消息记录</div></div>
+                <button class="btn-text bt-disconnect" id="nearDisconnectBtn">断开</button>
+            </div>
+        </div>
+        <!-- 蓝牙 -->
+        <div id="btPanelBt" hidden>
+            <div class="bt-desc-box">
+                <div class="bt-desc-title">蓝牙</div>
+                <div class="bt-desc-body">通过 Web Bluetooth 连接 BLE 外设（传感器、手环等）。<strong>仅 Chrome / Edge / Android 支持</strong>；iOS Safari 不可用。浏览器只能作为蓝牙主机，不支持手机间直连（手机间请用低数据模式）。</div>
+                <div class="bt-desc-steps">
+                    <span class="bt-step"><b>1</b> 点击扫描，在系统弹窗中选设备</span>
+                    <span class="bt-step"><b>2</b> 自动连接 GATT，匹配可读写特征</span>
+                    <span class="bt-step"><b>3</b> 收发文本数据，设备断开自动提示</span>
+                </div>
+            </div>
+            <div id="btSupportNote" class="bt-note">检测浏览器兼容性…</div>
             <div class="bt-status-row"><span class="bt-chip" id="btStatusChip">待机</span><span class="bt-status" id="btStatus"></span></div>
-            <button class="btn-primary bt-scan-btn" id="btScanBtn" style="width:100%;margin:8px 0;">
-                <span id="btScanLabel">📡 扫描附近设备</span>
+            <button class="btn-primary" id="btScanBtn" style="width:100%;margin:0 0 8px;">
+                <span id="btScanLabel">扫描附近设备</span>
             </button>
             <div id="btDeviceList" class="bt-device-list"></div>
             <div id="btConnected" class="bt-connected" hidden>
                 <div class="bt-device-info" id="btDeviceInfo"></div>
                 <div class="field glass-field bt-send-row">
-                    <input type="text" id="btSendInput" placeholder="通过蓝牙发送文本…" maxlength="120">
+                    <input type="text" id="btSendInput" placeholder="输入文本，回车发送…" maxlength="120">
                 </div>
                 <div class="bt-btn-row">
-                    <button class="btn-primary" id="btSendTextBtn" style="flex:1;">发送文本</button>
-                    <button class="btn-ghost" id="btSendCardBtn" style="flex:1;">📇 发送我的名片</button>
+                    <button class="btn-primary" id="btSendTextBtn" style="flex:1;">发送</button>
+                    <button class="btn-ghost" id="btSendCardBtn" style="flex:1;">📇 名片</button>
                 </div>
-                <div class="bt-rx-log" id="btRxLog"><div class="bt-rx-title">接收数据</div></div>
-                <button class="btn-text bt-disconnect" id="btDisconnectBtn" style="margin-top:6px;">断开连接</button>
-            </div>
-        </div>
-        <div id="btPanelNear" hidden>
-            <p class="bt-desc">经 WebRTC P2P 直连，信令仅 ~10KB，<strong>10kbps 极弱网可用</strong>，距离不限（需能打开本站）。全浏览器（含 iOS Safari/Firefox）支持。</p>
-            <div id="nearSupportNote" class="bt-note">🌐 全浏览器支持 · 需 HTTPS · 最低流量</div>
-            <div class="bt-status-row"><span class="bt-chip" id="nearStatusChip">待机</span><span class="bt-status" id="nearStatus">创建会话或输入 6 位配对码开始远程传输</span></div>
-            <div class="near-code-row">
-                <button class="btn-primary" id="nearCreateBtn" style="flex:1.2;">🔗 创建会话</button>
-                <input type="text" id="nearCodeInput" class="near-code-input" placeholder="6 位配对码" maxlength="6" autocomplete="off">
-                <button class="btn-ghost" id="nearJoinBtn">加入</button>
-            </div>
-            <div id="nearConnected" hidden>
-                <div class="bt-rtt-panel glass-field" id="nearRttPanel">
-                    <span class="bt-rtt-item">延迟 <b id="nearRttVal">--</b>ms</span>
-                    <span class="bt-rtt-item">已发 <b id="nearSentCnt">0</b></span>
-                    <span class="bt-rtt-item">已送达 <b id="nearAckCnt">0</b></span>
-                    <span class="bt-rtt-item bt-rtt-ok">0 丢包</span>
-                </div>
-                <div class="field glass-field bt-send-row">
-                    <input type="text" id="nearSendInput" placeholder="通过远程发送文本…" maxlength="500">
-                </div>
-                <div class="bt-btn-row">
-                    <button class="btn-primary" id="nearSendTextBtn" style="flex:1;">发送文本</button>
-                    <button class="btn-ghost" id="nearSendCardBtn" style="flex:1;">📇 发送我的名片</button>
-                </div>
-                <div class="bt-rx-log" id="nearRxLog"><div class="bt-rx-title">接收数据</div></div>
-                <button class="btn-text bt-disconnect" id="nearDisconnectBtn" style="margin-top:6px;">断开连接</button>
-            </div>
-        </div>
-        <div id="btPanelOffline" hidden>
-            <p class="bt-desc">无服务器、无流量，经 QR 码交换连接信息。<strong>限同局域网（同一 WiFi/网段，无隔离）</strong>。真正气隙（无任何网络）浏览器无法直连。</p>
-            <div class="bt-note">📶 需双方在同一局域网 · 无需互联网</div>
-            <div class="bt-status-row"><span class="bt-chip" id="offlineStatusChip">待机</span><span class="bt-status" id="offlineStatus">选择身份开始离线直连</span></div>
-            <div class="bt-btn-row" style="margin-top:8px;">
-                <button class="btn-primary" id="offlineCreateBtn" style="flex:1;">📤 我是发起方</button>
-                <button class="btn-ghost" id="offlineScanBtn" style="flex:1;">📷 我是加入方</button>
-            </div>
-            <div id="offlineConnected" hidden>
-                <div class="bt-rtt-panel glass-field" id="offlineRttPanel">
-                    <span class="bt-rtt-item">延迟 <b id="offlineRttVal">--</b>ms</span>
-                    <span class="bt-rtt-item">已发 <b id="offlineSentCnt">0</b></span>
-                    <span class="bt-rtt-item">已送达 <b id="offlineAckCnt">0</b></span>
-                </div>
-                <div class="field glass-field bt-send-row">
-                    <input type="text" id="offlineSendInput" placeholder="通过离线直连发送文本…" maxlength="500">
-                </div>
-                <div class="bt-btn-row">
-                    <button class="btn-primary" id="offlineSendTextBtn" style="flex:1;">发送文本</button>
-                    <button class="btn-ghost" id="offlineSendCardBtn" style="flex:1;">📇 发送我的名片</button>
-                </div>
-                <div class="bt-rx-log" id="offlineRxLog"><div class="bt-rx-title">接收数据</div></div>
-                <button class="btn-text bt-disconnect" id="offlineDisconnectBtn" style="margin-top:6px;">断开连接</button>
-            </div>
-            <div id="offlineQRBox" class="offline-qr-box" hidden></div>
-            <div id="offlineScanBox" class="offline-scan-box" hidden>
-                <video id="offlineScanVideo" class="offline-scan-video" playsinline muted></video>
-                <div class="offline-scan-hint" id="offlineScanHint">将对方的二维码对准摄像头…</div>
+                <div class="bt-rx-log" id="btRxLog"><div class="bt-rx-title">消息记录</div></div>
+                <button class="btn-text bt-disconnect" id="btDisconnectBtn">断开</button>
             </div>
         </div>
         <div class="confirm-btns">
