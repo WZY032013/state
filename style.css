@@ -4353,3 +4353,558 @@ body.dark .bt-rtt-item b { color: rgba(255, 255, 255, .9); }
     .nav-item span { font-size: 9px; }
 }
 
+/* ============================================================
+   扫码登录 & 扫一扫 — iOS 26 Liquid Glass
+   ============================================================ */
+
+/* 登录卡片里的 QR tab（图标按钮） */
+.auth-tab-qr {
+    flex: 0 0 auto;
+    min-width: 44px;
+    padding: 10px 16px;
+}
+.auth-tab-qr .svg-icon, .auth-tab-qr [data-icon] { width: 19px; height: 19px; }
+
+/* PC 端二维码面板 */
+.qr-login-panel { text-align: center; padding-top: 4px; }
+.qr-stage {
+    display: flex; justify-content: center;
+    margin: 4px 0 16px;
+}
+.qr-card {
+    position: relative;
+    width: 236px; height: 236px;
+    border-radius: 28px;
+    padding: 18px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.72);
+    overflow: hidden;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.9),
+        inset 0 -1px 0 rgba(31,45,80,.05),
+        0 16px 44px rgba(64,99,181,.16),
+        0 2px 10px rgba(31,45,80,.06);
+}
+.qr-img {
+    width: 200px; height: 200px;
+    border-radius: 16px;
+    background: #fff;
+    padding: 10px;
+    box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity .25s var(--spring-smooth), transform .25s var(--spring-smooth), filter .25s;
+}
+.qr-img svg, .qr-img img { width: 100%; height: 100%; display: block; }
+.qr-img svg path, .qr-img svg rect { shape-rendering: crispEdges; }
+
+/* 等待扫码时的蓝色扫描光带 */
+.qr-mask-line {
+    position: absolute; left: 22px; right: 22px; top: 22px;
+    height: 3px; border-radius: 3px;
+    background: linear-gradient(90deg, transparent, rgba(94,132,255,.95) 50%, transparent);
+    box-shadow: 0 0 14px rgba(94,132,255,.8), 0 0 4px rgba(94,132,255,.9);
+    animation: qrScanY 2.4s var(--spring-smooth) infinite;
+    pointer-events: none;
+}
+@keyframes qrScanY {
+    0% { transform: translateY(0); opacity: 0; }
+    12% { opacity: 1; }
+    50% { transform: translateY(180px); opacity: 1; }
+    88% { opacity: 1; }
+    100% { transform: translateY(0); opacity: 0; }
+}
+.qr-card.is-scanned .qr-mask-line,
+.qr-card.is-done .qr-mask-line,
+.qr-card.is-expired .qr-mask-line { animation: none; opacity: 0; }
+.qr-card.is-scanned .qr-img,
+.qr-card.is-expired .qr-img { opacity: .35; filter: blur(1.2px); transform: scale(.98); }
+
+/* 扫码后/过期/成功状态遮罩 */
+.qr-state-overlay {
+    position: absolute; inset: 0; z-index: 4;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px;
+    border-radius: inherit;
+    background: rgba(244,247,255,.55);
+    -webkit-backdrop-filter: blur(10px) saturate(160%);
+    backdrop-filter: blur(10px) saturate(160%);
+    animation: qrFade .28s var(--spring-smooth);
+    text-align: center; padding: 20px;
+}
+@keyframes qrFade { from { opacity: 0; } to { opacity: 1; } }
+.qr-state-icon {
+    width: 56px; height: 56px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    animation: qrPop .42s var(--spring-bounce);
+}
+.qr-state-icon .svg-icon { width: 30px; height: 30px; }
+.qr-state-overlay p { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--ink-2); line-height: 1.45; }
+.qr-reload-btn { margin-top: 4px; padding: 9px 20px; font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px; }
+.qr-reload-btn .svg-icon { width: 15px; height: 15px; }
+@keyframes qrPop {
+    from { transform: scale(.4); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.qr-status-text { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--ink); letter-spacing: -.2px; }
+.qr-status-sub { margin: 5px 0 0; font-size: 12px; color: var(--ink-4); }
+.qr-status-text.urgent { color: var(--primary); }
+
+/* ---------- 手机端扫码确认屏 ---------- */
+/* 模态全屏：未登录时与登录页并存，必须脱离文档流居中（否则被 100vh 登录屏挤到第二屏） */
+#qrConfirmScreen.auth-screen {
+    position: fixed; inset: 0; z-index: 60;
+    min-height: 100dvh;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    background: rgba(238,242,249,.66);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    backdrop-filter: blur(30px) saturate(180%);
+    animation: qrFade .28s var(--spring-smooth);
+}
+body.dark #qrConfirmScreen.auth-screen { background: rgba(10,10,18,.66); }
+.qr-confirm-card { max-width: 360px; width: 100%; text-align: center; margin: auto; }
+.qrc-state { animation: qrFade .3s var(--spring-smooth); }
+.qrc-state h1 { font-size: 21px; margin: 14px 0 6px; letter-spacing: -.3px; }
+.qrc-state p { font-size: 13.5px; color: var(--ink-3); margin: 0 0 18px; line-height: 1.5; }
+.qr-logo-badge { background: var(--primary-soft); }
+.qr-spinner {
+    width: 46px; height: 46px; border-radius: 50%;
+    border: 3.5px solid rgba(94,132,255,.18);
+    border-top-color: var(--primary);
+    animation: spin .8s linear infinite;
+    margin: 6px auto 4px;
+}
+.qrc-user {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 16px; margin: 4px 0 18px;
+    text-align: left;
+    border-radius: 999px;
+}
+.qrc-avatar {
+    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+    background: var(--primary-soft);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 3px 10px rgba(31,45,80,.1);
+}
+.qrc-meta { display: flex; flex-direction: column; min-width: 0; }
+.qrc-name { font-size: 15px; font-weight: 700; }
+.qrc-phone { font-size: 12px; color: var(--ink-4); letter-spacing: .4px; }
+.qrc-success {
+    width: 72px; height: 72px; margin: 4px auto 8px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #5ED4A0, #34C759);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    box-shadow: 0 10px 28px rgba(52,199,89,.38), inset 0 2px 0 rgba(255,255,255,.45);
+    animation: qrPop .5s var(--spring-bounce);
+}
+.qrc-success .svg-icon { width: 38px; height: 38px; }
+#qrcAsk .btn-primary, #qrcGuest .btn-primary,
+#qrcDone .btn-primary, #qrcFail .btn-primary { width: 100%; }
+
+/* ---------- 我的页：右上角扫一扫 ---------- */
+#profileView { position: relative; }
+.profile-scan-btn {
+    position: absolute; top: 0; right: 0; z-index: 6;
+    min-height: 44px;
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 16px;
+    font-size: 13.5px; font-weight: 700; color: var(--ink);
+    border-radius: 999px;
+    transition: transform .25s var(--spring-bounce), box-shadow .2s;
+}
+.profile-scan-btn .svg-icon, .profile-scan-btn [data-icon] { width: 19px; height: 19px; color: var(--primary); }
+.profile-scan-btn:active { transform: scale(.94); }
+
+/* ---------- 扫一扫全屏取景 ---------- */
+.scanner-overlay {
+    position: fixed; inset: 0; z-index: 9998;
+    background: #000;
+    overflow: hidden;
+    animation: qrFade .22s ease;
+}
+.scanner-video {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+}
+.scanner-ui {
+    position: absolute; inset: 0; z-index: 2;
+    display: flex; flex-direction: column; align-items: center;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,.05) 0%, rgba(0,0,0,.55) 100%);
+    pointer-events: none;
+}
+.scanner-ui > * { pointer-events: auto; }
+.scanner-close {
+    position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px); right: 16px;
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    background: rgba(255,255,255,.18);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255,255,255,.22);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 6px 18px rgba(0,0,0,.3);
+    transition: transform .25s var(--spring-bounce);
+}
+.scanner-close:active { transform: scale(.9); }
+.scanner-close .svg-icon { width: 20px; height: 20px; }
+
+.scanner-frame {
+    position: relative;
+    width: min(68vw, 260px); height: min(68vw, 260px);
+    margin-top: 18vh;
+}
+.sf-corner {
+    position: absolute; width: 26px; height: 26px;
+    border: 3.5px solid #fff;
+    filter: drop-shadow(0 0 6px rgba(94,132,255,.7));
+}
+.sf-corner.tl { top: 0; left: 0; border-right: none; border-bottom: none; border-top-left-radius: 12px; }
+.sf-corner.tr { top: 0; right: 0; border-left: none; border-bottom: none; border-top-right-radius: 12px; }
+.sf-corner.bl { bottom: 0; left: 0; border-right: none; border-top: none; border-bottom-left-radius: 12px; }
+.sf-corner.br { bottom: 0; right: 0; border-left: none; border-top: none; border-bottom-right-radius: 12px; }
+.sf-line {
+    position: absolute; left: 6px; right: 6px; top: 0;
+    height: 3px; border-radius: 3px;
+    background: linear-gradient(90deg, transparent, #7FA0FF 50%, transparent);
+    box-shadow: 0 0 12px rgba(110,146,255,.95);
+    animation: sfScan 2.3s var(--spring-smooth) infinite;
+}
+@keyframes sfScan {
+    0% { transform: translateY(4px); opacity: 0; }
+    15% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { transform: translateY(calc(min(68vw, 260px) - 10px)); opacity: 0; }
+}
+.scanner-tip {
+    margin: 26px 0 0;
+    color: rgba(255,255,255,.92);
+    font-size: 14px; font-weight: 600;
+    text-shadow: 0 1px 8px rgba(0,0,0,.5);
+    padding: 7px 16px;
+    border-radius: 999px;
+    background: rgba(0,0,0,.28);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+}
+.scanner-album {
+    position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 30px);
+    min-height: 48px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 24px;
+    font-size: 15px; font-weight: 700; color: #fff;
+    border-radius: 999px;
+    background: rgba(255,255,255,.18);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255,255,255,.24);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 8px 24px rgba(0,0,0,.32);
+    transition: transform .25s var(--spring-bounce);
+}
+.scanner-album:active { transform: scale(.94); }
+.scanner-album .svg-icon { width: 20px; height: 20px; }
+
+/* 扫码成功一闪的高亮反馈 */
+.scanner-overlay.scan-hit .scanner-frame .sf-corner { border-color: #6CF0A8; }
+
+/* 深色模式下的二维码卡 */
+body.dark .qr-card {
+    background: rgba(28,28,38,.72);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.14),
+        inset 0 -1px 0 rgba(0,0,0,.4),
+        0 16px 44px rgba(0,0,0,.5);
+}
+body.dark .qr-state-overlay { background: rgba(24,24,34,.6); }
+body.dark .qr-state-overlay p { color: rgba(235,238,250,.85); }
+body.dark .qr-img { background: #fff; }
+
+@media (max-width: 480px) {
+    .qr-card { width: 216px; height: 216px; }
+    .qr-img { width: 182px; height: 182px; }
+    @keyframes qrScanY {
+        0% { transform: translateY(0); opacity: 0; }
+        12% { opacity: 1; }
+        50% { transform: translateY(160px); opacity: 1; }
+        88% { opacity: 1; }
+        100% { transform: translateY(0); opacity: 0; }
+    }
+    .profile-scan-btn { padding: 10px 14px; min-height: 44px; font-size: 12.5px; }
+    .profile-scan-btn .psb-label { display: inline; }
+}
+
+/* ============================================================
+   安全中心：Passkey / 设备码 / 找回密码 / 签名验签 / 安全日志
+   —— iOS 26 Liquid Glass：深玻璃卡 + 高光描边 + 弹性入场
+   ============================================================ */
+
+/* ---------- 登录页更多方式入口 ---------- */
+.auth-more {
+    display: flex; gap: 8px; justify-content: center;
+    margin: 2px 0 18px; flex-wrap: wrap;
+}
+.auth-more-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 16px; min-height: 44px;
+    font-size: 12.5px; font-weight: 600; color: var(--text2, #5b6478);
+    background: rgba(255,255,255,.42);
+    border: 1px solid rgba(255,255,255,.55);
+    border-radius: 22px; backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    box-shadow: 0 4px 14px rgba(31,38,60,.08), inset 0 1px 0 rgba(255,255,255,.6);
+    cursor: pointer; transition: transform .25s cubic-bezier(.32,1.5,.5,1), box-shadow .25s ease, background .25s ease;
+}
+.auth-more-btn span[data-icon] { display: inline-flex; width: 15px; height: 15px; }
+.auth-more-btn span[data-icon] svg { width: 100%; height: 100%; }
+.auth-more-btn:hover { background: rgba(255,255,255,.62); transform: translateY(-1px); }
+.auth-more-btn:active { transform: scale(.94); }
+body.dark .auth-more-btn {
+    color: rgba(235,238,250,.8);
+    background: rgba(60,62,78,.42); border-color: rgba(255,255,255,.12);
+    box-shadow: 0 4px 14px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.08);
+}
+body.dark .auth-more-btn:hover { background: rgba(72,74,92,.6); }
+
+/* ---------- 通用玻璃弹窗 ---------- */
+.sec-overlay {
+    position: fixed; inset: 0; z-index: 2400;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(16,18,28,.38);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    animation: secFade .25s ease;
+    padding: 16px;
+}
+.sec-overlay[hidden] { display: none; }
+@keyframes secFade { from { opacity: 0; } to { opacity: 1; } }
+.sec-card {
+    position: relative; width: 100%; max-width: 360px; max-height: 86vh; overflow-y: auto;
+    padding: 30px 26px 24px; text-align: center;
+    border-radius: 28px;
+    background: linear-gradient(150deg, rgba(255,255,255,.72), rgba(255,255,255,.5));
+    border: 1px solid rgba(255,255,255,.65);
+    box-shadow: 0 24px 60px rgba(15,20,40,.28), inset 0 1px 0 rgba(255,255,255,.7);
+    backdrop-filter: blur(34px) saturate(180%); -webkit-backdrop-filter: blur(34px) saturate(180%);
+    animation: secPop .45s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes secPop { from { opacity: 0; transform: translateY(16px) scale(.92); } to { opacity: 1; transform: none; } }
+.sec-card h1 { font-size: 20px; font-weight: 700; margin: 4px 0 6px; letter-spacing: .3px; }
+.sec-sub { font-size: 12.5px; line-height: 1.6; color: var(--text2, #6a7288); margin-bottom: 14px; }
+.sec-close {
+    position: absolute; top: 12px; right: 12px; width: 34px; height: 34px;
+    display: flex; align-items: center; justify-content: center;
+    border: none; border-radius: 50%; cursor: pointer;
+    background: rgba(120,128,150,.12); color: var(--text2, #5b6478);
+    transition: transform .25s cubic-bezier(.32,1.5,.5,1), background .25s ease;
+}
+.sec-close span[data-icon] { display: inline-flex; width: 16px; height: 16px; }
+.sec-close span[data-icon] svg { width: 100%; height: 100%; }
+.sec-close:hover { background: rgba(120,128,150,.2); }
+.sec-close:active { transform: scale(.88); }
+.sec-badge {
+    width: 52px; height: 52px; margin: 0 auto 8px; border-radius: 17px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(145deg, #4f8cff, #7b5cff);
+    color: #fff; box-shadow: 0 8px 20px rgba(79,140,255,.35), inset 0 1px 0 rgba(255,255,255,.35);
+}
+.sec-badge span[data-icon] { display: inline-flex; width: 24px; height: 24px; }
+.sec-badge span[data-icon] svg { width: 100%; height: 100%; }
+.sec-count {
+    display: inline-block; min-width: 20px; padding: 1px 7px; margin-left: 6px;
+    border-radius: 10px; font-size: 11px; font-weight: 700;
+    background: linear-gradient(135deg, #4f8cff, #7b5cff); color: #fff;
+}
+body.dark .sec-card {
+    background: linear-gradient(150deg, rgba(44,46,60,.85), rgba(34,36,48,.78));
+    border-color: rgba(255,255,255,.1);
+    box-shadow: 0 24px 60px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
+}
+body.dark .sec-sub { color: rgba(235,238,250,.6); }
+body.dark .sec-close { background: rgba(255,255,255,.08); color: rgba(235,238,250,.7); }
+
+/* ---------- 设备码 ---------- */
+.dc-code {
+    font-family: 'SF Mono', ui-monospace, Consolas, monospace;
+    font-size: 30px; font-weight: 700; letter-spacing: 5px;
+    padding: 16px 10px; margin: 6px 0 10px; border-radius: 20px;
+    background: rgba(255,255,255,.55);
+    border: 1px solid rgba(255,255,255,.6);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 6px 16px rgba(31,38,60,.08);
+    color: var(--text, #1c2333); user-select: all;
+    animation: dcGlow 2.4s ease-in-out infinite;
+}
+@keyframes dcGlow {
+    0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 6px 16px rgba(79,140,255,.12); }
+    50% { box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 6px 26px rgba(79,140,255,.35); }
+}
+.dc-state { font-size: 13px; font-weight: 600; color: var(--text2, #6a7288); min-height: 20px; margin-bottom: 12px; }
+.dc-state.ok { color: #23b26d; }
+.dc-state.err { color: #e5484d; }
+.dc-spinner {
+    width: 26px; height: 26px; margin: 0 auto; border-radius: 50%;
+    border: 3px solid rgba(79,140,255,.18); border-top-color: #4f8cff;
+    animation: dcSpin .8s linear infinite;
+}
+.dc-spinner[hidden] { display: none; }
+@keyframes dcSpin { to { transform: rotate(360deg); } }
+body.dark .dc-code { background: rgba(28,30,42,.6); border-color: rgba(255,255,255,.1); color: #eef1fa; }
+
+/* ---------- Passkey 列表 / 设备授权 ---------- */
+.pk-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.pk-item {
+    display: flex; align-items: center; gap: 10px; text-align: left;
+    padding: 11px 13px; border-radius: 16px;
+    background: rgba(255,255,255,.5); border: 1px solid rgba(255,255,255,.55);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
+    animation: secPop .4s cubic-bezier(.34,1.56,.64,1);
+}
+.pk-item .pk-ic {
+    width: 36px; height: 36px; flex: none; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(145deg, rgba(79,140,255,.15), rgba(123,92,255,.15));
+    color: #4f8cff;
+}
+.pk-item .pk-ic span[data-icon] { display: inline-flex; width: 18px; height: 18px; }
+.pk-item .pk-ic span[data-icon] svg { width: 100%; height: 100%; }
+.pk-item .pk-meta { flex: 1; min-width: 0; }
+.pk-item .pk-name { font-size: 13px; font-weight: 700; }
+.pk-item .pk-time { font-size: 11px; color: var(--text2, #8a92a6); margin-top: 2px; }
+.pk-item .pk-del {
+    flex: none; width: 30px; height: 30px; border: none; border-radius: 50%; cursor: pointer;
+    background: rgba(229,72,77,.1); color: #e5484d;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .25s cubic-bezier(.32,1.5,.5,1);
+}
+.pk-item .pk-del span[data-icon] { display: inline-flex; width: 13px; height: 13px; }
+.pk-item .pk-del span[data-icon] svg { width: 100%; height: 100%; }
+.pk-item .pk-del:active { transform: scale(.85); }
+.pk-empty { font-size: 12.5px; color: var(--text2, #8a92a6); padding: 12px; border-radius: 16px; background: rgba(255,255,255,.35); }
+.pk-divider { height: 1px; margin: 16px 0 12px; background: linear-gradient(90deg, transparent, rgba(120,130,160,.3), transparent); }
+.pk-section-title { font-size: 13.5px; font-weight: 700; margin-bottom: 4px; text-align: left; }
+.pk-hint { font-size: 11.5px; color: var(--text2, #8a92a6); text-align: left; margin-bottom: 10px; }
+body.dark .pk-item { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.08); }
+body.dark .pk-empty { background: rgba(255,255,255,.04); }
+
+/* ---------- 找回密码：强度条 ---------- */
+.rec-strength {
+    height: 6px; border-radius: 3px; overflow: hidden; margin: 2px 0 4px;
+    background: rgba(120,130,160,.16);
+}
+.rec-strength-bar {
+    height: 100%; width: 0; border-radius: 3px;
+    background: linear-gradient(90deg, #e5484d, #f5a623, #23b26d);
+    transition: width .35s cubic-bezier(.32,1.2,.5,1);
+}
+.rec-strength-text { font-size: 11.5px; text-align: left; color: var(--text2, #8a92a6); min-height: 16px; margin-bottom: 10px; }
+
+/* ---------- 安全日志 ---------- */
+.sec-log-card { max-width: 380px; }
+.sec-log-list { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.sec-log-item {
+    display: flex; align-items: flex-start; gap: 9px;
+    padding: 9px 12px; border-radius: 14px;
+    background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.5);
+    animation: secPop .35s cubic-bezier(.34,1.4,.64,1) backwards;
+}
+.sec-log-dot {
+    flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 5px;
+    background: #4f8cff; box-shadow: 0 0 8px rgba(79,140,255,.6);
+}
+.sec-log-dot.warn { background: #f5a623; box-shadow: 0 0 8px rgba(245,166,35,.6); }
+.sec-log-dot.bad { background: #e5484d; box-shadow: 0 0 8px rgba(229,72,77,.6); }
+.sec-log-text { flex: 1; min-width: 0; }
+.sec-log-title { font-size: 12.5px; font-weight: 600; }
+.sec-log-meta { font-size: 10.5px; color: var(--text2, #8a92a6); margin-top: 2px; }
+body.dark .sec-log-item { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.08); }
+
+/* ---------- 签名验签工具 ---------- */
+.sign-tool-overlay { z-index: 2500; background: rgba(10,12,20,.5); }
+.sign-scroll {
+    position: relative; width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center; padding: 18px;
+    animation: secFade .25s ease;
+}
+.sign-card {
+    width: 100%; max-width: 420px; max-height: 88vh; overflow-y: auto;
+    padding: 30px 24px 22px; text-align: center; position: relative;
+    border-radius: 28px;
+    background: linear-gradient(150deg, rgba(255,255,255,.74), rgba(255,255,255,.52));
+    border: 1px solid rgba(255,255,255,.65);
+    box-shadow: 0 24px 60px rgba(15,20,40,.3), inset 0 1px 0 rgba(255,255,255,.7);
+    backdrop-filter: blur(34px) saturate(180%); -webkit-backdrop-filter: blur(34px) saturate(180%);
+    animation: secPop .45s cubic-bezier(.34,1.56,.64,1);
+}
+body.dark .sign-card {
+    background: linear-gradient(150deg, rgba(44,46,60,.85), rgba(34,36,48,.78));
+    border-color: rgba(255,255,255,.1);
+}
+.st-key-row {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 8px 15px; margin-bottom: 12px;
+    font-size: 12px; font-weight: 600; color: var(--text2, #5b6478);
+}
+.st-key-row.on { color: #23b26d; }
+#signInput {
+    width: 100%; box-sizing: border-box; resize: vertical; min-height: 74px;
+    padding: 12px 14px; margin-bottom: 10px; border-radius: 16px;
+    font-size: 13px; line-height: 1.5; color: var(--text, #1c2333);
+    background: rgba(255,255,255,.5); border: 1px solid rgba(255,255,255,.6);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.5);
+    outline: none; font-family: inherit;
+    transition: border-color .25s ease, box-shadow .25s ease;
+}
+#signInput:focus { border-color: rgba(79,140,255,.55); box-shadow: 0 0 0 3px rgba(79,140,255,.15); }
+body.dark #signInput { background: rgba(28,30,42,.6); border-color: rgba(255,255,255,.1); color: #eef1fa; }
+#stPassRow { margin-bottom: 10px; }
+#stPassRow input {
+    width: 100%; box-sizing: border-box; padding: 11px 14px; border-radius: 14px;
+    font-size: 13px; color: var(--text, #1c2333);
+    background: rgba(255,255,255,.5); border: 1px solid rgba(255,255,255,.6);
+    outline: none; font-family: inherit;
+    animation: secPop .3s cubic-bezier(.34,1.56,.64,1);
+}
+body.dark #stPassRow input { background: rgba(28,30,42,.6); border-color: rgba(255,255,255,.1); color: #eef1fa; }
+.st-actions { display: flex; gap: 10px; justify-content: center; margin-bottom: 12px; }
+.st-actions .btn-primary { flex: 1; max-width: 150px; margin: 0; }
+.st-output {
+    padding: 12px 14px; margin-bottom: 12px; border-radius: 16px;
+    font-size: 12px; line-height: 1.6; word-break: break-all; text-align: left;
+    color: var(--text, #1c2333);
+    background: rgba(255,255,255,.5); border: 1px solid rgba(255,255,255,.6);
+    max-height: 150px; overflow-y: auto;
+    animation: secPop .35s cubic-bezier(.34,1.56,.64,1);
+}
+.st-output.ok { border-color: rgba(35,178,109,.5); }
+.st-output.bad { border-color: rgba(229,72,77,.5); }
+.st-output .st-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11.5px; font-weight: 700; margin-bottom: 6px;
+}
+.st-output.ok .st-badge { color: #23b26d; }
+.st-output.bad .st-badge { color: #e5484d; }
+body.dark .st-output { background: rgba(28,30,42,.6); border-color: rgba(255,255,255,.1); color: #eef1fa; }
+.st-keys { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.btn-text {
+    padding: 8px 14px; min-height: 40px; border-radius: 14px; cursor: pointer;
+    font-size: 12px; font-weight: 600; color: var(--text2, #5b6478);
+    background: rgba(120,128,150,.1); border: none;
+    transition: transform .25s cubic-bezier(.32,1.5,.5,1), background .25s ease;
+}
+.btn-text:hover { background: rgba(120,128,150,.18); }
+.btn-text:active { transform: scale(.93); }
+body.dark .btn-text { color: rgba(235,238,250,.7); background: rgba(255,255,255,.07); }
+
+/* ---------- 液态玻璃弹窗内表单元素 ---------- */
+.sec-card .field { margin-bottom: 10px; }
+.sec-card .btn-primary { width: 100%; margin-top: 4px; }
+.auth-error { font-size: 12px; color: #e5484d; min-height: 16px; margin-top: 8px; font-weight: 600; }
+
+@media (max-width: 480px) {
+    .sec-card { max-width: 340px; padding: 26px 20px 20px; border-radius: 24px; }
+    .dc-code { font-size: 25px; letter-spacing: 4px; }
+    .sign-card { padding: 26px 18px 18px; }
+    .auth-more-btn { padding: 8px 13px; font-size: 12px; }
+}
+

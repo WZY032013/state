@@ -4,6 +4,7 @@
    ============================================================ */
 (function () {
 'use strict';
+window.__SCRIPT_VER = 'v2-cachefix-20260919'; // 部署版本标记（排障用）
 
 // ============ 常量 ============
 const API = '/api';
@@ -270,6 +271,7 @@ async function api(path, options = {}) {
 
         // 写入缓存
         if (method === 'GET') _apiMemCache.set(ckey, { ts: Date.now(), data });
+        else { _apiMemCache.clear(); _apiInflight.clear(); } // 写操作后失效缓存与请求去重映射，避免后续 GET 复用写操作前已完成的 inflight 旧 Promise（如 Passkey 增删后列表不刷新）
         _setLsSnapshot(path, data);
 
         return data;
@@ -1138,7 +1140,7 @@ async function handleLogin(e) {
         localStorage.setItem('stating_token', token);
         me = data.user;
         errEl.textContent = '';
-        showMain();
+        showMainOrQr();
     } catch (err) {
         errEl.textContent = err.message;
         errEl.classList.add('shake');
@@ -1172,7 +1174,7 @@ async function handleAdminKeySubmit() {
         inputs.forEach(i => i.value = '');
         errEl.textContent = '';
         $('#adminKeyScreen').hidden = true;
-        showMain();
+        showMainOrQr();
     } catch (err) {
         errEl.textContent = err.message;
         errEl.classList.add('shake');
@@ -1215,7 +1217,7 @@ async function handleRegister(e) {
         localStorage.setItem('stating_token', token);
         me = data.user;
         errEl.textContent = '';
-        showMain();
+        showMainOrQr();
     } catch (err) {
         errEl.textContent = err.message;
         errEl.classList.add('shake');
@@ -1224,13 +1226,18 @@ async function handleRegister(e) {
 }
 
 async function checkSession() {
-    if (!token) { showAuth(); return; }
+    if (!token) {
+        showAuth();
+        if (pendingQrId) { $('#qrConfirmScreen').hidden = false; setQrcState('guest'); }
+        return;
+    }
     try {
         const data = await api('/me');
         me = data.user;
-        showMain();
+        showMainOrQr();
     } catch {
         showAuth();
+        if (pendingQrId) { $('#qrConfirmScreen').hidden = false; setQrcState('guest'); }
     }
 }
 
@@ -1240,6 +1247,466 @@ function logout() {
     stopBgPoll();
     lastMsgCache = {};
     showAuth();
+}
+
+/* ============================================================
+   扫码登录（PC 出码 + 手机扫码确认，二维码只含一次性随机 qrId）
+   ============================================================ */
+const QRLIB = 'lib/qrcode/qrcode.min.js';
+const QRLIB_SCAN = 'lib/qrcode/jsQR.js';
+const QR_SS_KEY = 'stating_pending_qr';
+let pendingQrId = sessionStorage.getItem(QR_SS_KEY) || '';
+let qlTimer = null, qlExpireTimer = null, qlRunning = false;
+
+function loadLib(src, flag) {
+    return new Promise((resolve, reject) => {
+        if (window[flag]) return resolve();
+        const old = document.querySelector('script[data-lib="' + flag + '"]');
+        if (old) { old.addEventListener('load', resolve); old.addEventListener('error', () => reject(new Error('lib-error'))); return; }
+        const s = document.createElement('script');
+        s.src = src; s.async = true; s.dataset.lib = flag;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('lib-error'));
+        document.head.appendChild(s);
+    });
+}
+
+/* ---------- 手机端：hash 入口 / 确认流程 ---------- */
+function extractQrId(text) {
+    if (!text) return null;
+    const m = String(text).match(/qrlogin=([a-f0-9]{16,64})/i);
+    return m ? m[1] : null;
+}
+function handleQrHashOnBoot() {
+    const qrId = extractQrId(location.hash);
+    if (!qrId) return;
+    pendingQrId = qrId;
+    try { sessionStorage.setItem(QR_SS_KEY, qrId); } catch {}
+    history.replaceState(null, '', location.pathname + location.search);
+}
+/* 页面已打开时仅 hash 变化（同标签页被扫码链接拉起）：直接进入对应流程 */
+function handleQrHashChange() {
+    const qrId = extractQrId(location.hash);
+    if (!qrId) return;
+    history.replaceState(null, '', location.pathname + location.search);
+    try { if (scanRunning) closeScanner(); } catch {}
+    if (token && me) { openQrConfirmFlow(qrId); return; }
+    pendingQrId = qrId;
+    try { sessionStorage.setItem(QR_SS_KEY, qrId); } catch {}
+    showAuth();
+    $('#qrConfirmScreen').hidden = false;
+    setQrcState('guest');
+}
+function consumePendingQr() {
+    const id = pendingQrId || sessionStorage.getItem(QR_SS_KEY) || '';
+    pendingQrId = '';
+    try { sessionStorage.removeItem(QR_SS_KEY); } catch {}
+    return id || null;
+}
+function setQrcState(state) {
+    ['qrcLoading', 'qrcGuest', 'qrcAsk', 'qrcDone', 'qrcFail'].forEach(id => { const el = $(('#' + id)); if (el) el.hidden = true; });
+    const map = { loading: 'qrcLoading', guest: 'qrcGuest', ask: 'qrcAsk', done: 'qrcDone', fail: 'qrcFail' };
+    const el = $('#' + map[state]);
+    if (el) { el.hidden = false; injectIcons(el); }
+}
+function endQrFlow() {
+    pendingQrId = '';
+    try { sessionStorage.removeItem(QR_SS_KEY); } catch {}
+    $('#qrConfirmScreen').hidden = true;
+}
+async function beginQrConfirm(qrId) {
+    setQrcState('loading');
+    $('#qrConfirmScreen').hidden = false;
+    try {
+        await api('/qrlogin/scan', { method: 'POST', body: { qrId } });
+        if (me) {
+            $('#qrcAvatar').textContent = me.avatar || '😀';
+            $('#qrcNickname').textContent = me.nickname || '未命名';
+            $('#qrcPhone').textContent = me.phone || '';
+        }
+        pendingQrId = qrId;
+        setQrcState('ask');
+    } catch (err) {
+        pendingQrId = '';
+        $('#qrcFailTitle').textContent = '二维码已失效';
+        $('#qrcFailText').textContent = err.message || '请返回电脑刷新二维码后重试';
+        setQrcState('fail');
+    }
+}
+function openQrConfirmFlow(qrId) {
+    showMain();
+    beginQrConfirm(qrId);
+}
+/* 登录/注册/自动会话恢复成功后的统一入口：有待确认扫码则走确认，否则进主页 */
+function showMainOrQr() {
+    const qrId = consumePendingQr();
+    if (qrId) { openQrConfirmFlow(qrId); return; }
+    showMain();
+}
+async function confirmQrLogin() {
+    if (!pendingQrId) return;
+    const btn = $('#qrcConfirmBtn');
+    btn.disabled = true; btn.textContent = '确认中…';
+    try {
+        await api('/qrlogin/confirm', { method: 'POST', body: { qrId: pendingQrId } });
+        if (navigator.vibrate) navigator.vibrate(12);
+        setQrcState('done');
+    } catch (err) {
+        $('#qrcError').textContent = err.message || '确认失败，请重试';
+    } finally {
+        btn.disabled = false; btn.textContent = '确认登录';
+    }
+}
+async function cancelQrLogin() {
+    if (pendingQrId) {
+        try { await api('/qrlogin/cancel', { method: 'POST', body: { qrId: pendingQrId } }); } catch {}
+    }
+    pendingQrId = '';
+    try { sessionStorage.removeItem(QR_SS_KEY); } catch {}
+    $('#qrcFailTitle').textContent = '已取消登录';
+    $('#qrcFailText').textContent = '电脑端的登录请求已取消';
+    setQrcState('fail');
+}
+
+/* ---------- PC 端：出码 + 轮询 ---------- */
+function setQrPcState(mode, info) {
+    const card = $('#qrCard');
+    const overlay = $('#qrStateOverlay');
+    const icon = $('#qrStateIcon');
+    const text = $('#qrStateText');
+    const reload = $('#qrReloadBtn');
+    card.classList.remove('is-scanned', 'is-done', 'is-expired');
+    overlay.hidden = (mode === 'pending');
+    reload.hidden = !(mode === 'expired' || mode === 'canceled' || mode === 'error');
+    const status = $('#qrStatusText');
+    const sub = $('#qrStatusSub');
+    if (mode === 'loading') {
+        card.classList.add('is-expired');
+        icon.innerHTML = '<div class="qr-spinner" style="width:34px;height:34px;border-width:3px;margin:0;"></div>';
+        text.textContent = '二维码生成中…';
+    } else if (mode === 'pending') {
+        status.textContent = '打开手机 Stating「我的 → 扫一扫」';
+        status.classList.remove('urgent');
+        sub.textContent = '扫描二维码，安全登录网页版';
+    } else if (mode === 'scanned') {
+        card.classList.add('is-scanned');
+        const av = info && info.avatar ? info.avatar : '📱';
+        icon.innerHTML = '<span style="font-size:30px;">' + av + '</span>';
+        text.innerHTML = (info && info.nickname ? info.nickname : '手机') + ' 已扫码<br>请在手机上确认登录';
+        status.textContent = '已扫码，请在手机上确认';
+        status.classList.add('urgent');
+        sub.textContent = '确认后网页将自动登录';
+    } else if (mode === 'success') {
+        card.classList.add('is-done');
+        card.classList.remove('is-scanned');
+        icon.innerHTML = '<span style="color:#34C759;">' + (typeof svgIcon === 'function' ? svgIcon('checkDouble', 32) : '✓') + '</span>';
+        text.textContent = '登录成功';
+        status.textContent = '登录成功，正在进入…';
+    } else if (mode === 'expired') {
+        card.classList.add('is-expired');
+        icon.textContent = '⏱️';
+        text.textContent = '二维码已过期';
+    } else if (mode === 'canceled') {
+        card.classList.add('is-expired');
+        icon.textContent = '🚫';
+        text.textContent = '手机端已取消登录';
+    } else if (mode === 'error') {
+        card.classList.add('is-expired');
+        icon.textContent = '📡';
+        text.textContent = '网络异常，请重试';
+    }
+    injectIcons(card);
+}
+
+function stopQrPolling() {
+    qlRunning = false;
+    if (qlTimer) { clearTimeout(qlTimer); qlTimer = null; }
+    if (qlExpireTimer) { clearTimeout(qlExpireTimer); qlExpireTimer = null; }
+}
+
+async function startQrLogin() {
+    if (qlRunning) return;
+    qlRunning = true;
+    setQrPcState('loading');
+    try {
+        await loadLib(QRLIB, 'qrcode');
+    } catch {
+        setQrPcState('error'); qlRunning = false; return;
+    }
+    let qrId;
+    try {
+        const data = await api('/qrlogin/create', { method: 'POST' });
+        qrId = data.qrId;
+        const payload = location.origin + location.pathname + '#qrlogin=' + qrId;
+        const qr = qrcode(0, 'M');
+        qr.addData(payload);
+        qr.make();
+        $('#qrImg').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 0, scalable: true });
+        setQrPcState('pending');
+    } catch {
+        setQrPcState('error'); qlRunning = false; return;
+    }
+    /* 客户端兜底过期 */
+    qlExpireTimer = setTimeout(() => {
+        if (qlRunning) { stopQrPolling(); setQrPcState('expired'); }
+    }, 118 * 1000);
+
+    const poll = async () => {
+        if (!qlRunning) return;
+        let data;
+        try {
+            /* 带时间戳绕过 api() 的 25s GET 内存缓存与请求去重，保证拿到实时状态 */
+            data = await api('/qrlogin/status?qrId=' + encodeURIComponent(qrId) + '&_t=' + Date.now());
+        } catch {
+            setQrPcState('error'); stopQrPolling(); return;
+        }
+        if (!qlRunning) return;
+        if (data.status === 'pending') {
+            qlTimer = setTimeout(poll, 1800);
+        } else if (data.status === 'scanned') {
+            setQrPcState('scanned', data.scanner);
+            qlTimer = setTimeout(poll, 1500);
+        } else if (data.status === 'confirmed') {
+            stopQrPolling();
+            setQrPcState('success');
+            token = data.token;
+            localStorage.setItem('stating_token', token);
+            me = data.user;
+            if (navigator.vibrate) navigator.vibrate(12);
+            setTimeout(() => {
+                if (!$('#qrForm').classList.contains('active')) return;
+                showMain();
+            }, 850);
+        } else if (data.status === 'expired') {
+            stopQrPolling(); setQrPcState('expired');
+        } else if (data.status === 'canceled') {
+            stopQrPolling(); setQrPcState('canceled');
+        } else {
+            stopQrPolling(); setQrPcState('expired');
+        }
+    };
+    qlTimer = setTimeout(poll, 1200);
+}
+
+function initQrLogin() {
+    /* tab 切换：进入扫码出码，离开停轮询（事件追加，不覆盖原有 tab 逻辑） */
+    $$('.auth-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            if (tab.dataset.tab === 'qr') startQrLogin();
+            else stopQrPolling();
+        });
+    });
+    $('#qrReloadBtn').addEventListener('click', () => { stopQrPolling(); startQrLogin(); });
+
+    /* 手机确认屏 */
+    $('#qrcGoLogin').addEventListener('click', () => {
+        $('#qrConfirmScreen').hidden = true;
+        showAuth();
+        const loginTab = document.querySelector('.auth-tab[data-tab="login"]');
+        if (loginTab) loginTab.click();
+        $('#loginPhone').focus();
+    });
+    $('#qrcConfirmBtn').addEventListener('click', confirmQrLogin);
+    $('#qrcCancelBtn').addEventListener('click', cancelQrLogin);
+    const closeQrc = () => {
+        endQrFlow();
+        if (token && me) showMain(); else showAuth();
+    };
+    $('#qrcCloseDone').addEventListener('click', closeQrc);
+    $('#qrcCloseFail').addEventListener('click', closeQrc);
+
+    /* 同标签页内扫码链接跳转（仅 hash 变化，页面不重载） */
+    window.addEventListener('hashchange', handleQrHashChange);
+}
+
+/* ============================================================
+   扫一扫（相机）：原生 BarcodeDetector 优先，jsQR 全平台兜底
+   ============================================================ */
+let scanStream = null, scanRAF = null, scanRunning = false, scanLast = 0;
+let qrDetector = null, scanBusy = false;
+
+function setScanTip(msg, warn) {
+    const tip = $('#scannerTip');
+    tip.textContent = msg;
+    tip.style.color = warn ? '#ffd28a' : '';
+}
+
+function drawVideoToCanvas(source) {
+    const canvas = $('#scannerCanvas');
+    const vw = source.videoWidth || source.width;
+    const vh = source.videoHeight || source.height;
+    if (!vw || !vh) return null;
+    const scale = Math.min(1, 640 / Math.max(vw, vh));
+    canvas.width = Math.round(vw * scale);
+    canvas.height = Math.round(vh * scale);
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+    return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+async function decodeFrame(source) {
+    if (qrDetector) {
+        try {
+            const codes = await qrDetector.detect(source);
+            if (codes && codes.length) return codes[0].rawValue;
+        } catch {}
+        return null;
+    }
+    if (window.jsQR) {
+        const img = drawVideoToCanvas(source);
+        if (!img) return null;
+        const res = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+        return res ? res.data : null;
+    }
+    return null;
+}
+
+function scanLoop() {
+    if (!scanRunning) return;
+    scanRAF = requestAnimationFrame(scanLoop);
+    const now = performance.now();
+    if (now - scanLast < 280 || scanBusy) return;
+    const video = $('#scannerVideo');
+    if (!video || video.readyState < 2) return;
+    scanLast = now;
+    scanBusy = true;
+    decodeFrame(video).then(text => {
+        scanBusy = false;
+        if (text && scanRunning) onScanHit(text);
+    }).catch(() => { scanBusy = false; });
+}
+
+async function openScanner() {
+    const overlay = $('#scannerOverlay');
+    overlay.classList.remove('scan-hit');
+    overlay.hidden = false;
+    setScanTip('正在启动相机…');
+    let libOk = true;
+    try { await loadLib(QRLIB_SCAN, 'jsQR'); } catch { libOk = false; }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setScanTip('当前浏览器不支持相机，请使用「相册选码」', true);
+        return;
+    }
+    try {
+        scanStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        const video = $('#scannerVideo');
+        video.srcObject = scanStream;
+        /* play() 不阻塞就绪流程：部分环境首帧较慢，scanLoop 会自行等 readyState */
+        try { const p = video.play(); if (p && p.catch) p.catch(() => {}); } catch {}
+        /* 原生二维码检测（Chromium 系）；不支持则用 jsQR */
+        if ('BarcodeDetector' in window) {
+            try {
+                const fmts = await BarcodeDetector.getSupportedFormats();
+                if (fmts.includes('qr_code')) qrDetector = new BarcodeDetector({ formats: ['qr_code'] });
+            } catch { qrDetector = null; }
+        }
+        if (!qrDetector && !(libOk && window.jsQR)) {
+            setScanTip('扫码组件加载失败，请使用「相册选码」', true);
+            return;
+        }
+        scanRunning = true;
+        setScanTip('将二维码放入框内，即可自动扫描');
+        scanLoop();
+    } catch (err) {
+        const denied = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError');
+        setScanTip(denied ? '相机权限被拒绝，可在浏览器设置中开启，或使用「相册选码」' : '无法启动相机，请使用「相册选码」', true);
+    }
+}
+
+function closeScanner() {
+    scanRunning = false;
+    if (scanRAF) { cancelAnimationFrame(scanRAF); scanRAF = null; }
+    if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+    const video = $('#scannerVideo');
+    if (video) video.srcObject = null;
+    $('#scannerOverlay').hidden = true;
+    qrDetector = null;
+}
+
+function onScanHit(text) {
+    scanRunning = false;
+    if (navigator.vibrate) navigator.vibrate(12);
+    $('#scannerOverlay').classList.add('scan-hit');
+    setTimeout(() => {
+        closeScanner();
+        handleScannedText(text);
+    }, 550);
+}
+
+function handleScannedText(text) {
+    const qrId = extractQrId(text);
+    if (qrId) {
+        pendingQrId = qrId;
+        try { sessionStorage.setItem(QR_SS_KEY, qrId); } catch {}
+        if (token && me) { beginQrConfirm(qrId); return; }
+        /* 理论上扫一扫入口仅登录后可见，兜底：引导登录 */
+        showConfirm('qr', '扫码登录', '登录 Stating 后即可授权网页端登录', () => {
+            logout();
+            const lt = document.querySelector('.auth-tab[data-tab="login"]');
+            if (lt) lt.click();
+        });
+        return;
+    }
+    let isUrl = false;
+    try { const u = new URL(text); isUrl = /^https?:$/.test(u.protocol); } catch {}
+    if (isUrl) {
+        showConfirm('qr', '发现链接', text.length > 80 ? text.slice(0, 80) + '…' : text, () => window.open(text, '_blank', 'noopener'));
+    } else {
+        showConfirm('qr', '扫描结果', text || '未识别到内容', () => {});
+    }
+}
+
+async function decodeImageFile(file) {
+    const bmp = await createImageBitmap(file);
+    const canvas = $('#scannerCanvas');
+    const scale = Math.min(1, 1200 / Math.max(bmp.width, bmp.height));
+    canvas.width = Math.round(bmp.width * scale);
+    canvas.height = Math.round(bmp.height * scale);
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close();
+    if ('BarcodeDetector' in window) {
+        try {
+            const fmts = await BarcodeDetector.getSupportedFormats();
+            if (fmts.includes('qr_code')) {
+                const d = new BarcodeDetector({ formats: ['qr_code'] });
+                const codes = await d.detect(canvas);
+                if (codes.length) return codes[0].rawValue;
+            }
+        } catch {}
+    }
+    if (window.jsQR) {
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const res = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+        if (res) return res.data;
+    }
+    return null;
+}
+
+function initScanner() {
+    const btn = $('#openScannerBtn');
+    if (btn) btn.addEventListener('click', openScanner);
+    $('#scannerClose').addEventListener('click', closeScanner);
+    $('#scannerAlbum').addEventListener('click', () => $('#scannerFile').click());
+    $('#scannerFile').addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = '';
+        if (!file) return;
+        setScanTip('正在识别图片…');
+        try {
+            let libOk = true;
+            if (!('BarcodeDetector' in window)) { try { await loadLib(QRLIB_SCAN, 'jsQR'); } catch { libOk = false; } }
+            const text = await decodeImageFile(file);
+            if (text) { onScanHit(text); }
+            else setScanTip('未在图片中识别到二维码', true);
+        } catch {
+            setScanTip('图片识别失败，请换一张更清晰的图片', true);
+        }
+    });
 }
 
 // 紧急擦除：清除本机所有 Stating 数据（借鉴 BitChat 的三连击擦除）
@@ -2912,13 +3379,19 @@ function init() {
     $('#adminKeySubmit').onclick = handleAdminKeySubmit;
     $('#adminKeyCancel').onclick = cancelAdminKey;
 
-    // Check session
+    // 扫码登录 / 扫一扫
+    initQrLogin();
+    initScanner();
+    // 安全中心：Passkey / 设备码 / 签名 / 找回
+    initSecurityUI();
+
+    // Check session（若地址栏带 #qrlogin=xxx，先暂存，登录态确认后进入对应流程）
+    handleQrHashOnBoot();
     checkSession();
 }
 
 // ============ 博采反馈 ============
 let fbRating = 0;
-
 function setupFeedbackStars() {
     $$('.fb-star').forEach(s => {
         s.onclick = () => {
@@ -5096,6 +5569,484 @@ function initFocusModeUI() {
 setInterval(pollTyping, 3000);
 
 document.addEventListener('DOMContentLoaded', init);
+
+/* ============================================================
+   安全中心：Passkey(WebAuthn) / 设备码授权 / 签名验签 / 找回密码
+   —— 私钥/口令永不出本机；与后端一次性票据 + 频控配合
+   ============================================================ */
+
+// ---- 工具 ----
+const SB64 = {
+    enc(buf) {
+        const u = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+        let s = ''; u.forEach(b => s += String.fromCharCode(b));
+        return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    },
+    dec(str) {
+        str = String(str).replace(/-/g, '+').replace(/_/g, '/');
+        while (str.length % 4) str += '=';
+        const bin = atob(str);
+        const u = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+        return u;
+    }
+};
+const STE = new TextEncoder(), SDD = new TextDecoder();
+function secEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function waAvailable() { return !!(window.PublicKeyCredential); }
+
+// ---- WebAuthn 浏览器封装 ----
+async function waRegister(o) {
+    const cred = await navigator.credentials.create({ publicKey: {
+        challenge: SB64.dec(o.challenge), rp: o.rp,
+        user: { id: SB64.dec(o.user.id), name: o.user.name, displayName: o.user.displayName },
+        pubKeyCredParams: o.pubKeyCredParams, timeout: o.timeout,
+        attestation: o.attestation, authenticatorSelection: o.authenticatorSelection,
+        excludeCredentials: (o.excludeCredentials || []).map(c => ({ type: 'public-key', id: SB64.dec(c.id) }))
+    }});
+    return { id: cred.id, attachment: cred.authenticatorAttachment || 'platform',
+        response: { clientDataJSON: SB64.enc(cred.response.clientDataJSON), attestationObject: SB64.enc(cred.response.attestationObject) } };
+}
+async function waGet(o) {
+    const cred = await navigator.credentials.get({ publicKey: {
+        challenge: SB64.dec(o.challenge), rpId: o.rpId, timeout: o.timeout,
+        userVerification: o.userVerification || 'preferred',
+        allowCredentials: (o.allowCredentials || []).map(c => ({ type: 'public-key', id: SB64.dec(c.id) }))
+    }});
+    return { id: cred.id, response: {
+        clientDataJSON: SB64.enc(cred.response.clientDataJSON),
+        authenticatorData: SB64.enc(cred.response.authenticatorData),
+        signature: SB64.enc(cred.response.signature),
+        userHandle: cred.response.userHandle ? SB64.enc(cred.response.userHandle) : ''
+    } };
+}
+
+// ---- Passkey 快捷登录（登录页） ----
+async function passkeyQuickLogin() {
+    if (!waAvailable()) { showToast('此浏览器不支持 Passkey'); return; }
+    try {
+        const o = await api('/passkey/options', { method: 'POST', body: { mode: 'login' } });
+        const cred = await waGet(o.publicKey);
+        const r = await api('/passkey/verify', { method: 'POST', body: { mode: 'login', challengeId: o.challengeId, ...cred } });
+        token = r.token;
+        localStorage.setItem('stating_token', token);
+        me = r.user;
+        showMainOrQr();
+        showToast('Passkey 登录成功');
+    } catch (e) {
+        showToast(e && e.name === 'NotAllowedError' ? '已取消验证' : (e.message || '验证失败'));
+    }
+}
+
+// ---- 安全中心：Passkey 管理 ----
+async function passkeyAdd() {
+    if (!waAvailable()) { showToast('此浏览器不支持 Passkey'); return; }
+    try {
+        const o = await api('/passkey/register/options', { method: 'POST', body: {} });
+        const cred = await waRegister(o.publicKey);
+        const r = await api('/passkey/register', { method: 'POST', body: { challengeId: o.challengeId, ...cred } });
+        showToast('Passkey 已添加（' + (r.device || '') + '）');
+        renderPasskeyList();
+        refreshSecurityBrief();
+    } catch (e) {
+        showToast(e && e.name === 'NotAllowedError' ? '已取消' : (e.message || '添加失败'));
+    }
+}
+async function renderPasskeyList() {
+    const box = $('#passkeyList');
+    if (!box) return;
+    box.innerHTML = '<div class="pk-empty">加载中…</div>';
+    try {
+        const r = await api('/passkeys');
+        if (!r.passkeys.length) { box.innerHTML = '<div class="pk-empty">暂无 Passkey，添加后可免密登录</div>'; return; }
+        box.innerHTML = '';
+        r.passkeys.forEach((p, i) => {
+            const d = document.createElement('div');
+            d.className = 'pk-item';
+            d.style.animationDelay = (i * 45) + 'ms';
+            d.innerHTML = '<div class="pk-ic"><span data-icon="key"></span></div>'
+                + '<div class="pk-meta"><div class="pk-name">' + secEsc(p.device || 'Passkey') + '</div>'
+                + '<div class="pk-time">' + (p.lastUsed ? '最近使用 ' + new Date(p.lastUsed).toLocaleString() : '创建于 ' + new Date(p.createdAt).toLocaleString()) + '</div></div>'
+                + '<button class="pk-del" title="删除"><span data-icon="close"></span></button>';
+            d.querySelector('.pk-del').onclick = async () => {
+                if (!confirm('确定删除该 Passkey？')) return;
+                try {
+                    await api('/passkey/delete', { method: 'POST', body: { id: p.id } });
+                    renderPasskeyList();
+                    refreshSecurityBrief();
+                } catch (e) { showToast(e.message || '删除失败'); }
+            };
+            box.appendChild(d);
+        });
+        injectIcons(box);
+    } catch (e) {
+        box.innerHTML = '<div class="pk-empty">' + secEsc(e.message || '加载失败') + '</div>';
+    }
+}
+async function openSecurityCenter() {
+    $('#passkeyModal').hidden = false;
+    $('#dcAuthError').textContent = '';
+    $('#dcAuthInput').value = '';
+    renderPasskeyList();
+}
+async function deviceAuthorize() {
+    const err = $('#dcAuthError');
+    err.textContent = '';
+    const code = $('#dcAuthInput').value.trim();
+    if (!code) { err.textContent = '请输入设备码'; return; }
+    try {
+        await api('/devicecode/authorize', { method: 'POST', body: { userCode: code } });
+        showToast('已授权该设备登录');
+        $('#dcAuthInput').value = '';
+    } catch (e) {
+        err.textContent = e.message || '授权失败';
+    }
+}
+async function refreshSecurityBrief() {
+    try {
+        const r = await api('/passkeys');
+        const el = $('#passkeyCount');
+        if (el) el.textContent = r.passkeys.length ? r.passkeys.length : '';
+    } catch {}
+}
+
+// ---- 设备码登录 ----
+let dcTimer = null;
+function openDeviceCodeModal() {
+    $('#deviceCodeModal').hidden = false;
+    startDeviceCode();
+}
+function closeDeviceCodeModal() {
+    $('#deviceCodeModal').hidden = true;
+    clearInterval(dcTimer); dcTimer = null;
+}
+function dcSetState(txt, cls) {
+    const el = $('#dcState');
+    el.textContent = txt;
+    el.className = 'dc-state' + (cls ? ' ' + cls : '');
+}
+async function startDeviceCode() {
+    clearInterval(dcTimer); dcTimer = null;
+    $('#dcUserCode').textContent = '····-····';
+    $('#dcRefreshBtn').hidden = true;
+    $('#dcSpinner').hidden = false;
+    dcSetState('正在获取设备码…');
+    try {
+        const r = await api('/devicecode/create', { method: 'POST', body: {} });
+        $('#dcUserCode').textContent = r.userCode;
+        dcSetState('等待授权… 在已登录设备的「安全中心」输入此码');
+        const deadline = Date.now() + (r.expiresIn || 300) * 1000;
+        dcTimer = setInterval(async () => {
+            if ($('#deviceCodeModal').hidden) { clearInterval(dcTimer); return; }
+            if (Date.now() > deadline) {
+                clearInterval(dcTimer);
+                $('#dcSpinner').hidden = true;
+                dcSetState('设备码已过期', 'err');
+                $('#dcRefreshBtn').hidden = false;
+                return;
+            }
+            try {
+                const s = await api('/devicecode/status?deviceCode=' + r.deviceCode + '&_t=' + Date.now());
+                if (s.status === 'authorized') {
+                    clearInterval(dcTimer);
+                    $('#dcSpinner').hidden = true;
+                    dcSetState('授权成功，正在登录…', 'ok');
+                    token = s.token;
+                    localStorage.setItem('stating_token', token);
+                    me = s.user;
+                    setTimeout(() => {
+                        $('#deviceCodeModal').hidden = true;
+                        showMainOrQr();
+                        showToast('设备码登录成功');
+                    }, 600);
+                }
+            } catch {}
+        }, (r.interval || 3) * 1000);
+    } catch (e) {
+        dcSetState(e.message || '获取失败', 'err');
+        $('#dcSpinner').hidden = true;
+        $('#dcRefreshBtn').hidden = false;
+    }
+}
+
+// ---- 找回密码 ----
+let recPhone = '', recToken = '';
+function recStep(n) {
+    ['recStep1', 'recStep2', 'recStep3'].forEach((id, i) => { const el = $('#' + id); if (el) el.hidden = i !== n - 1; });
+    $('#recError').textContent = '';
+}
+function openRecover() {
+    $('#recoverModal').hidden = false;
+    $('#recPhone').value = '';
+    recStep(1);
+}
+async function recoverNext() {
+    const err = $('#recError'); err.textContent = '';
+    recPhone = $('#recPhone').value.trim();
+    if (!/^\d{6,15}$/.test(recPhone)) { err.textContent = '请输入正确的手机号'; return; }
+    try {
+        const m = await api('/recover/methods', { method: 'POST', body: { phone: recPhone } });
+        if (!m.exists) { err.textContent = '该手机号未注册'; return; }
+        $('#recAdminBox').hidden = false;   // 管理员密钥始终可用
+        $('#recPasskeyBox').hidden = !m.passkey;
+        $('#recMethodHint').textContent = m.passkey ? '选择一种方式验证身份' : '该账号未绑定 Passkey，可用管理员密钥验证';
+        recStep(2);
+    } catch (e) { err.textContent = e.message || '查询失败'; }
+}
+async function recoverAdmin() {
+    const err = $('#recError'); err.textContent = '';
+    try {
+        const r = await api('/recover/admin', { method: 'POST', body: { phone: recPhone, adminKey: $('#recAdminKey').value.trim() } });
+        recToken = r.resetToken;
+        recStep(3);
+        setTimeout(() => $('#recNewPass').focus(), 80);
+    } catch (e) { err.textContent = e.message || '验证失败'; }
+}
+async function recoverPasskey() {
+    const err = $('#recError'); err.textContent = '';
+    try {
+        const o = await api('/passkey/options', { method: 'POST', body: { mode: 'recover', phone: recPhone } });
+        const cred = await waGet(o.publicKey);
+        const r = await api('/passkey/verify', { method: 'POST', body: { mode: 'recover', phone: recPhone, challengeId: o.challengeId, ...cred } });
+        recToken = r.resetToken;
+        recStep(3);
+    } catch (e) {
+        err.textContent = e && e.name === 'NotAllowedError' ? '已取消验证' : (e.message || '验证失败');
+    }
+}
+function passScore(p) {
+    let s = 0;
+    if (p.length >= 8) s++;
+    if (p.length >= 12) s++;
+    if (/\d/.test(p) && /[a-zA-Z]/.test(p)) s++;
+    if (/[^a-zA-Z0-9]/.test(p)) s++;
+    return s;
+}
+function recoverStrength() {
+    const p = $('#recNewPass').value;
+    const s = passScore(p);
+    const bar = $('#recStrengthBar'), txt = $('#recStrengthText');
+    bar.style.width = (p ? Math.max(14, s * 25) : 0) + '%';
+    bar.style.filter = s <= 1 ? 'hue-rotate(-42deg) saturate(2.2)' : s <= 2 ? 'hue-rotate(-14deg) saturate(1.4)' : 'none';
+    const labels = ['太弱', '偏弱', '一般', '较强', '很强'];
+    txt.textContent = p ? '密码强度：' + labels[s] + (s < 2 ? '（至少8位，含字母和数字）' : '') : '';
+}
+async function recoverConfirm() {
+    const err = $('#recError'); err.textContent = '';
+    const np = $('#recNewPass').value;
+    if (np.length < 8 || !/\d/.test(np) || !/[a-zA-Z]/.test(np)) { err.textContent = '密码至少8位，需同时包含字母和数字'; return; }
+    try {
+        await api('/recover/confirm', { method: 'POST', body: { resetToken: recToken, newPassword: np } });
+        $('#recoverModal').hidden = true;
+        localStorage.removeItem('stating_token');
+        token = '';
+        showAuth();
+        $$('.auth-tab').forEach(t => { if (t.dataset.tab === 'login') t.click(); });
+        showToast('密码已重置，请使用新密码登录');
+    } catch (e) { err.textContent = e.message || '重置失败'; }
+}
+
+// ---- 签名验签工具 ----
+const SKEY_STORE = 'stating_signkey_v1';
+let signPriv = null, stMode = '';
+function skeyExists() { return !!localStorage.getItem(SKEY_STORE); }
+async function vaultSave(priv, pass) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const km = await crypto.subtle.importKey('raw', STE.encode(pass), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 210000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, STE.encode(JSON.stringify(priv)));
+    localStorage.setItem(SKEY_STORE, JSON.stringify({ v: 1, salt: SB64.enc(salt), iv: SB64.enc(iv), ct: SB64.enc(new Uint8Array(ct)) }));
+}
+async function vaultOpen(pass) {
+    const raw = JSON.parse(localStorage.getItem(SKEY_STORE) || 'null');
+    if (!raw) return null;
+    const km = await crypto.subtle.importKey('raw', STE.encode(pass), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: SB64.dec(raw.salt), iterations: 210000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    try { return JSON.parse(SDD.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: SB64.dec(raw.iv) }, key, SB64.dec(raw.ct)))); }
+    catch { return null; }
+}
+function updateKeyStatus() {
+    const el = $('#stKeyStatus');
+    if (!el) return;
+    if (skeyExists()) { el.textContent = '已创建钥匙（私钥加密存于本机）'; el.classList.add('on'); }
+    else { el.textContent = '未创建签名钥匙'; el.classList.remove('on'); }
+}
+function showSignOut(kind, html) {
+    const el = $('#signOutput');
+    el.hidden = false;
+    el.className = 'st-output glass' + (kind === 'ok' ? ' ok' : kind === 'bad' ? ' bad' : '');
+    el.innerHTML = html;
+}
+function askPass(mode) {
+    stMode = mode;
+    $('#stPassRow').hidden = false;
+    const i = $('#stPass');
+    i.value = '';
+    i.placeholder = mode === 'gen' ? '设置钥匙口令（至少8位），回车确认' : '输入钥匙口令，回车解锁';
+    setTimeout(() => i.focus(), 60);
+}
+async function passSubmit() {
+    const pass = $('#stPass').value;
+    if (stMode === 'gen') {
+        if (pass.length < 8) { showSignOut('bad', '口令至少8位'); return; }
+        try {
+            const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+            signPriv = await crypto.subtle.exportKey('jwk', kp.privateKey);
+            await vaultSave(signPriv, pass);
+            try { await api('/signkeys', { method: 'POST', body: { publicKeyJwk: { kty: 'EC', crv: 'P-256', x: signPriv.x, y: signPriv.y } } }); } catch {}
+            $('#stPassRow').hidden = true;
+            updateKeyStatus();
+            showSignOut('ok', '<div class="st-badge">✓ 钥匙已创建</div>公钥已托管到服务端；私钥已用口令加密存于本机，永不上传。');
+        } catch (e) { showSignOut('bad', secEsc(e.message || '创建失败')); }
+    } else if (stMode === 'unlock') {
+        const priv = await vaultOpen(pass);
+        if (!priv) { showSignOut('bad', '口令错误'); return; }
+        signPriv = priv;
+        passCache = pass; passCacheTs = Date.now();
+        $('#stPassRow').hidden = true;
+        showSignOut('ok', '钥匙已解锁，可以签名了');
+    }
+}
+let passCache = null, passCacheTs = 0; // 口令内存缓存（仅会话期）
+async function doSign() {
+    const text = $('#signInput').value;
+    if (!text.trim()) { showSignOut('bad', '请输入要签名的内容'); return; }
+    if (!skeyExists()) { showSignOut('bad', '请先在下方「创建钥匙」'); return; }
+    if (!signPriv) { askPass('unlock'); showSignOut('info', '请输入钥匙口令解锁'); return; }
+    try {
+        const payload = { v: 1, phone: (me && me.phone) || '', text, ts: Date.now() };
+        const data = STE.encode(JSON.stringify(payload));
+        const key = await crypto.subtle.importKey('jwk', signPriv, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+        const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, data);
+        const full = 'STSIG1.' + SB64.enc(data) + '.' + SB64.enc(new Uint8Array(sig));
+        showSignOut('ok', '<div class="st-badge">✍ 签名已生成（含时间戳，可防抵赖）</div>' + secEsc(full));
+    } catch (e) { showSignOut('bad', secEsc(e.message || '签名失败')); }
+}
+async function doVerify() {
+    const raw = $('#signInput').value.trim();
+    if (!raw.startsWith('STSIG1.')) { showSignOut('bad', '不是有效的签名串（应以 STSIG1. 开头）'); return; }
+    const parts = raw.split('.');
+    if (parts.length !== 3) { showSignOut('bad', '签名格式错误'); return; }
+    let payload;
+    try { payload = JSON.parse(SDD.decode(SB64.dec(parts[1]))); }
+    catch { showSignOut('bad', '载荷解析失败'); return; }
+    try {
+        const r = await api('/signkeys/' + encodeURIComponent(payload.phone) + '?_t=' + Date.now());
+        const key = await crypto.subtle.importKey('jwk', r.publicKeyJwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+        const okv = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, SB64.dec(parts[2]), SB64.dec(parts[1]));
+        if (okv) {
+            showSignOut('ok', '<div class="st-badge">✓ 签名有效</div>签名者：' + secEsc(payload.phone)
+                + '<br>签名时间：' + new Date(payload.ts).toLocaleString()
+                + '<br>内容：' + secEsc(payload.text));
+        } else {
+            showSignOut('bad', '<div class="st-badge">✗ 签名无效</div>内容或签名者不符，或已被篡改');
+        }
+    } catch (e) {
+        showSignOut('bad', secEsc(e.message || '验证失败：签名者未托管公钥'));
+    }
+}
+function signKeyBackup() {
+    const raw = localStorage.getItem(SKEY_STORE);
+    if (!raw) { showSignOut('bad', '还没有钥匙'); return; }
+    const blob = new Blob([raw], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'stating-signkey.stkey';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showSignOut('ok', '备份已导出（文件仍受口令加密保护）');
+}
+async function signKeyImport(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+        const j = JSON.parse(await f.text());
+        if (!j.salt || !j.iv || !j.ct) throw 0;
+        localStorage.setItem(SKEY_STORE, JSON.stringify(j));
+        signPriv = null;
+        updateKeyStatus();
+        showSignOut('ok', '备份已导入，输入口令即可使用');
+    } catch { showSignOut('bad', '备份文件无效'); }
+    e.target.value = '';
+}
+function openSignTool() {
+    $('#signToolOverlay').hidden = false;
+    updateKeyStatus();
+}
+function closeSignTool() {
+    $('#signToolOverlay').hidden = true;
+    $('#stPassRow').hidden = true;
+    $('#signOutput').hidden = true;
+}
+
+// ---- 安全日志 ----
+const SEC_EVENTS = {
+    login: ['登录成功', ''], login_fail: ['登录失败', 'bad'], register: ['注册账号', ''],
+    passkey_add: ['添加 Passkey', ''], passkey_login: ['Passkey 登录', ''],
+    passkey_fail: ['Passkey 校验失败', 'bad'], passkey_remove: ['删除 Passkey', 'warn'],
+    device_auth: ['授权设备码登录', 'warn'], device_login: ['设备码登录', ''],
+    signkey_set: ['更新签名公钥', ''], recover_methods: ['查询找回方式', 'warn'],
+    recover_admin: ['管理员验证找回', 'warn'], recover_admin_fail: ['管理员密钥错误', 'bad'],
+    recover_passkey: ['Passkey 验证找回', ''], password_reset: ['密码重置（全端下线）', 'warn']
+};
+async function openSecLog() {
+    $('#secLogModal').hidden = false;
+    const box = $('#secLogList');
+    box.innerHTML = '<div class="pk-empty">加载中…</div>';
+    try {
+        const r = await api('/security/log');
+        box.innerHTML = '';
+        if (!r.logs.length) { box.innerHTML = '<div class="pk-empty">暂无记录</div>'; return; }
+        r.logs.forEach((l, i) => {
+            const meta = SEC_EVENTS[l.event] || [l.event, ''];
+            const d = document.createElement('div');
+            d.className = 'sec-log-item';
+            d.style.animationDelay = Math.min(i * 35, 350) + 'ms';
+            d.innerHTML = '<div class="sec-log-dot ' + (meta[1] || '') + '"></div>'
+                + '<div class="sec-log-text"><div class="sec-log-title">' + secEsc(meta[0]) + '</div>'
+                + '<div class="sec-log-meta">' + new Date(l.ts).toLocaleString() + (l.detail ? ' · ' + secEsc(l.detail) : '') + '</div></div>';
+            box.appendChild(d);
+        });
+    } catch (e) {
+        box.innerHTML = '<div class="pk-empty">' + secEsc(e.message || '加载失败') + '</div>';
+    }
+}
+
+// ---- 统一初始化 ----
+function initSecurityUI() {
+    if (waAvailable()) $('#passkeyLoginBtn').hidden = false;
+    $('#passkeyLoginBtn').onclick = passkeyQuickLogin;
+    $('#deviceCodeBtn').onclick = openDeviceCodeModal;
+    $('#forgotBtn').onclick = openRecover;
+    $('#dcClose').onclick = closeDeviceCodeModal;
+    $('#dcRefreshBtn').onclick = startDeviceCode;
+    $('#passkeyManageBtn').onclick = openSecurityCenter;
+    $('#pkClose').onclick = () => { $('#passkeyModal').hidden = true; };
+    $('#passkeyAddBtn').onclick = passkeyAdd;
+    $('#dcAuthBtn').onclick = deviceAuthorize;
+    $('#dcAuthInput').addEventListener('keydown', e => { if (e.key === 'Enter') deviceAuthorize(); });
+    $('#recClose').onclick = () => { $('#recoverModal').hidden = true; };
+    $('#recNextBtn').onclick = recoverNext;
+    $('#recAdminBtn').onclick = recoverAdmin;
+    $('#recPasskeyBtn').onclick = recoverPasskey;
+    $('#recConfirmBtn').onclick = recoverConfirm;
+    $('#recNewPass').addEventListener('input', recoverStrength);
+    $('#slClose').onclick = () => { $('#secLogModal').hidden = true; };
+    $('#secLogBtn').onclick = openSecLog;
+    $('#signToolBtn').onclick = openSignTool;
+    $('#stClose').onclick = closeSignTool;
+    $('#signGenBtn').onclick = doSign;
+    $('#signVerifyBtn').onclick = doVerify;
+    $('#stPass').addEventListener('keydown', e => { if (e.key === 'Enter') passSubmit(); });
+    $('#signKeyGenBtn').onclick = () => askPass('gen');
+    $('#signKeyBackupBtn').onclick = signKeyBackup;
+    $('#signKeyImportBtn').onclick = () => $('#signKeyFile').click();
+    $('#signKeyFile').addEventListener('change', signKeyImport);
+    updateKeyStatus();
+}
 })();
 
 /* ============================================================

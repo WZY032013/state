@@ -38,6 +38,13 @@
         <div class="auth-tabs glass-pill">
             <button type="button" class="auth-tab active" data-tab="login">登录</button>
             <button type="button" class="auth-tab" data-tab="register">注册</button>
+            <button type="button" class="auth-tab auth-tab-qr" data-tab="qr" title="扫码登录"><span data-icon="qr"></span></button>
+        </div>
+
+        <div class="auth-more">
+            <button type="button" class="auth-more-btn glass-pill" id="passkeyLoginBtn" hidden><span data-icon="key"></span> Passkey 登录</button>
+            <button type="button" class="auth-more-btn glass-pill" id="deviceCodeBtn"><span data-icon="monitor"></span> 设备码登录</button>
+            <button type="button" class="auth-more-btn glass-pill" id="forgotBtn"><span data-icon="lock"></span> 忘记密码</button>
         </div>
 
         <!-- 登录 -->
@@ -61,7 +68,7 @@
             </div>
             <div class="field glass-field">
                 <span class="field-icon" data-icon="lock"></span>
-                <input type="password" id="regPassword" placeholder="设置密码（至少4位）" maxlength="32">
+                <input type="password" id="regPassword" placeholder="设置密码（8位以上，含字母和数字）" maxlength="64">
             </div>
             <div class="field glass-field">
                 <span class="field-icon" data-icon="mail"></span>
@@ -81,6 +88,23 @@
 
             <button type="submit" class="btn-primary">注 册</button>
         </form>
+
+        <!-- 扫码登录 -->
+        <div id="qrForm" class="auth-form qr-login-panel">
+            <div class="qr-stage">
+                <div class="qr-card glass" id="qrCard">
+                    <div class="qr-img" id="qrImg"></div>
+                    <div class="qr-mask-line"></div>
+                    <div class="qr-state-overlay" id="qrStateOverlay" hidden>
+                        <div class="qr-state-icon" id="qrStateIcon"></div>
+                        <p id="qrStateText"></p>
+                        <button type="button" class="btn-primary qr-reload-btn" id="qrReloadBtn" hidden><span data-icon="back" style="transform:rotate(180deg)"></span> 刷新二维码</button>
+                    </div>
+                </div>
+            </div>
+            <p class="qr-status-text" id="qrStatusText">打开手机 Stating「我的 → 扫一扫」</p>
+            <p class="qr-status-sub" id="qrStatusSub">扫描二维码，安全登录网页版</p>
+        </div>
 
         <div id="authError" class="auth-error"></div>
     </div>
@@ -105,6 +129,188 @@
         <div id="adminKeyError" class="auth-error"></div>
         <button class="btn-primary" id="adminKeySubmit">验证并登录</button>
         <button type="button" class="btn-text" id="adminKeyCancel">← 返回登录</button>
+    </div>
+</div>
+
+<!-- 手机扫码后：登录确认屏 -->
+<div id="qrConfirmScreen" class="auth-screen" hidden>
+    <div class="auth-card glass qr-confirm-card">
+        <!-- 加载中 -->
+        <div class="qrc-state" id="qrcLoading">
+            <div class="qr-spinner"></div>
+            <h1>正在验证二维码</h1>
+            <p>请稍候…</p>
+        </div>
+        <!-- 未登录 -->
+        <div class="qrc-state" id="qrcGuest" hidden>
+            <div class="logo-badge" data-icon="qr"></div>
+            <h1>扫码登录</h1>
+            <p>登录 Stating 后，即可授权电脑端登录</p>
+            <button class="btn-primary" id="qrcGoLogin">前往登录</button>
+        </div>
+        <!-- 已登录：确认授权 -->
+        <div class="qrc-state" id="qrcAsk" hidden>
+            <div class="logo-badge qr-logo-badge" data-icon="qr"></div>
+            <h1>确认登录网页版？</h1>
+            <p>扫码后请确认是本人操作</p>
+            <div class="qrc-user glass-pill">
+                <span class="qrc-avatar" id="qrcAvatar">😀</span>
+                <span class="qrc-meta">
+                    <span class="qrc-name" id="qrcNickname"></span>
+                    <span class="qrc-phone" id="qrcPhone"></span>
+                </span>
+            </div>
+            <div id="qrcError" class="auth-error"></div>
+            <button class="btn-primary" id="qrcConfirmBtn">确认登录</button>
+            <button type="button" class="btn-text" id="qrcCancelBtn">取消登录</button>
+        </div>
+        <!-- 成功 -->
+        <div class="qrc-state" id="qrcDone" hidden>
+            <div class="qrc-success"><span data-icon="checkDouble"></span></div>
+            <h1>登录成功</h1>
+            <p>请返回电脑端查看，已安全登录</p>
+            <button class="btn-primary" id="qrcCloseDone">完成</button>
+        </div>
+        <!-- 失败/过期/取消 -->
+        <div class="qrc-state" id="qrcFail" hidden>
+            <div class="logo-badge">⚠️</div>
+            <h1 id="qrcFailTitle">操作未完成</h1>
+            <p id="qrcFailText">二维码可能已失效</p>
+            <button class="btn-primary" id="qrcCloseFail">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============ 安全中心 ============ -->
+<!-- 设备码登录 -->
+<div id="deviceCodeModal" class="sec-overlay" hidden>
+    <div class="sec-card glass">
+        <button type="button" class="sec-close" id="dcClose"><span data-icon="close"></span></button>
+        <div class="sec-badge"><span data-icon="monitor"></span></div>
+        <h1>设备码登录</h1>
+        <p class="sec-sub">在任意已登录的 Stating 设备中<br>打开「安全中心 → 设备授权」输入此码</p>
+        <div class="dc-code glass" id="dcUserCode">····-····</div>
+        <div class="dc-state" id="dcState">等待授权…</div>
+        <div class="dc-spinner" id="dcSpinner"></div>
+        <button type="button" class="btn-primary" id="dcRefreshBtn" hidden>重新获取</button>
+    </div>
+</div>
+
+<!-- 安全中心（Passkey 管理 + 设备授权） -->
+<div id="passkeyModal" class="sec-overlay" hidden>
+    <div class="sec-card glass">
+        <button type="button" class="sec-close" id="pkClose"><span data-icon="close"></span></button>
+        <div class="sec-badge"><span data-icon="key"></span></div>
+        <h1>安全中心</h1>
+        <p class="sec-sub">Passkey 钥匙与设备授权</p>
+        <div class="pk-list" id="passkeyList"></div>
+        <button type="button" class="btn-primary" id="passkeyAddBtn"><span data-icon="plus"></span> 添加 Passkey</button>
+        <div class="pk-divider"></div>
+        <div class="pk-section-title">设备授权</div>
+        <p class="pk-hint">在未登录设备上生成设备码后，在此输入授权其登录</p>
+        <div class="field glass-field">
+            <span class="field-icon" data-icon="monitor"></span>
+            <input type="text" id="dcAuthInput" placeholder="如 XK4M-7QP9" maxlength="9">
+        </div>
+        <button type="button" class="btn-primary" id="dcAuthBtn">授权此设备</button>
+        <div id="dcAuthError" class="auth-error"></div>
+    </div>
+</div>
+
+<!-- 找回密码 -->
+<div id="recoverModal" class="sec-overlay" hidden>
+    <div class="sec-card glass">
+        <button type="button" class="sec-close" id="recClose"><span data-icon="close"></span></button>
+        <div class="sec-badge"><span data-icon="lock"></span></div>
+        <h1>找回密码</h1>
+        <div id="recStep1">
+            <p class="sec-sub">输入注册手机号，验证身份后重设密码</p>
+            <div class="field glass-field">
+                <span class="field-icon" data-icon="phone"></span>
+                <input type="tel" id="recPhone" placeholder="手机号" maxlength="11" inputmode="numeric">
+            </div>
+            <button type="button" class="btn-primary" id="recNextBtn">下一步</button>
+        </div>
+        <div id="recStep2" hidden>
+            <p class="sec-sub" id="recMethodHint">选择一种方式验证身份</p>
+            <div id="recAdminBox" hidden>
+                <div class="field glass-field">
+                    <span class="field-icon" data-icon="key"></span>
+                    <input type="password" id="recAdminKey" placeholder="管理员密钥" maxlength="16">
+                </div>
+                <button type="button" class="btn-primary" id="recAdminBtn">验证管理员密钥</button>
+            </div>
+            <div id="recPasskeyBox" hidden>
+                <button type="button" class="btn-primary" id="recPasskeyBtn"><span data-icon="key"></span> 使用 Passkey 验证身份</button>
+            </div>
+        </div>
+        <div id="recStep3" hidden>
+            <p class="sec-sub">身份验证通过，请设置新密码</p>
+            <div class="field glass-field">
+                <span class="field-icon" data-icon="lock"></span>
+                <input type="password" id="recNewPass" placeholder="新密码（8位以上，含字母和数字）" maxlength="64">
+            </div>
+            <div class="rec-strength"><div class="rec-strength-bar" id="recStrengthBar"></div></div>
+            <div class="rec-strength-text" id="recStrengthText"></div>
+            <button type="button" class="btn-primary" id="recConfirmBtn">重置密码</button>
+        </div>
+        <div id="recError" class="auth-error"></div>
+    </div>
+</div>
+
+<!-- 安全日志 -->
+<div id="secLogModal" class="sec-overlay" hidden>
+    <div class="sec-card glass sec-log-card">
+        <button type="button" class="sec-close" id="slClose"><span data-icon="close"></span></button>
+        <div class="sec-badge"><span data-icon="monitor"></span></div>
+        <h1>安全日志</h1>
+        <p class="sec-sub">最近的登录与安全事件（最多 50 条）</p>
+        <div class="sec-log-list" id="secLogList"></div>
+    </div>
+</div>
+
+<!-- 签名验签工具 -->
+<div id="signToolOverlay" class="scanner-overlay sign-tool-overlay" hidden>
+    <div class="sign-scroll">
+        <button type="button" class="scanner-close glass-pill" id="stClose" title="关闭"><span data-icon="close"></span></button>
+        <div class="sign-card glass">
+            <div class="sec-badge"><span data-icon="key"></span></div>
+            <h1>签名验签</h1>
+            <p class="sec-sub">ECDSA P-256 · 私钥口令加密仅存本机 · 签名含时间戳防抵赖</p>
+            <div class="st-key-row glass-pill" id="stKeyStatus">未创建签名钥匙</div>
+            <textarea id="signInput" rows="3" placeholder="输入要签名的内容；或粘贴 STSIG1. 开头的签名串进行验证"></textarea>
+            <div id="stPassRow" hidden>
+                <input type="password" id="stPass" placeholder="钥匙口令" maxlength="64">
+            </div>
+            <div class="st-actions">
+                <button type="button" class="btn-primary" id="signGenBtn">签名</button>
+                <button type="button" class="btn-text" id="signVerifyBtn">验证</button>
+            </div>
+            <div class="st-output glass" id="signOutput" hidden></div>
+            <div class="st-keys">
+                <button type="button" class="btn-text" id="signKeyGenBtn">创建钥匙</button>
+                <button type="button" class="btn-text" id="signKeyBackupBtn">导出备份</button>
+                <button type="button" class="btn-text" id="signKeyImportBtn">导入备份</button>
+                <input type="file" id="signKeyFile" accept=".stkey,application/json" hidden>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 扫一扫（相机取景） -->
+<div id="scannerOverlay" class="scanner-overlay" hidden>
+    <video id="scannerVideo" class="scanner-video" playsinline muted autoplay></video>
+    <canvas id="scannerCanvas" hidden></canvas>
+    <div class="scanner-ui">
+        <button type="button" class="scanner-close glass-pill" id="scannerClose" title="关闭"><span data-icon="close"></span></button>
+        <div class="scanner-frame">
+            <i class="sf-corner tl"></i><i class="sf-corner tr"></i>
+            <i class="sf-corner bl"></i><i class="sf-corner br"></i>
+            <span class="sf-line"></span>
+        </div>
+        <p class="scanner-tip" id="scannerTip">将二维码放入框内，即可自动扫描</p>
+        <button type="button" class="scanner-album glass-pill" id="scannerAlbum"><span data-icon="image"></span> 相册选码</button>
+        <input type="file" id="scannerFile" accept="image/*" hidden>
     </div>
 </div>
 
@@ -371,6 +577,10 @@
 
         <!-- 我的 -->
         <section id="profileView" class="view">
+            <button type="button" class="profile-scan-btn glass-pill" id="openScannerBtn" title="扫一扫">
+                <span data-icon="qr"></span>
+                <span class="psb-label">扫一扫</span>
+            </button>
             <div class="profile-card glass">
                 <div class="profile-avatar" id="profileAvatar">😀</div>
                 <h2 id="profileNickname">昵称</h2>
@@ -417,6 +627,9 @@
                 <button class="btn-sessions" id="sessionsBtn"><span data-icon="monitor"></span> 登录设备管理</button>
                 <button class="btn-sessions" id="savedBtn"><span data-icon="star"></span> 我的收藏</button>
                 <button class="btn-sessions" id="bubbleBtn"><span data-icon="chat"></span> 气泡皮肤</button>
+                <button class="btn-sessions" id="passkeyManageBtn"><span data-icon="key"></span> 安全中心 <span class="sec-count" id="passkeyCount"></span></button>
+                <button class="btn-sessions" id="signToolBtn"><span data-icon="edit"></span> 签名验签工具</button>
+                <button class="btn-sessions" id="secLogBtn"><span data-icon="monitor"></span> 安全日志</button>
                 <div class="focus-mode-row glass-pill">
                     <span class="dm-label"><span data-icon="moon"></span> 专注模式</span>
                     <div class="focus-time-inputs">

@@ -24,10 +24,26 @@ function json(data, status = 200) {
 function ok(data) { return json({ ok: true, ...data }); }
 function fail(msg, status = 400) { return json({ ok: false, error: msg }, status); }
 
-async function hashPassword(password, salt) {
+// 密码：PBKDF2-SHA256 10万次迭代；兼容旧 sha256，登录时透明升级
+async function legacyHash(password, salt) {
   const enc = new TextEncoder();
   const keyData = await crypto.subtle.digest('SHA-256', enc.encode(password + ':' + salt));
   return Array.from(new Uint8Array(keyData), b => b.toString(16).padStart(2, '0')).join('');
+}
+async function pbkdf2Hash(password, salt) {
+  const enc = new TextEncoder();
+  const km = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode(salt), iterations: 100000, hash: 'SHA-256' }, km, 256);
+  return 'pbkdf2$' + b64uEnc(new Uint8Array(bits));
+}
+async function verifyPassword(password, salt, stored) {
+  if (typeof stored === 'string' && stored.startsWith('pbkdf2$')) return (await pbkdf2Hash(password, salt)) === stored;
+  return (await legacyHash(password, salt)) === stored;
+}
+async function hashPassword(password, salt) { return pbkdf2Hash(password, salt); }
+function passwordOk(pw) {
+  if (typeof pw !== 'string' || pw.length < 8 || pw.length > 64) return false;
+  return /[a-zA-Z]/.test(pw) && /\d/.test(pw);
 }
 
 function makeSalt() {
@@ -44,6 +60,20 @@ function makeToken() {
 
 function makeId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+// base64url（WebAuthn/签名用，Workers 无 Buffer）
+function b64uEnc(u8) {
+  let s = ''; for (const b of u8) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64uDec(str) {
+  str = String(str).replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) str += '=';
+  const bin = atob(str);
+  const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
 }
 
 function parseArr(s) { try { return JSON.parse(s || '[]'); } catch { return []; } }
@@ -319,7 +349,7 @@ async function handleRegister(env, body) {
   const { phone, password, nickname, avatar, email, adminKey } = body;
   if (!phone || !password || !nickname) return fail('请填写完整信息');
   if (!/^\d{6,15}$/.test(phone)) return fail('手机号格式不正确');
-  if (password.length < 4) return fail('密码至少4位');
+  if (!passwordOk(password)) return fail('密码至少8位，需同时包含字母和数字');
   if (phone === ADMIN_PHONE) {
     if (!adminKey || adminKey !== ADMIN_KEY) return fail('管理员密钥错误');
   }
@@ -343,13 +373,107 @@ async function handleLogin(env, body) {
   if (phone === ADMIN_PHONE) {
     if (!adminKey || adminKey !== ADMIN_KEY) return fail('管理员密钥错误');
   }
+  await ensureSecTables(env).catch(() => {});
+  if (!(await rateHit(env, 'login:' + phone, 5, 15 * 60 * 1000))) return fail('尝试次数过多，请15分钟后再试', 429);
   const user = await getUser(env, phone);
-  if (!user) return fail('用户不存在');
-  const passHash = await hashPassword(password, user.passSalt);
-  if (passHash !== user.passHash) return fail('密码错误');
+  if (!user) { secLog(env, phone, 'login_fail', '账号不存在'); return fail('用户不存在'); }
+  if (!(await verifyPassword(password, user.passSalt, user.passHash))) { secLog(env, phone, 'login_fail', '密码错误'); return fail('密码错误'); }
+  await rateClear(env, 'login:' + phone);
+  if (!String(user.passHash || '').startsWith('pbkdf2$')) { user.passHash = await pbkdf2Hash(password, user.passSalt); await saveUser(env, user); }
   await ensureMediaTable(env);
   const token = await createToken(env, phone);
+  secLog(env, phone, 'login', '密码登录成功');
   return ok({ token, user: publicUser(user) });
+}
+
+// ============ 扫码登录（二维码只含一次性随机 qrId，不含任何账号密码） ============
+const QRLOGIN_TTL = 2 * 60 * 1000; // 二维码 2 分钟有效
+
+async function ensureQrTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS qr_sessions (
+    id TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    phone TEXT,
+    login_token TEXT,
+    expires INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  )`).run();
+}
+
+async function getQrSession(env, id) {
+  if (!id) return null;
+  const row = await env.DB.prepare('SELECT * FROM qr_sessions WHERE id = ?').bind(id).first();
+  if (!row) return null;
+  if (row.expires < Date.now()) {
+    await env.DB.prepare('DELETE FROM qr_sessions WHERE id = ?').bind(id).run();
+    return { id, status: 'expired' };
+  }
+  return row;
+}
+
+// PC 端：创建待扫码会话
+async function handleQrCreate(env) {
+  await ensureQrTable(env);
+  const arr = new Uint8Array(24);
+  crypto.getRandomValues(arr);
+  const qrId = Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+  const now = Date.now();
+  await env.DB.prepare('INSERT INTO qr_sessions (id, status, expires, created_at) VALUES (?,?,?,?)')
+    .bind(qrId, 'pending', now + QRLOGIN_TTL, now).run();
+  return ok({ qrId, expiresIn: QRLOGIN_TTL / 1000 });
+}
+
+// PC 端：轮询状态；confirmed 一次性返回登录 token 并销毁会话
+async function handleQrStatus(env, qrId) {
+  await ensureQrTable(env);
+  const s = await getQrSession(env, qrId);
+  if (!s) return json({ ok: false, status: 'invalid', error: '二维码无效' });
+  if (s.status === 'expired') return ok({ status: 'expired' });
+  if (s.status === 'confirmed') {
+    const token = s.login_token;
+    const row = await env.DB.prepare('SELECT * FROM tokens WHERE token = ?').bind(token).first();
+    await env.DB.prepare('DELETE FROM qr_sessions WHERE id = ?').bind(s.id).run();
+    if (!row || row.expires < Date.now()) return fail('登录态已失效，请重新扫码', 401);
+    const u = await getUser(env, row.phone);
+    return ok({ status: 'confirmed', token, user: publicUser(u) });
+  }
+  if (s.status === 'scanned') {
+    const u = await getUser(env, s.phone);
+    return ok({ status: 'scanned', scanner: u ? { nickname: u.nickname, avatar: u.avatar, phone: u.phone } : null });
+  }
+  return ok({ status: s.status });
+}
+
+// 手机端：已登录用户扫码
+async function handleQrScan(env, user, body) {
+  await ensureQrTable(env);
+  const s = await getQrSession(env, body.qrId || '');
+  if (!s || s.status === 'expired') return fail('二维码已过期');
+  if (s.status !== 'pending') return fail('二维码已被使用');
+  await env.DB.prepare('UPDATE qr_sessions SET status = ?, phone = ? WHERE id = ?')
+    .bind('scanned', user.phone, s.id).run();
+  return ok({ status: 'scanned' });
+}
+
+// 手机端：确认登录 → 服务端签发长期 token，PC 端下次轮询取走
+async function handleQrConfirm(env, user, body) {
+  await ensureQrTable(env);
+  const s = await getQrSession(env, body.qrId || '');
+  if (!s || s.status === 'expired') return fail('二维码已过期');
+  if (s.status !== 'scanned' || s.phone !== user.phone) return fail('请先扫码再确认');
+  const loginToken = await createToken(env, user.phone);
+  await env.DB.prepare('UPDATE qr_sessions SET status = ?, login_token = ? WHERE id = ?')
+    .bind('confirmed', loginToken, s.id).run();
+  return ok({ status: 'confirmed' });
+}
+
+// 手机端：取消登录
+async function handleQrCancel(env, user, body) {
+  const s = await getQrSession(env, body.qrId || '');
+  if (s && s.status !== 'confirmed' && s.status !== 'expired' && (!s.phone || s.phone === user.phone)) {
+    await env.DB.prepare('UPDATE qr_sessions SET status = ? WHERE id = ?').bind('canceled', s.id).run();
+  }
+  return ok({});
 }
 
 // ============ 用户管理 ============
@@ -1615,14 +1739,87 @@ export async function onRequest(context) {
       return handleLogin(env, await request.json().catch(() => ({})));
     }
 
+    // 扫码登录：PC 端公开接口（创建/轮询，无需登录）
+    if (parts[0] === 'qrlogin' && parts[1] === 'create' && method === 'POST') {
+      return handleQrCreate(env);
+    }
+    if (parts[0] === 'qrlogin' && parts[1] === 'status' && method === 'GET') {
+      return handleQrStatus(env, url.searchParams.get('qrId') || '');
+    }
+
+    // ===== 安全中心：公开接口（Passkey 登录/找回、设备码、签名公钥查询、找回密码） =====
+    if (parts[0] === 'passkey' && parts[1] === 'options' && method === 'POST') {
+      await ensureSecTables(env);
+      return handleWaOptions(env, await request.json().catch(() => ({})), url);
+    }
+    if (parts[0] === 'passkey' && parts[1] === 'verify' && method === 'POST') {
+      await ensureSecTables(env);
+      return handleWaVerify(env, await request.json().catch(() => ({})), url);
+    }
+    if (parts[0] === 'devicecode' && parts[1] === 'create' && method === 'POST') {
+      await ensureSecTables(env);
+      return handleDcCreate(env);
+    }
+    if (parts[0] === 'devicecode' && parts[1] === 'status' && method === 'GET') {
+      return handleDcStatus(env, url.searchParams.get('deviceCode') || '');
+    }
+    if (parts[0] === 'recover' && parts[1] === 'methods' && method === 'POST') {
+      return handleRecoverMethods(env, await request.json().catch(() => ({})));
+    }
+    if (parts[0] === 'recover' && parts[1] === 'admin' && method === 'POST') {
+      return handleRecoverAdmin(env, await request.json().catch(() => ({})));
+    }
+    if (parts[0] === 'recover' && parts[1] === 'confirm' && method === 'POST') {
+      return handleRecoverConfirm(env, await request.json().catch(() => ({})));
+    }
+    if (parts[0] === 'signkeys' && parts[1] && method === 'GET') {
+      return handleSignGet(env, parts[1]);
+    }
+
     // 认证
     const user = await authUser(env, request);
     if (!user) return fail('未登录', 401);
-
     // 获取当前用户信息
     if (parts[0] === 'me' && method === 'GET') {
       ensureMediaTable(env).catch(() => {});
       return ok({ user: publicUser(user) });
+    }
+
+    // 扫码登录：手机端已登录接口（扫码/确认/取消）
+    if (parts[0] === 'qrlogin' && parts[1] === 'scan' && method === 'POST') {
+      return handleQrScan(env, user, await request.json().catch(() => ({})));
+    }
+    if (parts[0] === 'qrlogin' && parts[1] === 'confirm' && method === 'POST') {
+      return handleQrConfirm(env, user, await request.json().catch(() => ({})));
+    }
+    if (parts[0] === 'qrlogin' && parts[1] === 'cancel' && method === 'POST') {
+      return handleQrCancel(env, user, await request.json().catch(() => ({})));
+    }
+
+    // ===== 安全中心：需登录（Passkey 管理、设备授权、签名公钥托管、安全日志） =====
+    if (parts[0] === 'passkey' && parts[1] === 'register' && parts[2] === 'options' && method === 'POST') {
+      await ensureSecTables(env);
+      return handleWaRegOptions(env, user, url);
+    }
+    if (parts[0] === 'passkey' && parts[1] === 'register' && method === 'POST') {
+      await ensureSecTables(env);
+      return handleWaRegister(env, user, await request.json().catch(() => ({})), url);
+    }
+    if (parts[0] === 'passkeys' && parts.length === 1 && method === 'GET') {
+      return handlePasskeyList(env, user);
+    }
+    if (parts[0] === 'passkey' && parts[1] === 'delete' && method === 'POST') {
+      return handlePasskeyDelete(env, user, await request.json().catch(() => ({})));
+    }
+    if (parts[0] === 'devicecode' && parts[1] === 'authorize' && method === 'POST') {
+      return handleDcAuthorize(env, user, await request.json().catch(() => ({})));
+    }
+    if (parts[0] === 'signkeys' && parts.length === 1 && method === 'POST') {
+      await ensureSecTables(env);
+      return handleSignUpload(env, user, await request.json().catch(() => ({})));
+    }
+    if (parts[0] === 'security' && parts[1] === 'log' && method === 'GET') {
+      return handleSecLog(env, user);
     }
 
     // 近场 P2P 信令（WebRTC 全浏览器兜底）
@@ -1851,4 +2048,344 @@ export async function onRequest(context) {
   } catch (e) {
     return fail('服务器错误: ' + e.message, 500);
   }
+}
+
+/* ============================================================
+   安全中心：Passkey(WebAuthn) / 设备码授权 / 签名验签 / 找回密码
+   —— D1 存储；挑战与票据一次性；频控 + 安全审计日志
+   ============================================================ */
+let secTablesReady = false;
+async function ensureSecTables(env) {
+  if (secTablesReady) return;
+  const stmts = [
+    `CREATE TABLE IF NOT EXISTS passkeys (credential_id TEXT PRIMARY KEY, phone TEXT NOT NULL, public_key TEXT NOT NULL, counter INTEGER DEFAULT 0, device TEXT DEFAULT '', created_at INTEGER, last_used INTEGER)`,
+    `CREATE TABLE IF NOT EXISTS sec_challenges (id TEXT PRIMARY KEY, challenge TEXT NOT NULL, mode TEXT NOT NULL, phone TEXT DEFAULT '', expires INTEGER NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS device_codes (device_code TEXT PRIMARY KEY, user_code TEXT UNIQUE, phone TEXT, status TEXT NOT NULL, expires INTEGER NOT NULL, created_at INTEGER)`,
+    `CREATE TABLE IF NOT EXISTS sign_keys (phone TEXT PRIMARY KEY, public_key TEXT NOT NULL, created_at INTEGER)`,
+    `CREATE TABLE IF NOT EXISTS security_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, phone TEXT, event TEXT, detail TEXT)`,
+    `CREATE TABLE IF NOT EXISTS sec_rate (k TEXT PRIMARY KEY, c INTEGER DEFAULT 0, ws INTEGER DEFAULT 0)`
+  ];
+  for (const s of stmts) await env.DB.prepare(s).run();
+  secTablesReady = true;
+}
+
+// ---------- 频控（D1 滑动窗口） ----------
+async function rateHit(env, key, limit, windowMs) {
+  const now = Date.now();
+  try {
+    const row = await env.DB.prepare('SELECT c, ws FROM sec_rate WHERE k = ?').bind(key).first();
+    if (!row) {
+      await env.DB.prepare('INSERT INTO sec_rate (k, c, ws) VALUES (?, 1, ?)').bind(key, now).run();
+      return true;
+    }
+    if (row.ws < now - windowMs) {
+      await env.DB.prepare('UPDATE sec_rate SET c = 1, ws = ? WHERE k = ?').bind(now, key).run();
+      return true;
+    }
+    const c = row.c + 1;
+    await env.DB.prepare('UPDATE sec_rate SET c = ? WHERE k = ?').bind(c, key).run();
+    return c <= limit;
+  } catch { return true; } // 频控表故障不阻塞正常流程
+}
+async function rateClear(env, key) {
+  try { await env.DB.prepare('DELETE FROM sec_rate WHERE k = ?').bind(key).run(); } catch {}
+}
+function tooMany(min) { return fail(min ? `操作过于频繁，请${min}分钟后再试` : '操作过于频繁，请稍后再试', 429); }
+
+// ---------- 安全审计日志 ----------
+function secLog(env, phone, event, detail) {
+  if (!phone || !env) return;
+  env.DB.prepare('INSERT INTO security_log (ts, phone, event, detail) VALUES (?,?,?,?)')
+    .bind(Date.now(), phone, event, detail || '').run().catch(() => {});
+}
+async function handleSecLog(env, user) {
+  const res = await env.DB.prepare('SELECT ts, event, detail FROM security_log WHERE phone = ? ORDER BY id DESC LIMIT 50').bind(user.phone).all();
+  return ok({ logs: res.results || [] });
+}
+
+// ---------- WebAuthn 基础（纯 WebCrypto + 手写 CBOR） ----------
+const SEC_TE = new TextEncoder();
+async function secSha256(buf) { return new Uint8Array(await crypto.subtle.digest('SHA-256', buf)); }
+
+function cborDecode(buf) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength); let i = 0;
+  const take = n => { const b = buf.subarray(i, i + n); i += n; return b; };
+  function val() {
+    const b = buf[i++]; const t = b >> 5, n = b & 31; let x;
+    if (n < 24) x = n; else if (n === 24) x = buf[i++]; else if (n === 25) { x = dv.getUint16(i); i += 2; }
+    else if (n === 26) { x = dv.getUint32(i); i += 4; } else if (n === 27) { x = Number(dv.getBigUint64(i)); i += 8; } else x = null;
+    if (t === 0) return x;
+    if (t === 1) return x === null ? null : (-1 - x);
+    if (t === 2) return new Uint8Array(take(x));
+    if (t === 3) return new TextDecoder().decode(take(x));
+    if (t === 4) { const a = []; for (let k = 0; k < x; k++) a.push(val()); return a; }
+    if (t === 5) { const m = {}; for (let k = 0; k < x; k++) { const key = val(); m[String(key)] = val(); } return m; }
+    if (t === 6) { val(); return null; }
+    return x;
+  }
+  return val();
+}
+function parseAuthData(b) {
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const flags = b[32], counter = dv.getUint32(33);
+  let off = 37, credId = null, cose = null;
+  if (flags & 0x40) {
+    off += 16; // aaguid
+    const cl = dv.getUint16(off); off += 2;
+    credId = b.subarray(off, off + cl); off += cl;
+    cose = cborDecode(b.subarray(off));
+  }
+  return { rpIdHash: b64uEnc(b.subarray(0, 32)), flags, counter, credId, cose };
+}
+function coseToJwk(c) {
+  if (c[1] === 2 && c[3] === -7) return { kty: 'EC', crv: 'P-256', x: b64uEnc(c[-2]), y: b64uEnc(c[-3]) };
+  if (c[1] === 3 && c[3] === -257) return { kty: 'RSA', n: b64uEnc(c[-1]), e: b64uEnc(c[-2]) };
+  if (c[1] === 1 && c[3] === -8) return { kty: 'OKP', crv: 'Ed25519', x: b64uEnc(c[-2]) };
+  return null;
+}
+async function webVerify(jwk, sigU8, dataU8) {
+  try {
+    const data = dataU8.buffer.slice(dataU8.byteOffset, dataU8.byteOffset + dataU8.byteLength);
+    if (jwk.kty === 'EC') {
+      const key = await crypto.subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+      return await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, sigU8, data);
+    }
+    if (jwk.kty === 'RSA') {
+      const key = await crypto.subtle.importKey('jwk', { kty: 'RSA', n: jwk.n, e: jwk.e }, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+      return await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, sigU8, data);
+    }
+    if (jwk.kty === 'OKP') {
+      const key = await crypto.subtle.importKey('jwk', { kty: 'OKP', crv: 'Ed25519', x: jwk.x }, { name: 'Ed25519' }, false, ['verify']);
+      return await crypto.subtle.verify('Ed25519', key, sigU8, data);
+    }
+  } catch { return false; }
+  return false;
+}
+
+async function secChallenge(env, mode, phone) {
+  const id = makeId() + makeToken().slice(0, 12);
+  const ch = makeToken();
+  await env.DB.prepare('INSERT INTO sec_challenges (id, challenge, mode, phone, expires) VALUES (?,?,?,?,?)')
+    .bind(id, ch, mode, phone || '', Date.now() + 180000).run();
+  return { id, ch };
+}
+async function takeChallenge(env, id, mode) {
+  if (!id) return null;
+  const row = await env.DB.prepare('SELECT * FROM sec_challenges WHERE id = ?').bind(id).first();
+  if (!row) return null;
+  await env.DB.prepare('DELETE FROM sec_challenges WHERE id = ?').bind(id).run(); // 一次性
+  if (row.expires < Date.now() || row.mode !== mode) return null;
+  return row;
+}
+function checkOrigin(cdj, url) {
+  try { return new URL(cdj.origin).hostname === url.hostname; } catch { return false; }
+}
+
+// ---------- Passkey：注册 ----------
+async function handleWaRegOptions(env, user, url) {
+  const { id, ch } = await secChallenge(env, 'register', user.phone);
+  const existing = await env.DB.prepare('SELECT credential_id FROM passkeys WHERE phone = ?').bind(user.phone).all();
+  return ok({
+    challengeId: id,
+    publicKey: {
+      challenge: ch, rp: { id: url.hostname, name: 'Stating' },
+      user: { id: b64uEnc(SEC_TE.encode(user.phone)), name: user.phone, displayName: user.nickname || user.phone },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }, { type: 'public-key', alg: -8 }],
+      timeout: 60000, attestation: 'none',
+      authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+      excludeCredentials: (existing.results || []).map(r => ({ type: 'public-key', id: r.credential_id }))
+    }
+  });
+}
+async function handleWaRegister(env, user, body, url) {
+  if (!body.challengeId || !body.id || !body.response) return fail('参数不完整');
+  const c = await takeChallenge(env, body.challengeId, 'register');
+  if (!c || c.phone !== user.phone) return fail('挑战已过期，请重试');
+  let cdj;
+  try { cdj = JSON.parse(new TextDecoder().decode(b64uDec(body.response.clientDataJSON))); } catch { return fail('响应解析失败'); }
+  if (cdj.type !== 'webauthn.create' || cdj.challenge !== c.challenge) return fail('挑战校验失败');
+  if (!checkOrigin(cdj, url)) return fail('来源域不匹配');
+  let ad;
+  try { ad = parseAuthData(cborDecode(b64uDec(body.response.attestationObject)).authData); } catch { return fail('凭据解析失败'); }
+  if (!(ad.flags & 0x01) || !ad.cose) return fail('凭据数据无效');
+  const jwk = coseToJwk(ad.cose);
+  if (!jwk) return fail('暂不支持该密钥算法');
+  const device = body.attachment === 'cross-platform' ? '安全钥匙' : '本机生物识别';
+  await env.DB.prepare('INSERT OR REPLACE INTO passkeys (credential_id, phone, public_key, counter, device, created_at, last_used) VALUES (?,?,?,?,?,?,0)')
+    .bind(body.id, user.phone, JSON.stringify(jwk), ad.counter, device, Date.now()).run();
+  secLog(env, user.phone, 'passkey_add', '新增 Passkey（' + device + '）');
+  return ok({ device });
+}
+
+// ---------- Passkey：登录 / 找回验证 ----------
+async function handleWaOptions(env, body, url) {
+  const mode = body.mode === 'recover' ? 'recover' : 'login';
+  const phone = String(body.phone || '').trim();
+  if (mode === 'recover' && !/^\d{6,15}$/.test(phone)) return fail('请输入手机号');
+  const existing = phone
+    ? (await env.DB.prepare('SELECT credential_id FROM passkeys WHERE phone = ?').bind(phone).all()).results || []
+    : [];
+  if (mode === 'recover' && !existing.length) return fail('该账号未绑定 Passkey');
+  const { id, ch } = await secChallenge(env, mode, phone);
+  return ok({
+    challengeId: id,
+    publicKey: {
+      challenge: ch, rpId: url.hostname, timeout: 60000, userVerification: 'preferred',
+      allowCredentials: existing.map(r => ({ type: 'public-key', id: r.credential_id }))
+    }
+  });
+}
+async function handleWaVerify(env, body, url) {
+  const mode = body.mode === 'recover' ? 'recover' : 'login';
+  if (!body.challengeId || !body.id || !body.response) return fail('参数不完整');
+  const c = await takeChallenge(env, body.challengeId, mode);
+  if (!c) return fail('挑战已过期，请重试');
+  let cdj;
+  try { cdj = JSON.parse(new TextDecoder().decode(b64uDec(body.response.clientDataJSON))); } catch { return fail('响应解析失败'); }
+  if (cdj.type !== 'webauthn.get' || cdj.challenge !== c.challenge) return fail('挑战校验失败');
+  if (!checkOrigin(cdj, url)) return fail('来源域不匹配');
+  const rec = await env.DB.prepare('SELECT * FROM passkeys WHERE credential_id = ?').bind(body.id).first();
+  if (!rec) return fail('未知凭据');
+  let userHandle = '';
+  try { userHandle = new TextDecoder().decode(b64uDec(body.response.userHandle || '')); } catch {}
+  if (mode === 'recover' && (c.phone !== rec.phone || (userHandle && userHandle !== rec.phone))) return fail('账号不匹配');
+  const ad = b64uDec(body.response.authenticatorData);
+  if (ad.length < 37) return fail('凭据数据无效');
+  const parsed = parseAuthData(ad);
+  if (parsed.rpIdHash !== b64uEnc(await secSha256(SEC_TE.encode(url.hostname)))) return fail('站点不匹配');
+  if (!(parsed.flags & 0x01)) return fail('请先完成生物识别验证');
+  if (parsed.counter < rec.counter && parsed.counter !== 0 && rec.counter !== 0) return fail('检测到凭据克隆，已拒绝');
+  const clientHash = await secSha256(b64uDec(body.response.clientDataJSON));
+  const signed = new Uint8Array(ad.length + clientHash.length);
+  signed.set(ad); signed.set(clientHash, ad.length);
+  const sigOk = await webVerify(parseObj(rec.public_key) || {}, b64uDec(body.response.signature), signed);
+  if (!sigOk) { secLog(env, rec.phone, 'passkey_fail', '签名校验失败'); return fail('签名校验失败'); }
+  await env.DB.prepare('UPDATE passkeys SET counter = ?, last_used = ? WHERE credential_id = ?')
+    .bind(Math.max(rec.counter, parsed.counter), Date.now(), body.id).run();
+  if (mode === 'recover') {
+    const resetToken = makeToken() + makeId();
+    await env.DB.prepare('INSERT INTO sec_challenges (id, challenge, mode, phone, expires) VALUES (?,?,?,?,?)')
+      .bind('reset:' + resetToken, '1', 'reset', rec.phone, Date.now() + 600000).run();
+    secLog(env, rec.phone, 'recover_passkey', 'Passkey 身份验证通过');
+    return ok({ resetToken });
+  }
+  const token = await createToken(env, rec.phone);
+  secLog(env, rec.phone, 'passkey_login', 'Passkey 登录成功（' + rec.device + '）');
+  return ok({ token, user: publicUser(await getUser(env, rec.phone)) });
+}
+
+async function handlePasskeyList(env, user) {
+  const res = await env.DB.prepare('SELECT credential_id, device, created_at, last_used FROM passkeys WHERE phone = ?').bind(user.phone).all();
+  return ok({ passkeys: (res.results || []).map(r => ({ id: r.credential_id, device: r.device, createdAt: r.created_at, lastUsed: r.last_used })) });
+}
+async function handlePasskeyDelete(env, user, body) {
+  const rec = await env.DB.prepare('SELECT phone, device FROM passkeys WHERE credential_id = ?').bind(String(body.id || '')).first();
+  if (!rec || rec.phone !== user.phone) return fail('凭据不存在');
+  await env.DB.prepare('DELETE FROM passkeys WHERE credential_id = ?').bind(String(body.id)).run();
+  secLog(env, user.phone, 'passkey_remove', '删除 Passkey（' + rec.device + '）');
+  return ok();
+}
+
+// ---------- 设备码授权（RFC 8628 风格） ----------
+function dcUserCode() {
+  const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const b = new Uint8Array(8); crypto.getRandomValues(b);
+  let s = ''; for (let i = 0; i < 8; i++) s += A[b[i] % A.length];
+  return s.slice(0, 4) + '-' + s.slice(4);
+}
+async function handleDcCreate(env) {
+  const deviceCode = makeToken() + makeId();
+  let userCode;
+  for (let t = 0; t < 5; t++) {
+    userCode = dcUserCode();
+    const ex = await env.DB.prepare('SELECT device_code FROM device_codes WHERE user_code = ?').bind(userCode).first();
+    if (!ex) break;
+  }
+  await env.DB.prepare('INSERT INTO device_codes (device_code, user_code, phone, status, expires, created_at) VALUES (?,?,?,?,?,?)')
+    .bind(deviceCode, userCode, null, 'pending', Date.now() + 300000, Date.now()).run();
+  return ok({ deviceCode, userCode, expiresIn: 300, interval: 3 });
+}
+async function handleDcStatus(env, deviceCode) {
+  const s = await env.DB.prepare('SELECT * FROM device_codes WHERE device_code = ?').bind(deviceCode).first();
+  if (!s) return ok({ status: 'expired' });
+  if (s.expires < Date.now()) {
+    await env.DB.prepare('DELETE FROM device_codes WHERE device_code = ?').bind(deviceCode).run();
+    return ok({ status: 'expired' });
+  }
+  if (s.status !== 'authorized') return ok({ status: 'pending', interval: 3 });
+  await env.DB.prepare('DELETE FROM device_codes WHERE device_code = ?').bind(deviceCode).run();
+  const token = await createToken(env, s.phone);
+  secLog(env, s.phone, 'device_login', '设备码授权登录（' + s.user_code + '）');
+  return ok({ status: 'authorized', token, user: publicUser(await getUser(env, s.phone)) });
+}
+async function handleDcAuthorize(env, user, body) {
+  const uc = String(body.userCode || '').toUpperCase().replace(/\s/g, '');
+  if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(uc)) return fail('设备码格式不正确');
+  if (!(await rateHit(env, 'dcauth:' + user.phone, 8, 10 * 60 * 1000))) return tooMany(10);
+  const s = await env.DB.prepare('SELECT * FROM device_codes WHERE user_code = ?').bind(uc).first();
+  if (!s || s.expires < Date.now()) return fail('设备码不存在或已过期');
+  if (s.status !== 'pending') return fail('该设备码已被使用');
+  await env.DB.prepare('UPDATE device_codes SET status = ?, phone = ? WHERE device_code = ?').bind('authorized', user.phone, s.device_code).run();
+  secLog(env, user.phone, 'device_auth', '授权设备码 ' + uc + ' 登录');
+  return ok();
+}
+
+// ---------- 签名验签（公钥托管，私钥不出本机） ----------
+async function handleSignUpload(env, user, body) {
+  const jwk = body.publicKeyJwk;
+  if (!jwk || jwk.kty !== 'EC' || jwk.crv !== 'P-256' || !jwk.x || !jwk.y) return fail('仅支持 ECDSA P-256 公钥');
+  await env.DB.prepare('INSERT OR REPLACE INTO sign_keys (phone, public_key, created_at) VALUES (?,?,?)')
+    .bind(user.phone, JSON.stringify(jwk), Date.now()).run();
+  secLog(env, user.phone, 'signkey_set', '更新签名公钥');
+  return ok();
+}
+async function handleSignGet(env, phone) {
+  const k = await env.DB.prepare('SELECT public_key, created_at FROM sign_keys WHERE phone = ?').bind(phone).first();
+  if (!k) return fail('该用户未注册签名钥匙');
+  return ok({ phone, publicKeyJwk: parseObj(k.public_key), createdAt: k.created_at });
+}
+
+// ---------- 找回密码 ----------
+async function issueResetToken(env, phone, via) {
+  const resetToken = makeToken() + makeId();
+  await env.DB.prepare('INSERT INTO sec_challenges (id, challenge, mode, phone, expires) VALUES (?,?,?,?,?)')
+    .bind('reset:' + resetToken, '1', 'reset', phone, Date.now() + 600000).run();
+  secLog(env, phone, 'recover_' + via, '身份验证通过，签发重置票据');
+  return resetToken;
+}
+async function handleRecoverMethods(env, body) {
+  const phone = String(body.phone || '').trim();
+  if (!/^\d{6,15}$/.test(phone)) return fail('手机号格式不正确');
+  if (!(await rateHit(env, 'recm:' + phone, 10, 60 * 60 * 1000))) return tooMany(60);
+  secLog(env, phone, 'recover_methods', '查询可用找回方式');
+  const exists = !!(await getUser(env, phone));
+  const pk = exists ? (await env.DB.prepare('SELECT credential_id FROM passkeys WHERE phone = ?').bind(phone).first()) : null;
+  return ok({ exists, passkey: !!pk });
+}
+async function handleRecoverAdmin(env, body) {
+  const phone = String(body.phone || '').trim();
+  if (!/^\d{6,15}$/.test(phone)) return fail('手机号格式不正确');
+  if (!(await rateHit(env, 'reca:' + phone, 5, 15 * 60 * 1000))) return tooMany(15);
+  if (body.adminKey !== ADMIN_KEY) { secLog(env, phone, 'recover_admin_fail', '管理员密钥错误'); return fail('管理员密钥错误'); }
+  if (!(await getUser(env, phone))) return fail('该手机号未注册');
+  return ok({ resetToken: await issueResetToken(env, phone, 'admin') });
+}
+async function handleRecoverConfirm(env, body) {
+  const t = await env.DB.prepare('SELECT * FROM sec_challenges WHERE id = ?').bind('reset:' + String(body.resetToken || '')).first();
+  if (!t || t.expires < Date.now()) {
+    if (t) await env.DB.prepare('DELETE FROM sec_challenges WHERE id = ?').bind('reset:' + body.resetToken).run();
+    return fail('重置票据已过期，请重新验证');
+  }
+  await env.DB.prepare('DELETE FROM sec_challenges WHERE id = ?').bind('reset:' + body.resetToken).run();
+  if (!(await rateHit(env, 'recc:' + t.phone, 5, 15 * 60 * 1000))) return tooMany(15);
+  if (!passwordOk(body.newPassword)) return fail('密码至少8位，需同时包含字母和数字');
+  const user = await getUser(env, t.phone);
+  if (!user) return fail('账号不存在');
+  user.passHash = await pbkdf2Hash(body.newPassword, user.passSalt);
+  await saveUser(env, user);
+  // 逐出全部旧会话（所有设备强制重新登录）
+  await env.DB.prepare('DELETE FROM tokens WHERE phone = ?').bind(t.phone).run();
+  await rateClear(env, 'login:' + t.phone);
+  secLog(env, t.phone, 'password_reset', '密码重置成功，已下线全部设备');
+  return ok();
 }
