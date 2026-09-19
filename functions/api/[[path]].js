@@ -1229,9 +1229,15 @@ async function handleGetUserProfile(env, user, phone) {
 
 // 会话管理
 async function handleGetSessions(env, user) {
-  const res = await env.DB.prepare('SELECT id, userAgent, createdAt, lastActive FROM sessions WHERE phone = ? ORDER BY lastActive DESC').bind(user.phone).all();
+  const res = await env.DB.prepare('SELECT id, userAgent, createdAt, lastActive, token FROM sessions WHERE phone = ? ORDER BY lastActive DESC').bind(user.phone).all();
   const currentToken = user._currentToken;
-  return ok({ sessions: res.results.map(s => ({ ...s, isCurrent: s.token === currentToken })) });
+  return ok({ sessions: res.results.map(s => ({
+    id: s.id,
+    userAgent: s.userAgent,
+    createdAt: s.createdAt,
+    lastActive: s.lastActive,
+    isCurrent: s.token === currentToken
+  })) });
 }
 
 async function handleDeleteSession(env, user, sessionId) {
@@ -1358,12 +1364,12 @@ async function handleGetPinned(env, user, code) {
 // 收藏消息
 async function handleSaveMessage(env, user, msgId, body) {
   const { groupCode } = body;
-  if (!groupCode) return fail('缺少群聊');
   const existing = await env.DB.prepare('SELECT 1 FROM saved_messages WHERE phone = ? AND msgId = ?').bind(user.phone, msgId).first();
   if (existing) {
     await env.DB.prepare('DELETE FROM saved_messages WHERE phone = ? AND msgId = ?').bind(user.phone, msgId).run();
     return ok({ saved: false });
   }
+  if (!groupCode) return fail('缺少群聊');
   await env.DB.prepare('INSERT INTO saved_messages (phone, msgId, groupCode, ts) VALUES (?,?,?,?)').bind(user.phone, msgId, groupCode.toUpperCase(), Date.now()).run();
   return ok({ saved: true });
 }

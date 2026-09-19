@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    Stating — 聊天应用（云端版）
    Cloudflare Pages Functions API + 轮询实时消息
    ============================================================ */
@@ -2816,7 +2816,17 @@ function init() {
     };
 
     // Online panel toggle
-    $('#onlineToggle').onclick = () => $('#onlinePanel').classList.toggle('open');
+    $('#onlineToggle').onclick = (e) => {
+        e.stopPropagation();
+        $('#onlinePanel').classList.toggle('open');
+    };
+    // 移动端抽屉打开后，点击面板以外区域关闭
+    document.addEventListener('click', (e) => {
+        const panel = $('#onlinePanel');
+        if (!panel.classList.contains('open')) return;
+        if (panel.contains(e.target) || $('#onlineToggle').contains(e.target)) return;
+        panel.classList.remove('open');
+    });
 
     // Admin panel
     $('#apBack').onclick = () => $('#adminPanel').hidden = true;
@@ -5086,4 +5096,195 @@ function initFocusModeUI() {
 setInterval(pollTyping, 3000);
 
 document.addEventListener('DOMContentLoaded', init);
+})();
+
+/* ============================================================
+ * iOS 26 Liquid Glass — 液态镜面高光模块（独立 / 零依赖 / 零侵入）
+ *
+ * 原理：在每个玻璃容器内注入一个 .lg-glint 光斑层，监听指针坐标
+ * （document 级事件委托 + rAF 批量写 CSS 变量），让玻璃表面产生
+ * 跟随手指/鼠标的液态镜面反射；按下时光斑放大增亮 + 轻触感反馈。
+ *
+ * 性能：
+ *  - 只写 transform 用的自定义属性与 class，不触发 layout/paint
+ *  - 单组 document 监听驱动全站玻璃，事件数恒定，不随元素增长
+ *  - prefers-reduced-motion / 不支持 backdrop-filter 时自动停用
+ * ============================================================ */
+(function () {
+    'use strict';
+
+    var GLASS_SEL = '.glass, .glass-pill, .topbar, .composer, .chat-header';
+    /* 仅对"真正可点按"的控件给触感反馈，避免滚动/触摸经过时乱震 */
+    var TAPPABLE_SEL = 'button, [role="button"], .nav-item, .feature-card, .fc-btn, .user-card.clickable, .mg-item, .fb-tile, .gm-item, .multi-menu-item, .ctx-item, .list-item[onclick], [onclick]';
+
+    var reduceMotion = window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) return;
+
+    var supportsBackdrop = CSS && CSS.supports &&
+        (CSS.supports('-webkit-backdrop-filter', 'blur(1px)') ||
+         CSS.supports('backdrop-filter', 'blur(1px)'));
+    if (supportsBackdrop === false) return; /* 无玻璃能力的环境不注入光斑 */
+
+    var isTouch = window.matchMedia &&
+        window.matchMedia('(hover: none), (pointer: coarse)').matches;
+
+    /* ---------- 注入光斑层 ---------- */
+    function injectInto(root) {
+        if (!root || root.nodeType !== 1) return;
+        var hosts = root.matches && root.matches(GLASS_SEL)
+            ? [root].concat(slice(root.querySelectorAll(GLASS_SEL)))
+            : slice(root.querySelectorAll(GLASS_SEL));
+        for (var i = 0; i < hosts.length; i++) {
+            var el = hosts[i];
+            /* lg-ready 防重复注入；光斑在小容器内由 overflow:hidden 自然裁切 */
+            if (el.classList.contains('lg-ready')) continue;
+            el.classList.add('lg-ready');
+            var g = document.createElement('span');
+            g.className = 'lg-glint';
+            g.setAttribute('aria-hidden', 'true');
+            el.appendChild(g);
+        }
+    }
+    function slice(nodeList) {
+        return Array.prototype.slice.call(nodeList || []);
+    }
+
+    /* ---------- 指针跟踪（rAF 合帧） ---------- */
+    var rafId = null;
+    var pending = null;   // { el, x, y }
+    var hoverEl = null;   // 当前悬浮玻璃
+    var pressEl = null;   // 当前按压玻璃
+
+    function queue(el, x, y) {
+        pending = { el: el, x: x, y: y };
+        if (rafId === null) rafId = requestAnimationFrame(flush);
+    }
+    function flush() {
+        rafId = null;
+        if (!pending) return;
+        pending.el.style.setProperty('--gx', pending.x + 'px');
+        pending.el.style.setProperty('--gy', pending.y + 'px');
+        pending = null;
+    }
+
+    function glassFrom(node) {
+        return node && node.closest ? node.closest(GLASS_SEL) : null;
+    }
+    function localPos(el, e) {
+        var r = el.getBoundingClientRect();
+        return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+    function setHover(el, e) {
+        if (hoverEl === el) {
+            if (el && e) queue(el, localPos(el, e).x, localPos(el, e).y);
+            return;
+        }
+        if (hoverEl) hoverEl.classList.remove('lg-hover');
+        hoverEl = el;
+        if (el) {
+            el.classList.add('lg-hover');
+            if (e) {
+                var p = localPos(el, e);
+                queue(el, p.x, p.y);
+            }
+        }
+    }
+
+    function onPointerDown(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        var el = glassFrom(e.target);
+        if (!el) return;
+        if (hoverEl && hoverEl !== el) hoverEl.classList.remove('lg-hover');
+        hoverEl = el;
+        pressEl = el;
+        el.classList.add('lg-hover', 'lg-press');
+        var p = localPos(el, e);
+        queue(el, p.x, p.y);
+
+        /* iOS 风格极轻触感（8ms）：仅真实可点控件、仅触屏/支持振动的设备 */
+        if (isTouch && navigator.vibrate && e.target.closest && e.target.closest(TAPPABLE_SEL)) {
+            try { navigator.vibrate(8); } catch (err) { /* 忽略策略限制 */ }
+        }
+    }
+    function onPointerMove(e) {
+        if (pressEl) {
+            /* 按压期间始终更新被按下的玻璃（手指在其表面滑动） */
+            var pp = localPos(pressEl, e);
+            queue(pressEl, pp.x, pp.y);
+            return;
+        }
+        var el = glassFrom(e.target);
+        if (el) setHover(el, e);
+        else if (hoverEl) { hoverEl.classList.remove('lg-hover'); hoverEl = null; }
+    }
+    function onPointerOver(e) {
+        if (pressEl) return;
+        var el = glassFrom(e.target);
+        if (el && el !== hoverEl) setHover(el, e);
+    }
+    function releasePress(pointerType) {
+        if (pressEl) {
+            pressEl.classList.remove('lg-press');
+            /* 触摸设备没有"悬停"：抬起即熄灭；鼠标抬起后指针仍在玻璃上，保持 hover 高亮 */
+            if (pointerType === 'touch' || pressEl !== hoverEl) {
+                pressEl.classList.remove('lg-hover');
+                if (hoverEl === pressEl) hoverEl = null;
+            }
+            pressEl = null;
+        }
+    }
+    function onPointerUp(e) {
+        releasePress(e.pointerType);
+    }
+    function onPointerOut(e) {
+        if (!hoverEl) return;
+        /* 按压中的玻璃：指针滑出也保持点亮，直到 pointerup */
+        if (hoverEl === pressEl) return;
+        /* relatedTarget 仍在当前玻璃内部（挪到其子元素）→ 不算离开 */
+        if (e.relatedTarget && hoverEl.contains && hoverEl.contains(e.relatedTarget)) return;
+        /* 真正离开：只负责熄灭当前玻璃；
+           若指针直接进入另一块玻璃，紧随其后的 pointerover/pointermove 会点亮新目标
+           （此处不可越权预设 hoverEl，否则目标玻璃只更新坐标不加高亮类） */
+        hoverEl.classList.remove('lg-hover');
+        hoverEl = null;
+    }
+
+    function bind() {
+        injectInto(document.body);
+
+        document.addEventListener('pointerdown', onPointerDown, { capture: true, passive: true });
+        document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
+        document.addEventListener('pointerover', onPointerOver, { capture: true, passive: true });
+        document.addEventListener('pointerout', onPointerOut, { capture: true, passive: true });
+        document.addEventListener('pointerup', onPointerUp, { capture: true, passive: true });
+        document.addEventListener('pointercancel', function () {
+            releasePress();
+            if (hoverEl) { hoverEl.classList.remove('lg-hover'); hoverEl = null; }
+        }, { capture: true, passive: true });
+        /* 指针拖出窗口后松开等边缘情况：窗口失焦时复位，避免高光常驻 */
+        window.addEventListener('blur', function () {
+            releasePress();
+            if (hoverEl) { hoverEl.classList.remove('lg-hover'); hoverEl = null; }
+        }, { passive: true });
+
+        /* 动态插入的玻璃（如运行时创建的面板/弹窗）自动补注光斑 */
+        if ('MutationObserver' in window) {
+            var mo = new MutationObserver(function (mutations) {
+                for (var i = 0; i < mutations.length; i++) {
+                    var added = mutations[i].addedNodes;
+                    for (var j = 0; j < added.length; j++) {
+                        if (added[j].nodeType === 1) injectInto(added[j]);
+                    }
+                }
+            });
+            mo.observe(document.body, { childList: true, subtree: true });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bind);
+    } else {
+        bind();
+    }
 })();

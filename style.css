@@ -19,30 +19,44 @@
     --bubble-in: #E9EBF0;
     --bubble-in-ink: #000;
 
-    /* 液态玻璃 — 升级 */
-    --glass-bg: rgba(255,255,255,.48);
-    --glass-bg-strong: rgba(255,255,255,.68);
+    /* 液态玻璃 — iOS 26 Liquid Glass */
+    --glass-bg: rgba(255,255,255,.44);
+    --glass-bg-strong: rgba(255,255,255,.66);
     --glass-border: rgba(255,255,255,.72);
     --glass-border-soft: rgba(255,255,255,.38);
+    /* 阴影层次：近距投影 + 远距环境投影 + 顶部截面高光 + 底部折射暗边（玻璃"厚度"感） */
     --glass-shadow:
-        0 2px 8px rgba(31,45,80,.06),
-        0 12px 40px rgba(31,45,80,.10),
-        0 1px 0 rgba(255,255,255,.7) inset;
-    --glass-shadow-deep:
-        0 4px 12px rgba(31,45,80,.08),
-        0 20px 60px rgba(31,45,80,.14),
+        0 1px 2px rgba(31,45,80,.05),
+        0 6px 18px rgba(31,45,80,.08),
+        0 18px 48px rgba(31,45,80,.10),
         0 1px 0 rgba(255,255,255,.75) inset,
-        0 -1px 0 rgba(31,45,80,.04) inset;
-    --glass-shine: linear-gradient(135deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.15) 28%, rgba(255,255,255,0) 52%, rgba(255,255,255,.12) 80%, rgba(255,255,255,.35) 100%);
-    --glass-rainbow: linear-gradient(135deg, rgba(130,180,255,.12), rgba(190,160,255,.08) 50%, rgba(255,180,200,.10));
+        0 -1px 0 rgba(31,45,80,.05) inset;
+    --glass-shadow-deep:
+        0 2px 6px rgba(31,45,80,.06),
+        0 12px 30px rgba(31,45,80,.10),
+        0 28px 72px rgba(31,45,80,.16),
+        0 1.5px 0 rgba(255,255,255,.78) inset,
+        0 -1px 0 rgba(31,45,80,.06) inset;
+    /* 边缘截面折射光：固定左上来光，左上最亮、右下微弱回亮，模拟玻璃实体边缘 */
+    --glass-shine: linear-gradient(145deg, rgba(255,255,255,.9) 0%, rgba(255,255,255,.32) 30%, rgba(255,255,255,.06) 54%, rgba(255,255,255,.22) 78%, rgba(255,255,255,.55) 100%);
+    /* 彩虹色散：只做极淡的边缘染色（过重会发灰） */
+    --glass-rainbow: linear-gradient(135deg, rgba(130,180,255,.10), rgba(190,160,255,.06) 50%, rgba(255,180,200,.08));
     --radius-lg: 30px;
     --radius-md: 22px;
     --radius-sm: 16px;
+    /* iOS 26 动画曲线族 */
     --ease: cubic-bezier(.22,.72,.16,1);
+    --spring: cubic-bezier(.32,.72,0,1);            /* 标准减速：按下/抬起 */
+    --spring-bounce: cubic-bezier(.34,1.46,.5,1);  /* 带回弹：Q 弹释放感 */
+    --spring-smooth: cubic-bezier(.25,.85,.25,1);  /* 平滑：面板/菜单入场 */
     --emoji-font: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif;
     --danger: #FF3B30;
     --danger-soft: rgba(255,59,48,.1);
     --success: #34C759;
+
+    /* 指针镜面高光（由 JS 写入 --gx/--gy 坐标） */
+    --gx: -500px; --gy: -500px;
+    --glint: radial-gradient(circle at 50% 50%, rgba(255,255,255,.5) 0%, rgba(255,255,255,.2) 30%, rgba(255,255,255,0) 64%);
 
     /* 性能：高成本 backdrop-filter 元素提升到独立合成层（GPU layer），避免每帧重新采样背景 */
     --glass-promote: transform translateZ(0);
@@ -126,24 +140,26 @@ a { color: inherit; }
 @keyframes float3 { to { transform: translate(-60px, 90px) scale(.96); } }
 @keyframes float4 { to { transform: translate(50px, 120px) scale(1.15); } }
 
-/* ---------- 液态玻璃核心（全面升级） ---------- */
+/* ---------- 液态玻璃核心（iOS 26 Liquid Glass） ----------
+   材质 = 半透底色 + 大半径模糊 + 提亮提饱和（模拟透镜对背景的折射）
+   层次 = 外投影(悬浮感) + 1.5px 截面折射边 + 顶部液面高光 + 极淡色散 + 指针镜面光斑 */
 .glass {
     position: relative;
     background: var(--glass-bg);
-    backdrop-filter: blur(20px) saturate(200%) contrast(102%);
-    -webkit-backdrop-filter: blur(20px) saturate(200%) contrast(102%);
+    backdrop-filter: blur(26px) saturate(185%) brightness(1.025);
+    -webkit-backdrop-filter: blur(26px) saturate(185%) brightness(1.025);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
     border-radius: var(--radius-lg);
     isolation: isolate;
     overflow: hidden;
 }
-/* 内高光 + 外描边双层效果 */
+/* 玻璃截面折射边：1.5px 斜面光边，比 1px 更有"实体玻璃"厚度 */
 .glass::before {
     content: "";
     position: absolute; inset: 0;
     border-radius: inherit;
-    padding: 1px;
+    padding: 1.5px;
     background: var(--glass-shine);
     -webkit-mask: linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
             mask: linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
@@ -152,31 +168,81 @@ a { color: inherit; }
     pointer-events: none;
     z-index: 1;
 }
-/* 彩虹折射边缘 */
+/* 极淡彩虹色散，仅在边缘可感知（soft-light 不抢主体） */
 .glass::after {
     content: "";
     position: absolute; inset: 0;
     border-radius: inherit;
     background: var(--glass-rainbow);
-    opacity: .9;
+    opacity: .32;
     pointer-events: none;
     z-index: 0;
     mix-blend-mode: soft-light;
+    transition: opacity .3s var(--spring);
 }
 .glass > * { position: relative; z-index: 2; }
 
+/* iOS 26 指针/触摸跟随的液态镜面高光（由 JS 在玻璃元素内注入 .lg-glint）
+   - 只做 transform/opacity 变化，全程 GPU 合成，不触发重排重绘
+   - screen 混合：压到亮色内容上自然隐没，压到深色/彩色内容上形成镜面反射 */
+.lg-glint {
+    position: absolute;
+    left: 0; top: 0;
+    width: 440px; height: 440px;
+    margin: -220px 0 0 -220px;
+    border-radius: 50%;
+    background: var(--glint);
+    mix-blend-mode: screen;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    visibility: hidden; /* 非交互态完全不绘制，避免几十个常驻混合层占用显存 */
+    transform: translate3d(var(--gx), var(--gy), 0) scale(.82);
+    transition:
+        transform .2s cubic-bezier(.22,.8,.26,1),
+        opacity .34s var(--spring),
+        visibility 0s linear .34s;
+}
+.glass > .lg-glint,
+.glass-pill > .lg-glint { position: absolute; z-index: 1; }
+.lg-hover > .lg-glint {
+    opacity: .85;
+    visibility: visible;
+    transform: translate3d(var(--gx), var(--gy), 0) scale(1);
+    transition:
+        transform .2s cubic-bezier(.22,.8,.26,1),
+        opacity .34s var(--spring),
+        visibility 0s;
+}
+.lg-press > .lg-glint {
+    opacity: 1;
+    visibility: visible;
+    transform: translate3d(var(--gx), var(--gy), 0) scale(1.14);
+    transition:
+        transform .12s cubic-bezier(.22,.8,.26,1),
+        opacity .18s var(--spring),
+        visibility 0s;
+}
+/* 顶栏/输入栏等自定义堆叠层级（::after z:2 内容 z:3）里，光斑置于边缘光之上、内容之下；
+   同时显式复位 position，避免被 .topbar > * 等同特异性规则改为 relative */
+.topbar > .lg-glint,
+.composer > .lg-glint,
+.chat-header > .lg-glint { position: absolute; z-index: 2; }
+/* 深色光斑配色走 body.dark 的 --glint 变量；仅收敛不透明度避免过曝 */
+body.dark .lg-hover > .lg-glint { opacity: .8; }
+
 .glass-strong {
     background: var(--glass-bg-strong);
-    backdrop-filter: blur(54px) saturate(220%) contrast(103%);
-    -webkit-backdrop-filter: blur(54px) saturate(220%) contrast(103%);
+    backdrop-filter: blur(54px) saturate(200%) contrast(103%) brightness(1.02);
+    -webkit-backdrop-filter: blur(54px) saturate(200%) contrast(103%) brightness(1.02);
     box-shadow: var(--glass-shadow-deep);
 }
 
 .glass-pill {
     position: relative;
     background: var(--glass-bg);
-    backdrop-filter: blur(20px) saturate(200%);
-    -webkit-backdrop-filter: blur(20px) saturate(200%);
+    backdrop-filter: blur(26px) saturate(185%) brightness(1.02);
+    -webkit-backdrop-filter: blur(26px) saturate(185%) brightness(1.02);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
     border-radius: 999px;
@@ -187,7 +253,7 @@ a { color: inherit; }
     content: "";
     position: absolute; inset: 0;
     border-radius: inherit;
-    padding: 1px;
+    padding: 1.5px;
     background: var(--glass-shine);
     -webkit-mask: linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
             mask: linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
@@ -283,7 +349,7 @@ a { color: inherit; }
         0 1px 0 rgba(255,255,255,.65) inset,
         0 -1.5px 0 rgba(255,255,255,.12) inset,
         0 0 0 0.5px rgba(255,255,255,.18);
-    transition: transform .2s var(--ease), box-shadow .2s var(--ease), opacity .2s, filter .2s, background .2s;
+    transition: transform .25s var(--spring-bounce), box-shadow .2s var(--spring), opacity .2s, filter .2s, background .2s;
     isolation: isolate;
 }
 .btn-primary::before {
@@ -311,7 +377,7 @@ a { color: inherit; }
     transform: translateY(-1.5px);
 }
 .btn-primary:hover::after { transform: translateX(100%); }
-.btn-primary:active { transform: scale(.97) translateY(0); filter: brightness(.96); box-shadow: 0 3px 12px rgba(74,144,217,.26), 0 1px 0 rgba(255,255,255,.5) inset; }
+.btn-primary:active { transform: scale(.94) translateY(0); filter: brightness(.96); box-shadow: 0 3px 12px rgba(74,144,217,.26), 0 1px 0 rgba(255,255,255,.5) inset; }
 .btn-primary:disabled { opacity: .5; cursor: not-allowed; filter: saturate(.7); backdrop-filter: blur(18px); }
 
 .btn-text {
@@ -341,10 +407,10 @@ a { color: inherit; }
     font-size: 15px;
     font-weight: 600;
     box-shadow: 0 1px 0 rgba(255,255,255,.32) inset, 0 4px 14px rgba(0,0,0,.08);
-    transition: all .2s var(--ease);
+    transition: transform .25s var(--spring-bounce), background .2s var(--spring), box-shadow .2s var(--spring);
 }
 .btn-ghost:hover { background: rgba(255,255,255,.26); transform: translateY(-1.5px); box-shadow: 0 1px 0 rgba(255,255,255,.45) inset, 0 7px 20px rgba(0,0,0,.12); }
-.btn-ghost:active { transform: scale(.97); }
+.btn-ghost:active { transform: scale(.94); }
 
 .btn-logout {
     margin-top: 24px;
@@ -393,7 +459,7 @@ a { color: inherit; }
         0 5px 18px rgba(255,59,48,.22),
         0 1px 0 rgba(255,255,255,.55) inset,
         0 -1px 0 rgba(255,255,255,.12) inset;
-    transition: transform .2s var(--ease), box-shadow .2s var(--ease), background .2s;
+    transition: transform .25s var(--spring-bounce), box-shadow .2s var(--spring), background .2s;
 }
 .btn-danger::before {
     content: "";
@@ -406,7 +472,7 @@ a { color: inherit; }
     box-shadow: 0 8px 24px rgba(255,59,48,.30), 0 1px 0 rgba(255,255,255,.65) inset;
     transform: translateY(-1px);
 }
-.btn-danger:active { transform: scale(.97); }
+.btn-danger:active { transform: scale(.94); }
 
 /* ---------- 输入框 ---------- */
 .field {
@@ -620,13 +686,14 @@ a { color: inherit; }
     display: flex; align-items: center; gap: 6px;
     padding: 9px 18px; border-radius: 999px;
     font-size: 14px; font-weight: 600; color: var(--ink-2);
-    transition: all .22s var(--ease);
+    transition: transform .28s var(--spring-bounce), box-shadow .22s var(--spring), background .22s var(--spring), border-color .22s, color .22s, opacity .22s;
     position: relative;
     opacity: .9;
     overflow: hidden;
     backdrop-filter: blur(14px) saturate(180%);
     -webkit-backdrop-filter: blur(14px) saturate(180%);
     border: 1px solid transparent;
+    min-height: 38px; /* 配合水平 padding 保证 ≥44pt 触控目标的视觉热区（JS 层另有命中扩张） */
 }
 .nav-item svg { width: 18px; height: 18px; }
 .nav-item:hover {
@@ -706,7 +773,7 @@ a { color: inherit; }
     padding: 20px 20px 12px;
     overflow-y: auto;
 }
-.view { display: none; animation: fadeUp .4s var(--ease); }
+.view { display: none; animation: fadeUp .42s var(--spring-smooth); }
 .view.active { display: block; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px) scale(.995); } to { opacity: 1; transform: none; } }
 
@@ -763,7 +830,7 @@ a { color: inherit; }
 .feature-card {
     padding: 28px 22px;
     text-align: center;
-    transition: transform .25s var(--ease), box-shadow .25s var(--ease);
+    transition: transform .28s var(--spring-bounce), box-shadow .25s var(--spring);
     border: none;
     font-family: inherit;
     color: inherit;
@@ -777,7 +844,7 @@ a { color: inherit; }
         0 1px 0 rgba(255,255,255,.8) inset;
 }
 .fc-btn { cursor: pointer; }
-.fc-btn:active { transform: translateY(-1px) scale(.985); }
+.fc-btn:active { transform: translateY(-1px) scale(.97); }
 .fc-icon { font-size: 36px; margin-bottom: 12px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.08)); }
 .feature-card h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; letter-spacing: -.2px; }
 .feature-card p { font-size: 13px; color: var(--ink-3); line-height: 1.5; }
@@ -1606,7 +1673,7 @@ a { color: inherit; }
     width: 38px; height: 38px; border-radius: 50%;
     font-size: 20px;
     display: flex; align-items: center; justify-content: center;
-    transition: background .15s var(--ease), transform .15s var(--ease), box-shadow .15s var(--ease);
+    transition: background .15s var(--spring), transform .24s var(--spring-bounce), box-shadow .15s var(--spring);
     flex-shrink: 0;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -1614,8 +1681,8 @@ a { color: inherit; }
     border: 1px solid rgba(255,255,255,.42);
     box-shadow: 0 1px 0 rgba(255,255,255,.55) inset;
 }
-.composer-btn:hover { background: rgba(255,255,255,.60); transform: scale(1.05); }
-.composer-btn:active { transform: scale(.91); box-shadow: 0 1px 0 rgba(255,255,255,.35) inset; }
+.composer-btn:hover { background: rgba(255,255,255,.60); transform: scale(1.06); }
+.composer-btn:active { transform: scale(.9); box-shadow: 0 1px 0 rgba(255,255,255,.35) inset; }
 .composer-input {
     flex: 1;
     max-height: 130px;
@@ -1666,7 +1733,7 @@ a { color: inherit; }
         0 4px 14px rgba(74,144,217,.24),
         0 1px 0 rgba(255,255,255,.55) inset,
         0 -1px 0 rgba(255,255,255,.10) inset;
-    transition: all .2s var(--ease);
+    transition: transform .24s var(--spring-bounce), background .2s var(--spring), box-shadow .2s var(--spring), filter .2s;
     position: relative; overflow: hidden;
 }
 .send-btn:hover:not(:disabled) {
@@ -1702,7 +1769,7 @@ a { color: inherit; }
     padding: 14px;
     border-radius: var(--radius-md);
     z-index: 30;
-    animation: fadeUp .22s var(--ease);
+    animation: fadeUp .28s var(--spring-bounce);
     box-shadow: var(--glass-shadow-deep);
 }
 .emoji-grid {
@@ -1741,7 +1808,7 @@ a { color: inherit; }
     display: flex;
     align-items: center;
     gap: 14px;
-    transition: transform .25s var(--ease), box-shadow .25s var(--ease);
+    transition: transform .28s var(--spring-bounce), box-shadow .25s var(--spring);
     box-shadow: var(--glass-shadow);
 }
 .user-card.clickable { cursor: pointer; }
@@ -1749,6 +1816,7 @@ a { color: inherit; }
     transform: translateY(-3px);
     box-shadow: var(--glass-shadow-deep);
 }
+.user-card.clickable:active { transform: scale(.97); }
 .uc-avatar {
     position: relative;
     width: 54px; height: 54px;
@@ -1894,11 +1962,12 @@ a { color: inherit; }
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255,255,255,.5);
-    transition: all .22s var(--ease);
+    transition: transform .26s var(--spring-bounce), background .2s var(--spring), box-shadow .2s var(--spring);
     cursor: pointer;
     box-shadow: 0 1px 0 rgba(255,255,255,.65) inset;
 }
 .mg-item:hover { background: rgba(255,255,255,.75); transform: translateX(4px); box-shadow: 0 4px 14px rgba(0,0,0,.06), 0 1px 0 rgba(255,255,255,.8) inset; }
+.mg-item:active { transform: scale(.97); }
 .mg-avatar {
     width: 46px; height: 46px;
     border-radius: 50%;
@@ -1932,11 +2001,11 @@ a { color: inherit; }
     max-height: 85vh;
     display: flex; flex-direction: column;
     overflow: hidden;
-    animation: panelIn .35s var(--ease);
+    animation: panelIn .4s var(--spring-bounce);
     box-shadow: 0 30px 100px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.2) inset;
 }
 .admin-msg-panel { max-width: 580px; }
-@keyframes panelIn { from { opacity: 0; transform: scale(.96) translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes panelIn { from { opacity: 0; transform: scale(.93) translateY(16px); } to { opacity: 1; transform: none; } }
 
 .ap-header {
     display: flex; align-items: center; gap: 12px;
@@ -2087,7 +2156,7 @@ a { color: inherit; }
     width: 100%; max-width: 360px;
     padding: 32px 26px 24px;
     text-align: center;
-    animation: panelIn .35s var(--ease);
+    animation: panelIn .4s var(--spring-bounce);
     box-shadow: 0 30px 100px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.4) inset;
 }
 .confirm-icon {
@@ -2181,8 +2250,15 @@ a { color: inherit; }
         transform: translateX(-110%);
         transition: transform .32s var(--ease);
     }
-    .online-panel.show { transform: translateX(0); }
-    .online-toggle { display: flex; align-items: center; justify-content: center; }
+    .online-panel.open {
+        transform: translateX(0);
+        box-shadow: var(--glass-shadow-deep), 24px 0 60px rgba(0,0,0,.22);
+    }
+    .online-toggle {
+        display: flex; align-items: center; justify-content: center;
+        top: 8px; left: auto; right: 62px;
+        width: 38px; height: 38px;
+    }
     .mobile-online-bar { display: flex; }
 
     .messages { padding: 14px 12px; }
@@ -2229,10 +2305,10 @@ a { color: inherit; }
     border-radius: 16px;
     display: flex; flex-direction: column; gap: 2px;
     box-shadow: 0 12px 42px rgba(0,0,0,.18), 0 1px 0 rgba(255,255,255,.65) inset;
-    animation: menuIn .22s var(--ease);
+    animation: menuIn .28s var(--spring-bounce);
 }
 @keyframes menuIn {
-    from { opacity: 0; transform: translateY(-10px) scale(.96); }
+    from { opacity: 0; transform: translateY(-8px) scale(.94); }
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .gm-item {
@@ -2543,21 +2619,26 @@ body.dark {
     --ink-4: #636366;
     --bubble-in: #252530;
     --bubble-in-ink: #F2F2F7;
-    --glass-bg: rgba(45,45,58,.42);
-    --glass-bg-strong: rgba(58,58,75,.62);
-    --glass-border: rgba(255,255,255,.10);
-    --glass-border-soft: rgba(255,255,255,.06);
+    --glass-bg: rgba(48,48,64,.46);
+    --glass-bg-strong: rgba(60,60,78,.66);
+    --glass-border: rgba(255,255,255,.14);
+    --glass-border-soft: rgba(255,255,255,.08);
     --glass-shadow:
-        0 2px 8px rgba(0,0,0,.35),
-        0 12px 40px rgba(0,0,0,.55),
-        0 1px 0 rgba(255,255,255,.06) inset;
+        0 1px 2px rgba(0,0,0,.35),
+        0 6px 18px rgba(0,0,0,.45),
+        0 18px 48px rgba(0,0,0,.55),
+        0 1px 0 rgba(255,255,255,.14) inset,
+        0 -1px 0 rgba(0,0,0,.32) inset;
     --glass-shadow-deep:
-        0 4px 12px rgba(0,0,0,.4),
-        0 22px 70px rgba(0,0,0,.65),
-        0 1px 0 rgba(255,255,255,.07) inset,
-        0 -1px 0 rgba(0,0,0,.3) inset;
-    --glass-shine: linear-gradient(135deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 28%, rgba(255,255,255,0) 52%, rgba(255,255,255,.05) 80%, rgba(255,255,255,.12) 100%);
+        0 2px 6px rgba(0,0,0,.4),
+        0 12px 30px rgba(0,0,0,.55),
+        0 28px 72px rgba(0,0,0,.68),
+        0 1.5px 0 rgba(255,255,255,.16) inset,
+        0 -1px 0 rgba(0,0,0,.34) inset;
+    /* 深色玻璃截面：冷白亮边（左上来光），比浅色模式更克制但更清晰 */
+    --glass-shine: linear-gradient(145deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.10) 30%, rgba(255,255,255,.02) 54%, rgba(255,255,255,.07) 78%, rgba(255,255,255,.20) 100%);
     --glass-rainbow: linear-gradient(135deg, rgba(130,180,255,.08), rgba(190,160,255,.06) 50%, rgba(255,180,200,.07));
+    --glint: radial-gradient(circle at 50% 50%, rgba(180,205,255,.42) 0%, rgba(140,175,255,.15) 30%, rgba(140,175,255,0) 64%);
     background: var(--bg);
     color: var(--ink);
 }
@@ -2709,9 +2790,10 @@ body.theme-feedback .brand { color: #FF9F43; }
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255,255,255,.42);
     box-shadow: var(--glass-shadow);
-    transition: transform .22s var(--ease), box-shadow .22s;
+    transition: transform .28s var(--spring-bounce), box-shadow .22s var(--spring), background .22s;
 }
 .fb-tile:hover { transform: translateY(-3px); box-shadow: var(--glass-shadow-deep); }
+.fb-tile:active { transform: scale(.97); }
 body.dark .fb-tile { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.09); }
 .fb-submit {
     padding: 22px;
@@ -2915,9 +2997,9 @@ body.dark .fb-stat { background: rgba(0,0,0,.15); box-shadow: inset 0 1px 0 rgba
     border-radius: 18px;
     min-width: 155px;
     z-index: 100;
-    animation: mmIn .24s var(--ease);
+    animation: mmIn .3s var(--spring-bounce);
 }
-@keyframes mmIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes mmIn { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .multi-menu-item {
     display: flex; align-items: center; gap: 10px;
     padding: 11px 14px;
@@ -2943,7 +3025,7 @@ body.dark .fb-stat { background: rgba(0,0,0,.15); box-shadow: inset 0 1px 0 rgba
     border-radius: 16px;
     min-width: 165px;
     z-index: 100;
-    animation: mmIn .24s var(--ease);
+    animation: mmIn .3s var(--spring-bounce);
 }
 .loc-menu-item {
     display: flex; align-items: center; gap: 10px;
@@ -4227,3 +4309,47 @@ body.dark .bt-rx-line.out { color: rgba(255, 255, 255, .88); }
 body.dark .near-code-input { background: rgba(255, 255, 255, .08); color: rgba(255, 255, 255, .92); }
 body.dark .bt-rtt-item { color: rgba(255, 255, 255, .5); }
 body.dark .bt-rtt-item b { color: rgba(255, 255, 255, .9); }
+
+/* ============================================================
+   iOS 26 Liquid Glass 增强：降级与可访问性兜底
+   ============================================================ */
+
+/* 尊重系统"减弱动态效果"：关闭光斑跟随与回弹动画（功能完全保留） */
+@media (prefers-reduced-motion: reduce) {
+    .lg-glint { display: none; }
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* 不支持 backdrop-filter 的环境：提高底色不透明度，保证可读性 */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .glass, .glass-pill, .glass-field { background: rgba(248,248,250,.94); }
+    .glass-strong { background: rgba(252,252,253,.97); }
+    .topbar, .composer, .chat-header { background: rgba(248,248,250,.95) !important; }
+    body.dark .glass,
+    body.dark .glass-pill,
+    body.dark .glass-field { background: rgba(34,34,44,.96); }
+    body.dark .glass-strong,
+    body.dark .topbar,
+    body.dark .composer,
+    body.dark .chat-header { background: rgba(28,28,38,.98) !important; }
+}
+
+/* 低端移动设备：光斑尺寸减半，降低合成层面积与 GPU 带宽压力 */
+@media (max-width: 480px) {
+    .lg-glint {
+        width: 300px; height: 300px;
+        margin: -150px 0 0 -150px;
+    }
+    /* 小屏顶栏紧凑化，避免 5 个导航项挤压换行 */
+    .topbar { padding: 6px 6px 6px 14px; border-radius: 20px; }
+    .brand { font-size: 15px; letter-spacing: -.3px; }
+    .nav-item { padding: 5px 9px; gap: 1px; }
+    .nav-item svg { width: 19px; height: 19px; }
+    .nav-item span { font-size: 9px; }
+}
+
