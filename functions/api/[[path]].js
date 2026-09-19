@@ -90,12 +90,13 @@ async function getUser(env, phone) {
 
 async function saveUser(env, user) {
   await env.DB.prepare(
-    'INSERT OR REPLACE INTO users (phone, nickname, avatar, email, passHash, passSalt, joinedGroups, createdAt, bubble_style, focus_start, focus_end) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+    'INSERT OR REPLACE INTO users (phone, nickname, avatar, email, passHash, passSalt, joinedGroups, createdAt, bubble_style, focus_start, focus_end, wx_openid, wx_unionid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
   ).bind(
     user.phone, user.nickname, user.avatar || '😀', user.email || '无',
     user.passHash, user.passSalt,
     JSON.stringify(user.joinedGroups || []), user.createdAt,
-    user.bubble_style || '', user.focus_start || '', user.focus_end || ''
+    user.bubble_style || '', user.focus_start || '', user.focus_end || '',
+    user.wx_openid || '', user.wx_unionid || ''
   ).run();
 }
 
@@ -430,6 +431,15 @@ async function handleQrStatus(env, qrId) {
   if (!s) return json({ ok: false, status: 'invalid', error: '二维码无效' });
   if (s.status === 'expired') return ok({ status: 'expired' });
   if (s.status === 'confirmed') {
+    // 原子消费：只有一个请求能将 confirmed 改为 consumed，
+    // 杜绝并发轮询（含截获 qrId 的攻击者）重复获取同一登录 token
+    const upd = await env.DB.prepare(
+      "UPDATE qr_sessions SET status = 'consumed' WHERE id = ? AND status = 'confirmed'"
+    ).bind(s.id).run();
+    if (!upd.meta || upd.meta.changes === 0) {
+      // 已被其他请求消费（并发的另一方），返回 expired 让前端提示重新扫码
+      return ok({ status: 'expired' });
+    }
     const token = s.login_token;
     const row = await env.DB.prepare('SELECT * FROM tokens WHERE token = ?').bind(token).first();
     await env.DB.prepare('DELETE FROM qr_sessions WHERE id = ?').bind(s.id).run();
@@ -1676,8 +1686,10 @@ async function handleNearSignal(env, user, url, method, request) {
       const rows = await env.DB.prepare('SELECT id, data FROM near_signals WHERE code = ? AND peer = ? ORDER BY id ASC LIMIT 200')
         .bind(code, peer).all();
       if (rows.results && rows.results.length) {
+        // 只删除本次读取到的信号，避免 LIMIT 200 之外的信令被误删
         const ids = rows.results.map(r => r.id);
-        await env.DB.prepare('DELETE FROM near_signals WHERE code = ? AND peer = ?').bind(code, peer).run();
+        const placeholders = ids.map(() => '?').join(',');
+        await env.DB.prepare(`DELETE FROM near_signals WHERE id IN (${placeholders})`).bind(...ids).run();
         return rows.results.map(r => JSON.parse(r.data));
       }
       return null;
@@ -1772,6 +1784,45 @@ export async function onRequest(context) {
     if (parts[0] === 'recover' && parts[1] === 'confirm' && method === 'POST') {
       return handleRecoverConfirm(env, await request.json().catch(() => ({})));
     }
+    // ---- 本机号码：短信验证码登录/注册（WebOTP 自动填充） ----
+    if (parts[0] === 'sms' && parts[1] === 'send' && method === 'POST') {
+      await ensureLoginExtras(env);
+      return handleSmsSend(env, await request.json().catch(() => ({})));
+    }
+    if (parts[0] === 'sms' && parts[1] === 'login' && method === 'POST') {
+      await ensureLoginExtras(env);
+      return handleSmsLogin(env, await request.json().catch(() => ({})));
+    }
+    if (parts[0] === 'sms' && parts[1] === 'register' && method === 'POST') {
+      await ensureLoginExtras(env);
+      return handleSmsRegister(env, await request.json().catch(() => ({})));
+    }
+    // ---- 微信 OAuth2 登录/注册/绑定（配置 WX_APPID/WX_SECRET 后生效） ----
+    if (parts[0] === 'wechat' && parts[1] === 'start' && method === 'POST') {
+      await ensureLoginExtras(env);
+      return handleWxStart(env, await request.json().catch(() => ({})), url);
+    }
+    if (parts[0] === 'wechat' && parts[1] === 'status' && method === 'GET') {
+      await ensureLoginExtras(env);
+      return handleWxStatus(env, url.searchParams);
+    }
+    if (parts[0] === 'wechat' && parts[1] === 'mockscan' && method === 'POST') {
+      if (env.IS_DEV !== '1') return fail('Not Found', 404);
+      await ensureLoginExtras(env);
+      return handleWxMockScan(env, await request.json().catch(() => ({})));
+    }
+    if (parts[0] === 'wechat' && parts[1] === 'callback' && method === 'GET') {
+      await ensureLoginExtras(env);
+      return handleWxCallback(env, url.searchParams, url);
+    }
+    if (parts[0] === 'wechat' && parts[1] === 'exchange' && method === 'POST') {
+      await ensureLoginExtras(env);
+      return handleWxExchange(env, await request.json().catch(() => ({})));
+    }
+    if (parts[0] === 'wechat' && parts[1] === 'bind' && method === 'POST') {
+      await ensureLoginExtras(env);
+      return handleWxBind(env, await request.json().catch(() => ({})));
+    }
     if (parts[0] === 'signkeys' && parts[1] && method === 'GET') {
       return handleSignGet(env, parts[1]);
     }
@@ -1799,7 +1850,7 @@ export async function onRequest(context) {
     // ===== 安全中心：需登录（Passkey 管理、设备授权、签名公钥托管、安全日志） =====
     if (parts[0] === 'passkey' && parts[1] === 'register' && parts[2] === 'options' && method === 'POST') {
       await ensureSecTables(env);
-      return handleWaRegOptions(env, user, url);
+      return handleWaRegOptions(env, user, await request.json().catch(() => ({})), url);
     }
     if (parts[0] === 'passkey' && parts[1] === 'register' && method === 'POST') {
       await ensureSecTables(env);
@@ -1812,7 +1863,7 @@ export async function onRequest(context) {
       return handlePasskeyDelete(env, user, await request.json().catch(() => ({})));
     }
     if (parts[0] === 'devicecode' && parts[1] === 'authorize' && method === 'POST') {
-      return handleDcAuthorize(env, user, await request.json().catch(() => ({})));
+      return handleDcAuthorize(env, user, await request.json().catch(() => ({})), url);
     }
     if (parts[0] === 'signkeys' && parts.length === 1 && method === 'POST') {
       await ensureSecTables(env);
@@ -2182,9 +2233,10 @@ function checkOrigin(cdj, url) {
 }
 
 // ---------- Passkey：注册 ----------
-async function handleWaRegOptions(env, user, url) {
+async function handleWaRegOptions(env, user, body, url) {
   const { id, ch } = await secChallenge(env, 'register', user.phone);
   const existing = await env.DB.prepare('SELECT credential_id FROM passkeys WHERE phone = ?').bind(user.phone).all();
+  const isPlatform = body.attachment === 'platform';
   return ok({
     challengeId: id,
     publicKey: {
@@ -2192,7 +2244,9 @@ async function handleWaRegOptions(env, user, url) {
       user: { id: b64uEnc(SEC_TE.encode(user.phone)), name: user.phone, displayName: user.nickname || user.phone },
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }, { type: 'public-key', alg: -8 }],
       timeout: 60000, attestation: 'none',
-      authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+      authenticatorSelection: isPlatform
+        ? { authenticatorAttachment: 'platform', residentKey: 'required', userVerification: 'required' }
+        : { residentKey: 'preferred', userVerification: 'preferred' },
       excludeCredentials: (existing.results || []).map(r => ({ type: 'public-key', id: r.credential_id }))
     }
   });
@@ -2318,16 +2372,256 @@ async function handleDcStatus(env, deviceCode) {
   secLog(env, s.phone, 'device_login', '设备码授权登录（' + s.user_code + '）');
   return ok({ status: 'authorized', token, user: publicUser(await getUser(env, s.phone)) });
 }
-async function handleDcAuthorize(env, user, body) {
+// 设备码授权断言校验（mode=dcauth，必须本机生物验证 UV=1）
+async function verifyDcBio(env, user, bio, url) {
+  if (!bio || !bio.challengeId || !bio.id || !bio.response) return fail('生物验证参数不完整');
+  const c = await takeChallenge(env, bio.challengeId, 'dcauth');
+  if (!c || c.phone !== user.phone) return fail('验证已过期，请重试');
+  let cdj;
+  try { cdj = JSON.parse(new TextDecoder().decode(b64uDec(bio.response.clientDataJSON))); } catch { return fail('响应解析失败'); }
+  if (cdj.type !== 'webauthn.get' || cdj.challenge !== c.challenge) return fail('挑战校验失败');
+  if (!checkOrigin(cdj, url)) return fail('来源域不匹配');
+  const rec = await env.DB.prepare('SELECT * FROM passkeys WHERE credential_id = ? AND phone = ?').bind(bio.id, user.phone).first();
+  if (!rec) return fail('该生物凭据不属于当前账号');
+  const ad = b64uDec(bio.response.authenticatorData);
+  if (ad.length < 37) return fail('凭据数据无效');
+  const parsed = parseAuthData(ad);
+  if (parsed.rpIdHash !== b64uEnc(await secSha256(SEC_TE.encode(url.hostname)))) return fail('站点不匹配');
+  if (!(parsed.flags & 0x01)) return fail('请先完成生物识别验证');
+  if (!(parsed.flags & 0x04)) return fail('需要本机面容/指纹/设备密码验证（UV）');
+  if (parsed.counter < rec.counter && parsed.counter !== 0 && rec.counter !== 0) return fail('检测到凭据克隆，已拒绝');
+  const clientHash = await secSha256(b64uDec(bio.response.clientDataJSON));
+  const signed = new Uint8Array(ad.length + clientHash.length);
+  signed.set(ad); signed.set(clientHash, ad.length);
+  const sigOk = await webVerify(parseObj(rec.public_key) || {}, b64uDec(bio.response.signature), signed);
+  if (!sigOk) { secLog(env, user.phone, 'passkey_fail', '设备码授权生物验证签名失败'); return fail('生物验证失败'); }
+  await env.DB.prepare('UPDATE passkeys SET counter = ?, last_used = ? WHERE credential_id = ?')
+    .bind(Math.max(rec.counter, parsed.counter), Date.now(), bio.id).run();
+  return null; // null = 通过
+}
+async function handleDcAuthorize(env, user, body, url) {
   const uc = String(body.userCode || '').toUpperCase().replace(/\s/g, '');
   if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(uc)) return fail('设备码格式不正确');
+  // 已绑定 Passkey 的账号：授权新设备必须通过本机生物识别（原生设备联动）
+  const pkRow = await env.DB.prepare('SELECT credential_id FROM passkeys WHERE phone = ? LIMIT 1').bind(user.phone).first();
+  const hasBio = !!pkRow;
+  if (hasBio) {
+    if (!body.bio) {
+      await ensureSecTables(env);
+      const { id, ch } = await secChallenge(env, 'dcauth', user.phone);
+      const rows = (await env.DB.prepare('SELECT credential_id FROM passkeys WHERE phone = ?').bind(user.phone).all()).results || [];
+      return json({ ok: false, needBio: true, challengeId: id,
+        publicKey: { challenge: ch, rpId: url.hostname, timeout: 60000, userVerification: 'required',
+          allowCredentials: rows.map(r => ({ type: 'public-key', id: r.credential_id })) } });
+    }
+    const bad = await verifyDcBio(env, user, body.bio, url);
+    if (bad) return bad;
+  }
   if (!(await rateHit(env, 'dcauth:' + user.phone, 8, 10 * 60 * 1000))) return tooMany(10);
   const s = await env.DB.prepare('SELECT * FROM device_codes WHERE user_code = ?').bind(uc).first();
   if (!s || s.expires < Date.now()) return fail('设备码不存在或已过期');
   if (s.status !== 'pending') return fail('该设备码已被使用');
   await env.DB.prepare('UPDATE device_codes SET status = ?, phone = ? WHERE device_code = ?').bind('authorized', user.phone, s.device_code).run();
-  secLog(env, user.phone, 'device_auth', '授权设备码 ' + uc + ' 登录');
+  secLog(env, user.phone, 'device_auth', (hasBio ? '生物识别通过，' : '') + '授权设备码 ' + uc + ' 登录');
+  return ok({ bioVerified: hasBio });
+}
+
+// ============ 本机号码：短信验证码登录/注册 + 微信 OAuth2 ============
+async function ensureLoginExtras(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS sms_codes (
+    k TEXT PRIMARY KEY, phone TEXT NOT NULL, scene TEXT NOT NULL,
+    code TEXT NOT NULL, expires INTEGER NOT NULL, attempts INTEGER DEFAULT 0
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS sms_tickets (
+    id TEXT PRIMARY KEY, phone TEXT NOT NULL, expires INTEGER NOT NULL
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS wx_states (
+    state TEXT PRIMARY KEY, status TEXT NOT NULL, ticket TEXT DEFAULT '', expires INTEGER NOT NULL
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS wx_tickets (
+    ticket TEXT PRIMARY KEY, openid TEXT NOT NULL, unionid TEXT DEFAULT '',
+    nickname TEXT DEFAULT '', avatar TEXT DEFAULT '', expires INTEGER NOT NULL
+  )`).run();
+  // users 表迁移微信标识列（老库平滑升级）
+  try { await env.DB.prepare("ALTER TABLE users ADD COLUMN wx_openid TEXT DEFAULT ''").run(); } catch {}
+  try { await env.DB.prepare("ALTER TABLE users ADD COLUMN wx_unionid TEXT DEFAULT ''").run(); } catch {}
+}
+const SMS_TTL = 5 * 60 * 1000, SMS_RESEND = 60 * 1000, SMS_DAY_MAX = 10;
+const smsPhoneOk = phone => /^\d{6,15}$/.test(String(phone || '').trim());
+// 短信下发：生产对接腾讯云 SMS（env.SMS_SDKAPPID / SMS_SIGN / SMS_TEMPLATE_ID）；
+// 未配置且 IS_DEV=1 时返回固定开发码 246810，其余环境拒绝，避免假装发送。
+async function sendSmsCode(env, phone, code) {
+  if (env.SMS_SDKAPPID && env.SMS_SECRETID && env.SMS_SIGN) {
+    // 接入点：腾讯云 SendSms（签名 v3）。服务密钥只在 Workers 环境变量中，不落前端。
+    // 因需要额外 SDK/签名封装，上线时在此实现；返回 503 可让前端给出明确提示。
+    return { sent: false, error: '短信网关尚未完成对接，请配置 SMS_TEMPLATE_ID 并启用腾讯云 SMS 动作' };
+  }
+  if (env.IS_DEV === '1') return { sent: true, devCode: '246810' };
+  return { sent: false, error: '短信服务暂未开通' };
+}
+async function handleSmsSend(env, body) {
+  const phone = String(body.phone || '').trim();
+  const scene = body.scene === 'bind' ? 'bind' : 'login';
+  if (!smsPhoneOk(phone)) return fail('手机号格式不正确');
+  if (!(await rateHit(env, 'sms60:' + phone + ':' + scene, 1, SMS_RESEND))) return fail('验证码发送过于频繁，请60秒后再试', 429);
+  const day = new Date().toISOString().slice(0, 10);
+  if (!(await rateHit(env, 'smsday:' + day + ':' + phone, SMS_DAY_MAX, 24 * 3600 * 1000))) return fail('今日验证码次数已达上限', 429);
+  const code = env.IS_DEV === '1' ? '246810' : String(Math.floor(100000 + Math.random() * 900000));
+  const r = await sendSmsCode(env, phone, code);
+  if (!r.sent) return fail(r.error || '验证码发送失败', 503);
+  await env.DB.prepare('INSERT OR REPLACE INTO sms_codes (k, phone, scene, code, expires, attempts) VALUES (?,?,?,?,?,0)')
+    .bind(scene + ':' + phone, phone, scene, code, Date.now() + SMS_TTL).run();
+  secLog(env, phone, 'sms_send', '下发短信验证码（' + scene + '）' + (r.devCode ? ' devCode=' + r.devCode : ''));
+  return ok({ expiresIn: SMS_TTL / 1000, ...(r.devCode ? { devCode: r.devCode } : {}) });
+}
+async function smsConsume(env, phone, scene, code) {
+  const k = scene + ':' + phone;
+  const rec = await env.DB.prepare('SELECT * FROM sms_codes WHERE k = ?').bind(k).first();
+  if (!rec) return '请先获取验证码';
+  if (rec.expires < Date.now()) { await env.DB.prepare('DELETE FROM sms_codes WHERE k = ?').bind(k).run(); return '验证码已过期，请重新获取'; }
+  if ((rec.attempts || 0) + 1 > 5) { await env.DB.prepare('DELETE FROM sms_codes WHERE k = ?').bind(k).run(); return '错误次数过多，请重新获取验证码'; }
+  if (String(code) !== rec.code) {
+    await env.DB.prepare('UPDATE sms_codes SET attempts = attempts + 1 WHERE k = ?').bind(k).run();
+    return '验证码不正确';
+  }
+  await env.DB.prepare('DELETE FROM sms_codes WHERE k = ?').bind(k).run();
+  return null;
+}
+async function makeSmsTicket(env, phone) {
+  const id = makeToken() + makeId();
+  await env.DB.prepare('INSERT INTO sms_tickets (id, phone, expires) VALUES (?,?,?)')
+    .bind(id, phone, Date.now() + 10 * 60 * 1000).run();
+  return id;
+}
+function smsOnlyUserRow(phone, nickname, avatar) {
+  return { phone, nickname, avatar: avatar || '😀', email: '无', passHash: 'sms-only', passSalt: 'sms-only',
+    joinedGroups: [], createdAt: Date.now(), bubble_style: '', focus_start: '', focus_end: '', wx_openid: '', wx_unionid: '' };
+}
+async function handleSmsLogin(env, body) {
+  const phone = String(body.phone || '').trim();
+  const code = String(body.code || '').trim();
+  if (!smsPhoneOk(phone)) return fail('手机号格式不正确');
+  if (!/^\d{6}$/.test(code)) return fail('请输入6位验证码');
+  if (!(await rateHit(env, 'smslogin:' + phone, 10, 15 * 60 * 1000))) return fail('尝试过于频繁，请稍后再试', 429);
+  const err = await smsConsume(env, phone, 'login', code);
+  if (err) { secLog(env, phone, 'sms_login_fail', err); return fail(err); }
+  const user = await getUser(env, phone);
+  if (user) {
+    const token = await createToken(env, phone);
+    secLog(env, phone, 'sms_login', '本机号码验证码登录成功');
+    return ok({ token, user: publicUser(user) });
+  }
+  return ok({ needRegister: true, smsTicket: await makeSmsTicket(env, phone) });
+}
+async function handleSmsRegister(env, body) {
+  const t = await env.DB.prepare('SELECT * FROM sms_tickets WHERE id = ?').bind(String(body.smsTicket || '')).first();
+  if (!t || t.expires < Date.now()) return fail('验证已过期，请重新获取验证码');
+  const phone = t.phone;
+  if (await getUser(env, phone)) return fail('该手机号已注册，请直接登录');
+  const nickname = String(body.nickname || '').trim() || ('用户' + phone.slice(-4));
+  const user = smsOnlyUserRow(phone, nickname, body.avatar);
+  await saveUser(env, user);
+  await env.DB.prepare('DELETE FROM sms_tickets WHERE id = ?').bind(t.id).run();
+  const token = await createToken(env, phone);
+  secLog(env, phone, 'sms_register', '本机号码注册成功（免密账号）');
+  return ok({ token, user: publicUser(user) });
+}
+
+// ---------- 微信 OAuth2（开放平台扫码 / 公众号内 H5） ----------
+const WX_STATE_TTL = 5 * 60 * 1000, WX_TICKET_TTL = 10 * 60 * 1000;
+async function handleWxStart(env, body, url) {
+  const appid = env.WX_APPID || '';
+  const state = makeToken() + makeId();
+  await env.DB.prepare('INSERT INTO wx_states (state, status, ticket, expires) VALUES (?,?,?,?)')
+    .bind(state, 'pending', '', Date.now() + WX_STATE_TTL).run();
+  if (!appid) {
+    return ok({ mock: true, state, expiresIn: WX_STATE_TTL / 1000,
+      hint: '未配置 WX_APPID，当前为模拟模式；在 Pages 环境变量配置微信开放平台凭证后自动切换真实扫码' });
+  }
+  const redirect = encodeURIComponent(url.origin + '/api/wechat/callback');
+  const authorizeUrl = body.mode === 'mp'
+    ? 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=' + appid + '&redirect_uri=' + redirect + '&response_type=code&scope=snsapi_userinfo&state=' + state + '#wechat_redirect'
+    : 'https://open.weixin.qq.com/connect/qrconnect?appid=' + appid + '&redirect_uri=' + redirect + '&response_type=code&scope=snsapi_login&state=' + state;
+  return ok({ mock: false, state, authorizeUrl, expiresIn: WX_STATE_TTL / 1000 });
+}
+async function handleWxMockScan(env, body) {
+  const s = await env.DB.prepare('SELECT * FROM wx_states WHERE state = ?').bind(String(body.state || '')).first();
+  if (!s || s.expires < Date.now()) return fail('二维码已过期，请刷新');
+  const openid = 'mockwx_dev_tester';
+  const ticket = makeToken() + makeId();
+  await env.DB.prepare('INSERT INTO wx_tickets (ticket, openid, unionid, nickname, avatar, expires) VALUES (?,?,?,?,?,?)')
+    .bind(ticket, openid, '', '微信用户', '💬', Date.now() + WX_TICKET_TTL).run();
+  await env.DB.prepare("UPDATE wx_states SET status = 'confirmed', ticket = ? WHERE state = ?").bind(ticket, s.state).run();
   return ok();
+}
+async function handleWxStatus(env, sp) {
+  const s = await env.DB.prepare('SELECT * FROM wx_states WHERE state = ?').bind(String(sp.get('state') || '')).first();
+  if (!s) return ok({ status: 'invalid' });
+  if (s.expires < Date.now()) { await env.DB.prepare('DELETE FROM wx_states WHERE state = ?').bind(s.state).run(); return ok({ status: 'expired' }); }
+  if (s.status === 'confirmed') { await env.DB.prepare('DELETE FROM wx_states WHERE state = ?').bind(s.state).run(); return ok({ status: 'confirmed', ticket: s.ticket }); }
+  return ok({ status: 'pending' });
+}
+async function handleWxCallback(env, sp, url) {
+  const failHome = url.origin + '/?wxerr=1';
+  const code = sp.get('code'), state = sp.get('state');
+  const s = state ? await env.DB.prepare('SELECT * FROM wx_states WHERE state = ?').bind(state).first() : null;
+  if (!code || !s || s.expires < Date.now()) return Response.redirect(failHome, 302);
+  const appid = env.WX_APPID || '', secret = env.WX_SECRET || '';
+  if (!appid || !secret) return Response.redirect(failHome, 302);
+  try {
+    const tokR = await fetch('https://api.weixin.qq.com/sns/oauth2/access_token?appid=' + appid + '&secret=' + secret + '&code=' + encodeURIComponent(code) + '&grant_type=authorization_code');
+    const tok = await tokR.json();
+    if (!tok.openid) return Response.redirect(failHome, 302);
+    let nickname = '微信用户', avatar = '💬';
+    try {
+      const info = await (await fetch('https://api.weixin.qq.com/sns/userinfo?access_token=' + tok.access_token + '&openid=' + tok.openid)).json();
+      if (info.nickname) { nickname = info.nickname; avatar = '💬'; }
+    } catch {}
+    const ticket = makeToken() + makeId();
+    await env.DB.prepare('INSERT INTO wx_tickets (ticket, openid, unionid, nickname, avatar, expires) VALUES (?,?,?,?,?,?)')
+      .bind(ticket, tok.openid, tok.unionid || '', nickname, avatar, Date.now() + WX_TICKET_TTL).run();
+    await env.DB.prepare('DELETE FROM wx_states WHERE state = ?').bind(state).run();
+    return Response.redirect(url.origin + '/#wxticket=' + ticket, 302);
+  } catch {
+    return Response.redirect(failHome, 302);
+  }
+}
+async function handleWxExchange(env, body) {
+  const t = await env.DB.prepare('SELECT * FROM wx_tickets WHERE ticket = ?').bind(String(body.ticket || '')).first();
+  if (!t || t.expires < Date.now()) return fail('微信登录已过期，请重试');
+  const u = await env.DB.prepare('SELECT phone FROM users WHERE wx_openid = ?').bind(t.openid).first();
+  if (u && (await getUser(env, u.phone))) {
+    await env.DB.prepare('DELETE FROM wx_tickets WHERE ticket = ?').bind(t.ticket).run();
+    const token = await createToken(env, u.phone);
+    secLog(env, u.phone, 'wx_login', '微信快捷登录成功');
+    return ok({ bound: true, token, user: publicUser(await getUser(env, u.phone)) });
+  }
+  return ok({ bound: false, wxTicket: body.ticket, profile: { nickname: t.nickname, avatar: t.avatar } });
+}
+async function handleWxBind(env, body) {
+  const t = await env.DB.prepare('SELECT * FROM wx_tickets WHERE ticket = ?').bind(String(body.wxTicket || '')).first();
+  if (!t || t.expires < Date.now()) return fail('微信登录已过期，请重试');
+  const phone = String(body.phone || '').trim();
+  const code = String(body.code || '').trim();
+  if (!smsPhoneOk(phone)) return fail('手机号格式不正确');
+  if (!/^\d{6}$/.test(code)) return fail('请输入6位短信验证码');
+  const err = await smsConsume(env, phone, 'bind', code);
+  if (err) return fail(err);
+  let user = await getUser(env, phone);
+  const isNew = !user;
+  if (isNew) {
+    const nickname = String(body.nickname || '').trim() || t.nickname || ('微信用户' + phone.slice(-4));
+    user = smsOnlyUserRow(phone, nickname, body.avatar || t.avatar);
+    secLog(env, phone, 'wx_register', '微信授权 + 本机号码验证，注册成功');
+  } else {
+    secLog(env, phone, 'wx_bind', '微信账号绑定到已有账号');
+  }
+  user.wx_openid = t.openid;
+  user.wx_unionid = t.unionid || '';
+  await saveUser(env, user);
+  await env.DB.prepare('DELETE FROM wx_tickets WHERE ticket = ?').bind(t.ticket).run();
+  const token = await createToken(env, phone);
+  return ok({ bound: true, isNew, token, user: publicUser(await getUser(env, phone)) });
 }
 
 // ---------- 签名验签（公钥托管，私钥不出本机） ----------

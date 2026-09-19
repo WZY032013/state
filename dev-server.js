@@ -163,6 +163,17 @@ async function handleAPI(req, parts, body, url) {
   if (parts[0] === 'recover' && parts[1] === 'methods' && req.method === 'POST') return handleRecoverMethods(body, req);
   if (parts[0] === 'recover' && parts[1] === 'admin' && req.method === 'POST') return handleRecoverAdmin(body, req);
   if (parts[0] === 'recover' && parts[1] === 'confirm' && req.method === 'POST') return handleRecoverConfirm(body);
+  // ---- 本机号码：短信验证码登录/注册（WebOTP 自动填充） ----
+  if (parts[0] === 'sms' && parts[1] === 'send' && req.method === 'POST') return handleSmsSend(body);
+  if (parts[0] === 'sms' && parts[1] === 'login' && req.method === 'POST') return handleSmsLogin(body);
+  if (parts[0] === 'sms' && parts[1] === 'register' && req.method === 'POST') return handleSmsRegister(body);
+  // ---- 微信登录/注册（OAuth2；未配置 WX_APPID 时本地 mock） ----
+  if (parts[0] === 'wechat' && parts[1] === 'start' && req.method === 'POST') return handleWxStart(body, url);
+  if (parts[0] === 'wechat' && parts[1] === 'status' && req.method === 'GET') return handleWxStatus(url.searchParams);
+  if (parts[0] === 'wechat' && parts[1] === 'mockscan' && req.method === 'POST') return handleWxMockScan(body);
+  if (parts[0] === 'wechat' && parts[1] === 'callback' && req.method === 'GET') return handleWxCallback(url.searchParams, url);
+  if (parts[0] === 'wechat' && parts[1] === 'exchange' && req.method === 'POST') return handleWxExchange(body);
+  if (parts[0] === 'wechat' && parts[1] === 'bind' && req.method === 'POST') return handleWxBind(body);
   if (parts[0] === 'signkeys' && parts[1] && req.method === 'GET') return handleSignGet(parts[1]);
 
   const user = authUser(req);
@@ -181,7 +192,7 @@ async function handleAPI(req, parts, body, url) {
     if (parts[0] === 'passkey' && parts[1] === 'register' && req.method === 'POST') return handleWaRegister(user, body, url);
     if (parts[0] === 'passkeys' && parts.length === 1 && req.method === 'GET') return handlePasskeyList(user);
     if (parts[0] === 'passkey' && parts[1] === 'delete' && req.method === 'POST') return handlePasskeyDelete(user, body);
-    if (parts[0] === 'devicecode' && parts[1] === 'authorize' && req.method === 'POST') return handleDcAuthorize(user, body);
+    if (parts[0] === 'devicecode' && parts[1] === 'authorize' && req.method === 'POST') return handleDcAuthorize(user, body, url);
     if (parts[0] === 'signkeys' && parts.length === 1 && req.method === 'POST') return handleSignUpload(user, body);
     if (parts[0] === 'security' && parts[1] === 'log' && req.method === 'GET') return handleSecLog(user);
 
@@ -451,6 +462,11 @@ const server = http.createServer(async (req, res) => {
     }
     const parts = url.pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean);
     const result = await handleAPI(req, parts, body, url);
+    if (result.redirect) {
+      res.writeHead(result.httpStatus || 302, { 'Location': result.redirect, 'Access-Control-Allow-Origin': '*' });
+      res.end();
+      return;
+    }
     res.writeHead(typeof result.httpStatus === 'number' ? result.httpStatus : (typeof result.status === 'number' ? result.status : 200), { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify(result));
     return;
@@ -596,6 +612,7 @@ function checkOrigin(cdj, url) {
 function handleWaRegOptions(user, body, url) {
   const { id, ch } = secChallenge('register', user.phone);
   const existing = passkeyList(user.phone).map(cid => ({ type: 'public-key', id: cid }));
+  const isPlatform = body.attachment === 'platform';
   return {
     ok: true, challengeId: id,
     publicKey: {
@@ -603,7 +620,9 @@ function handleWaRegOptions(user, body, url) {
       user: { id: b64uEnc(TE8.encode(user.phone)), name: user.phone, displayName: user.nickname || user.phone },
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }, { type: 'public-key', alg: -8 }],
       timeout: 60000, attestation: 'none',
-      authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+      authenticatorSelection: isPlatform
+        ? { authenticatorAttachment: 'platform', residentKey: 'required', userVerification: 'required' }
+        : { residentKey: 'preferred', userVerification: 'preferred' },
       excludeCredentials: existing
     }
   };
@@ -730,18 +749,242 @@ function handleDcStatus(query) {
   secLog(s.phone, 'device_login', '设备码授权登录（' + s.userCode + '）');
   return { ok: true, status: 'authorized', token, user: publicUser(kvGet('user:' + s.phone)) };
 }
-function handleDcAuthorize(user, body) {
+// 设备码授权断言校验（mode=dcauth，必须本机生物验证 UV=1）
+async function verifyDcBio(user, bio, url) {
+  if (!bio || !bio.challengeId || !bio.id || !bio.response) return { ok: false, error: '生物验证参数不完整' };
+  const c = takeChallenge(bio.challengeId, 'dcauth');
+  if (!c || c.phone !== user.phone) return { ok: false, error: '验证已过期，请重试' };
+  dropChallenge(c.id);
+  let cdj;
+  try { cdj = JSON.parse(Buffer.from(b64uDec(bio.response.clientDataJSON)).toString('utf8')); } catch { return { ok: false, error: '响应解析失败' }; }
+  if (cdj.type !== 'webauthn.get' || cdj.challenge !== c.ch) return { ok: false, error: '挑战校验失败' };
+  if (!checkOrigin(cdj, url)) return { ok: false, error: '来源域不匹配' };
+  const rec = getPasskey(bio.id);
+  if (!rec || rec.phone !== user.phone) return { ok: false, error: '该生物凭据不属于当前账号' };
+  const ad = b64uDec(bio.response.authenticatorData);
+  if (ad.length < 37) return { ok: false, error: '凭据数据无效' };
+  const parsed = parseAuthData(ad);
+  if (parsed.rpIdHash !== b64uEnc(await sha256(TE8.encode(url.hostname)))) return { ok: false, error: '站点不匹配' };
+  if (!(parsed.flags & 0x01)) return { ok: false, error: '请先完成生物识别验证' };
+  if (!(parsed.flags & 0x04)) return { ok: false, error: '需要本机面容/指纹/设备密码验证（UV）' };
+  if (parsed.counter < rec.counter && parsed.counter !== 0 && rec.counter !== 0) return { ok: false, error: '检测到凭据克隆，已拒绝' };
+  const clientHash = await sha256(b64uDec(bio.response.clientDataJSON));
+  const signed = new Uint8Array(ad.length + clientHash.length);
+  signed.set(ad); signed.set(clientHash, ad.length);
+  const sigOk = await webVerify(rec.jwk, b64uDec(bio.response.signature), signed);
+  if (!sigOk) { secLog(user.phone, 'passkey_fail', '设备码授权生物验证签名失败'); return { ok: false, error: '生物验证失败' }; }
+  rec.counter = Math.max(rec.counter, parsed.counter); rec.lastUsed = Date.now(); savePasskey(rec);
+  return true;
+}
+async function handleDcAuthorize(user, body, url) {
   const uc = String(body.userCode || '').toUpperCase().replace(/\s/g, '');
   if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(uc)) return { ok: false, error: '设备码格式不正确' };
+  // 已绑定 Passkey 的账号：授权新设备必须通过本机生物识别（原生设备联动）
+  const hasBio = passkeyList(user.phone).length > 0;
+  if (hasBio) {
+    if (!body.bio) {
+      const { id, ch } = secChallenge('dcauth', user.phone);
+      return { ok: false, needBio: true, challengeId: id,
+        publicKey: { challenge: ch, rpId: url.hostname, timeout: 60000, userVerification: 'required',
+          allowCredentials: passkeyList(user.phone).map(cid => ({ type: 'public-key', id: cid })) } };
+    }
+    const v = await verifyDcBio(user, body.bio, url);
+    if (v !== true) return v;
+  }
   if (!rateHit('dcauth:' + user.phone, 8, 10 * 60 * 1000)) return tooMany(10);
   const dcId = kvGet('dcu:' + uc);
   const s = dcId && kvGet('dc:' + dcId);
   if (!s || s.expires < Date.now()) return { ok: false, error: '设备码不存在或已过期' };
   if (s.status !== 'pending') return { ok: false, error: '该设备码已被使用' };
-  s.status = 'authorized'; s.phone = user.phone;
+  s.status = 'authorized'; s.phone = user.phone; s.bioVerified = hasBio;
   kvSet('dc:' + s.deviceCode, s);
-  secLog(user.phone, 'device_auth', '授权设备码 ' + uc + ' 登录');
+  secLog(user.phone, 'device_auth', (hasBio ? '生物识别通过，' : '') + '授权设备码 ' + uc + ' 登录');
+  return { ok: true, bioVerified: hasBio };
+}
+
+// ============ 本机号码：短信验证码登录/注册 ============
+// 说明：浏览器内无法直接调用运营商"一键取号"网关（需原生 SDK），Web 端标准方案为
+// 短信验证码 + WebOTP API（Chrome/Android 自动读取），iOS/桌面端手动输入，体验等效。
+const SMS_TTL = 5 * 60 * 1000, SMS_RESEND = 60 * 1000, SMS_DAY_MAX = 10;
+const SMS_DEV_CODE = '246810'; // 本地开发固定码；生产由 functions 端短信网关下发，不返回给前端
+const smsPhoneOk = phone => /^\d{6,15}$/.test(String(phone || '').trim());
+function handleSmsSend(body) {
+  const phone = String(body.phone || '').trim();
+  const scene = body.scene === 'bind' ? 'bind' : 'login';
+  if (!smsPhoneOk(phone)) return { ok: false, error: '手机号格式不正确' };
+  if (!rateHit('sms60:' + phone + ':' + scene, 1, SMS_RESEND)) return { httpStatus: 429, ok: false, error: '验证码发送过于频繁，请60秒后再试' };
+  const day = new Date().toISOString().slice(0, 10);
+  if (!rateHit('smsday:' + day + ':' + phone, SMS_DAY_MAX, 24 * 3600 * 1000)) return { httpStatus: 429, ok: false, error: '今日验证码次数已达上限' };
+  const code = SMS_DEV_CODE;
+  kvSet('smscode:' + scene + ':' + phone, { code, expires: Date.now() + SMS_TTL, attempts: 0 });
+  // WebOTP 短信正文格式（生产示例）：【Stating】验证码 246810，5 分钟有效。\n@stating.pages.dev #246810
+  console.log('[sms] -> ' + phone + '  scene=' + scene + '  code=' + code + '  （WebOTP 尾行: @localhost #' + code + '）');
+  secLog(phone, 'sms_send', '下发短信验证码（' + scene + '）');
+  return { ok: true, expiresIn: SMS_TTL / 1000, devCode: code };
+}
+function smsConsume(phone, scene, code) {
+  const k = 'smscode:' + scene + ':' + phone;
+  const rec = kvGet(k);
+  if (!rec) return { err: '请先获取验证码' };
+  if (rec.expires < Date.now()) { kvDel(k); return { err: '验证码已过期，请重新获取' }; }
+  rec.attempts = (rec.attempts || 0) + 1;
+  if (rec.attempts > 5) { kvDel(k); return { err: '错误次数过多，请重新获取验证码' }; }
+  if (String(code) !== String(rec.code)) { kvSet(k, rec); return { err: '验证码不正确' }; }
+  kvDel(k);
   return { ok: true };
+}
+function makeSmsTicket(phone) {
+  const id = crypto.randomBytes(18).toString('hex');
+  kvSet('smsticket:' + id, { phone, expires: Date.now() + 10 * 60 * 1000 });
+  return id;
+}
+function smsOnlyUser(phone, nickname, avatar) {
+  return { phone, nickname, avatar: avatar || '😀', email: '无', passHash: 'sms-only', passSalt: 'sms-only',
+    joinedGroups: [], createdAt: Date.now(), smsOnly: true };
+}
+function indexUser(phone) {
+  const idx = kvGet('user_index') || [];
+  if (!idx.includes(phone)) { idx.push(phone); kvSet('user_index', idx); }
+}
+function handleSmsLogin(body) {
+  const phone = String(body.phone || '').trim();
+  const code = String(body.code || '').trim();
+  if (!smsPhoneOk(phone)) return { ok: false, error: '手机号格式不正确' };
+  if (!/^\d{6}$/.test(code)) return { ok: false, error: '请输入6位验证码' };
+  if (!rateHit('smslogin:' + phone, 10, 15 * 60 * 1000)) return { httpStatus: 429, ok: false, error: '尝试过于频繁，请稍后再试' };
+  const v = smsConsume(phone, 'login', code);
+  if (!v.ok) { secLog(phone, 'sms_login_fail', v.err); return { ok: false, error: v.err }; }
+  const user = kvGet('user:' + phone);
+  if (user) {
+    const token = makeToken();
+    kvSet('token:' + token, { phone, expires: Date.now() + TOKEN_TTL * 1000 });
+    secLog(phone, 'sms_login', '本机号码验证码登录成功');
+    return { ok: true, token, user: publicUser(user) };
+  }
+  return { ok: true, needRegister: true, smsTicket: makeSmsTicket(phone) };
+}
+function handleSmsRegister(body) {
+  const t = kvGet('smsticket:' + String(body.smsTicket || ''));
+  if (!t || t.expires < Date.now()) return { ok: false, error: '验证已过期，请重新获取验证码' };
+  const phone = t.phone;
+  if (kvGet('user:' + phone)) return { ok: false, error: '该手机号已注册，请直接登录' };
+  const nickname = String(body.nickname || '').trim() || ('用户' + phone.slice(-4));
+  const user = smsOnlyUser(phone, nickname, body.avatar);
+  kvSet('user:' + phone, user);
+  indexUser(phone);
+  kvDel('smsticket:' + body.smsTicket);
+  const token = makeToken();
+  kvSet('token:' + token, { phone, expires: Date.now() + TOKEN_TTL * 1000 });
+  secLog(phone, 'sms_register', '本机号码注册成功（免密账号）');
+  return { ok: true, token, user: publicUser(user) };
+}
+
+// ============ 微信 OAuth2 登录/注册/绑定 ============
+// 生产：配置环境变量 WX_APPID / WX_SECRET（开放平台扫码登录 snsapi_login；
+// 公众号内 H5 用 snsapi_userinfo）。未配置时进入本地 mock，全流程可开发联调/自动化测试。
+const WX_STATE_TTL = 5 * 60 * 1000, WX_TICKET_TTL = 10 * 60 * 1000;
+function handleWxStart(body, url) {
+  const appid = process.env.WX_APPID || '';
+  const state = crypto.randomBytes(16).toString('hex');
+  kvSet('wxstate:' + state, { status: 'pending', expires: Date.now() + WX_STATE_TTL });
+  if (!appid) {
+    return { ok: true, mock: true, state, expiresIn: WX_STATE_TTL / 1000,
+      hint: '未配置微信开放平台凭证，当前为本地模拟模式；生产配置 WX_APPID/WX_SECRET 后自动切换真实微信扫码' };
+  }
+  const redirect = encodeURIComponent(url.origin + '/api/wechat/callback');
+  const authorizeUrl = body.mode === 'mp'
+    ? 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=' + appid + '&redirect_uri=' + redirect + '&response_type=code&scope=snsapi_userinfo&state=' + state + '#wechat_redirect'
+    : 'https://open.weixin.qq.com/connect/qrconnect?appid=' + appid + '&redirect_uri=' + redirect + '&response_type=code&scope=snsapi_login&state=' + state;
+  return { ok: true, mock: false, state, authorizeUrl, expiresIn: WX_STATE_TTL / 1000 };
+}
+// 仅本地：模拟微信 App 完成扫码与确认
+function handleWxMockScan(body) {
+  const state = String(body.state || '');
+  const s = kvGet('wxstate:' + state);
+  if (!s || s.expires < Date.now()) return { ok: false, error: '二维码已过期，请刷新' };
+  // dev mock 固定模拟同一个微信用户（openid 稳定），便于二次登录/绑定联调；生产由微信回调换真实 openid
+  const openid = 'mockwx_dev_tester';
+  const profile = { openid, unionid: '', nickname: '微信用户', avatar: '💬' };
+  const ticket = crypto.randomBytes(18).toString('hex');
+  kvSet('wxticket:' + ticket, Object.assign({ expires: Date.now() + WX_TICKET_TTL }, profile));
+  s.status = 'confirmed'; s.ticket = ticket;
+  kvSet('wxstate:' + state, s);
+  return { ok: true };
+}
+function handleWxStatus(query) {
+  const state = String(query.get('state') || '');
+  const s = kvGet('wxstate:' + state);
+  if (!s) return { ok: true, status: 'invalid' };
+  if (s.expires < Date.now()) { kvDel('wxstate:' + state); return { ok: true, status: 'expired' }; }
+  if (s.status === 'confirmed') { kvDel('wxstate:' + state); return { ok: true, status: 'confirmed', ticket: s.ticket }; }
+  return { ok: true, status: 'pending' };
+}
+// 生产回调：code 换 openid/userinfo，签发一次性登录票并跳回前端
+async function handleWxCallback(query, url) {
+  const code = query.get('code'), state = query.get('state');
+  const s = state && kvGet('wxstate:' + state);
+  const failHome = url.origin + '/?wxerr=1';
+  if (!code || !s || s.expires < Date.now()) return { redirect: failHome };
+  const appid = process.env.WX_APPID || '', secret = process.env.WX_SECRET || '';
+  if (!appid || !secret) return { redirect: failHome };
+  try {
+    const tok = await (await fetch('https://api.weixin.qq.com/sns/oauth2/access_token?appid=' + appid + '&secret=' + secret + '&code=' + encodeURIComponent(code) + '&grant_type=authorization_code')).json();
+    if (!tok.openid) return { redirect: failHome };
+    const profile = { openid: tok.openid, unionid: tok.unionid || '', nickname: '微信用户', avatar: '💬' };
+    try {
+      const info = await (await fetch('https://api.weixin.qq.com/sns/userinfo?access_token=' + tok.access_token + '&openid=' + tok.openid)).json();
+      if (info.nickname) { profile.nickname = info.nickname; profile.avatar = info.headimgurl ? '🖼' : '💬'; }
+    } catch {}
+    const ticket = crypto.randomBytes(18).toString('hex');
+    kvSet('wxticket:' + ticket, Object.assign({ expires: Date.now() + WX_TICKET_TTL }, profile));
+    kvDel('wxstate:' + state);
+    return { redirect: url.origin + '/#wxticket=' + ticket };
+  } catch {
+    return { redirect: failHome };
+  }
+}
+function handleWxExchange(body) {
+  const key = 'wxticket:' + String(body.ticket || '');
+  const t = kvGet(key);
+  if (!t || t.expires < Date.now()) return { ok: false, error: '微信登录已过期，请重试' };
+  const phone = kvGet('wxopenid:' + t.openid);
+  if (phone && kvGet('user:' + phone)) {
+    kvDel(key);
+    const token = makeToken();
+    kvSet('token:' + token, { phone, expires: Date.now() + TOKEN_TTL * 1000 });
+    secLog(phone, 'wx_login', '微信快捷登录成功');
+    return { ok: true, bound: true, token, user: publicUser(kvGet('user:' + phone)) };
+  }
+  return { ok: true, bound: false, wxTicket: body.ticket, profile: { nickname: t.nickname, avatar: t.avatar } };
+}
+function handleWxBind(body) {
+  const key = 'wxticket:' + String(body.wxTicket || '');
+  const t = kvGet(key);
+  if (!t || t.expires < Date.now()) return { ok: false, error: '微信登录已过期，请重试' };
+  const phone = String(body.phone || '').trim();
+  if (!smsPhoneOk(phone)) return { ok: false, error: '手机号格式不正确' };
+  const code = String(body.code || '').trim();
+  if (!/^\d{6}$/.test(code)) return { ok: false, error: '请输入6位短信验证码' };
+  const v = smsConsume(phone, 'bind', code);
+  if (!v.ok) return { ok: false, error: v.err };
+  let user = kvGet('user:' + phone);
+  const isNew = !user;
+  if (isNew) {
+    const nickname = String(body.nickname || '').trim() || t.nickname || ('微信用户' + phone.slice(-4));
+    user = smsOnlyUser(phone, nickname, body.avatar || t.avatar);
+    indexUser(phone);
+    secLog(phone, 'wx_register', '微信授权 + 本机号码验证，注册成功');
+  } else {
+    secLog(phone, 'wx_bind', '微信账号绑定到已有账号');
+  }
+  user.wxOpenid = t.openid;
+  if (t.unionid) user.wxUnionid = t.unionid;
+  kvSet('user:' + phone, user);
+  kvSet('wxopenid:' + t.openid, phone);
+  kvDel(key);
+  const token = makeToken();
+  kvSet('token:' + token, { phone, expires: Date.now() + TOKEN_TTL * 1000 });
+  return { ok: true, bound: true, isNew, token, user: publicUser(user) };
 }
 
 // ---------- 签名验签（公钥托管，私钥不出本机） ----------

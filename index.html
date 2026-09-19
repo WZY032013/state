@@ -51,7 +51,7 @@
         <form id="loginForm" class="auth-form active" autocomplete="off">
             <div class="field glass-field">
                 <span class="field-icon" data-icon="phone"></span>
-                <input type="tel" id="loginPhone" placeholder="手机号" maxlength="11" inputmode="numeric">
+                <input type="tel" id="loginPhone" placeholder="手机号" maxlength="11" inputmode="numeric" autocomplete="username webauthn">
             </div>
             <div class="field glass-field">
                 <span class="field-icon" data-icon="lock"></span>
@@ -102,9 +102,25 @@
                     </div>
                 </div>
             </div>
-            <p class="qr-status-text" id="qrStatusText">打开手机 Stating「我的 → 扫一扫」</p>
+            <p class="qr-status-text" id="qrStatusText">打开手机 Stating 「我的 → 扫一扫」</p>
             <p class="qr-status-sub" id="qrStatusSub">扫描二维码，安全登录网页版</p>
         </div>
+
+        <!-- 本机号码 / 微信 免密登录注册（登录/注册/扫码三种方式下方统一入口） -->
+        <div class="auth-oauth-divider"><span>免密登录 / 注册</span></div>
+        <div class="auth-oauth">
+            <button type="button" class="oauth-btn oauth-sms" id="smsLoginBtn">
+                <span class="oauth-ic"><span data-icon="phone"></span></span>
+                <span class="oauth-tx"><b>本机号码</b><small>验证码一键登录 · 自动注册</small></span>
+                <span class="oauth-go" data-icon="chevron"></span>
+            </button>
+            <button type="button" class="oauth-btn oauth-wx" id="wxLoginBtn">
+                <span class="oauth-ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.74-1.78 6.22.942 2.452 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-3.044-5.837-7.062-6.122zm-2.095 2.98c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/></svg></span>
+                <span class="oauth-tx"><b>微信</b><small>扫码授权 · 手机号绑定即用</small></span>
+                <span class="oauth-go" data-icon="chevron"></span>
+            </button>
+        </div>
+        <div class="auth-oauth-note">登录注册同一入口：未注册手机号通过验证后自动创建账号，无需设置密码</div>
 
         <div id="authError" class="auth-error"></div>
     </div>
@@ -214,6 +230,91 @@
         </div>
         <button type="button" class="btn-primary" id="dcAuthBtn">授权此设备</button>
         <div id="dcAuthError" class="auth-error"></div>
+        <p class="dc-bio-note" id="dcBioNote" hidden><span data-icon="key"></span> 本账号已开启生物识别：授权时必须通过本机面容 / 指纹验证</p>
+    </div>
+</div>
+
+<!-- ============ 本机号码（短信验证码）登录 / 注册 ============ -->
+<div id="smsModal" class="sec-overlay" hidden>
+    <div class="sec-card glass lg-flow-card">
+        <button type="button" class="sec-close" id="smsCloseBtn"><span data-icon="close"></span></button>
+        <div class="sec-badge lg-badge-sms"><span data-icon="phone"></span></div>
+        <h1>本机号码登录</h1>
+        <p class="sec-sub">短信验证码核验身份，支持自动读取<br>未注册的手机号验证后自动创建账号</p>
+
+        <div class="lg-flow" data-smsstep="phone">
+            <div class="field glass-field">
+                <span class="field-icon" data-icon="phone"></span>
+                <input type="tel" id="smsPhone" inputmode="numeric" maxlength="15" placeholder="请输入手机号" autocomplete="tel">
+            </div>
+            <button type="button" class="btn-primary lg-block-btn" id="smsSendBtn">获取验证码</button>
+            <div class="auth-error" id="smsErr"></div>
+            <div class="lg-devhint" id="smsDevHint" hidden></div>
+        </div>
+
+        <div class="lg-flow" data-smsstep="code" hidden>
+            <p class="lg-code-tip">验证码已发送至 <b id="smsPhoneShown"></b></p>
+            <div class="lg-otp" id="smsOtp"></div>
+            <button type="button" class="btn-primary lg-block-btn" id="smsVerifyBtn">验证并登录</button>
+            <button type="button" class="btn-ghost lg-block-btn" id="smsBackBtn">返回修改手机号</button>
+            <div class="lg-resend" id="smsResendWrap">重新发送（<span id="smsCd">60</span>s）</div>
+            <div class="auth-error" id="smsCodeErr"></div>
+        </div>
+
+        <div class="lg-flow" data-smsstep="profile" hidden>
+            <p class="lg-code-tip">验证通过，补全资料完成注册</p>
+            <div class="field glass-field">
+                <span class="field-icon" data-icon="user"></span>
+                <input type="text" id="smsNick" maxlength="16" placeholder="给自己起个昵称">
+            </div>
+            <div class="lg-avatar-row" id="smsAvatars"></div>
+            <button type="button" class="btn-primary lg-block-btn" id="smsRegBtn">完成注册并进入</button>
+            <div class="auth-error" id="smsRegErr"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ 微信登录 / 注册（扫码授权 + 手机号绑定） ============ -->
+<div id="wxModal" class="sec-overlay" hidden>
+    <div class="sec-card glass lg-flow-card">
+        <button type="button" class="sec-close" id="wxCloseBtn"><span data-icon="close"></span></button>
+        <div class="sec-badge lg-badge-wx"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.74-1.78 6.22.942 2.452 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-3.044-5.837-7.062-6.122zm-2.095 2.98c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/></svg></div>
+        <h1>微信登录 / 注册</h1>
+        <p class="sec-sub">微信授权后验证本机手机号<br>老用户直接绑定登录，新用户自动注册</p>
+
+        <div class="lg-flow" data-wxstep="qr">
+            <div class="wx-qr glass" id="wxQr"><div class="wx-qr-loading"><div class="loading-spinner"></div></div></div>
+            <div class="wx-state" id="wxState">正在生成微信登录二维码…</div>
+            <button type="button" class="btn-primary lg-block-btn" id="wxMockBtn" hidden>模拟微信中确认授权</button>
+            <button type="button" class="btn-primary lg-block-btn" id="wxOpenBtn" hidden>打开微信授权页</button>
+            <button type="button" class="btn-ghost lg-block-btn" id="wxCancelBtn">取消</button>
+            <div class="lg-devhint" id="wxHint"></div>
+        </div>
+
+        <div class="lg-flow" data-wxstep="bind" hidden>
+            <div class="wx-profile" id="wxProfileChip"><span class="wx-profile-ic">💬</span><span class="wx-profile-name">微信用户</span></div>
+            <div class="field glass-field">
+                <span class="field-icon" data-icon="phone"></span>
+                <input type="tel" id="wxBindPhone" inputmode="numeric" maxlength="15" placeholder="绑定本机手机号" autocomplete="tel">
+            </div>
+            <button type="button" class="btn-ghost lg-block-btn" id="wxBindSendBtn">发送验证码</button>
+            <div class="lg-otp" id="wxBindOtp"></div>
+            <button type="button" class="btn-primary lg-block-btn" id="wxBindConfirmBtn">验证并完成登录 / 注册</button>
+            <button type="button" class="btn-ghost lg-block-btn" id="wxBindBackBtn">返回扫码</button>
+            <div class="auth-error" id="wxBindErr"></div>
+            <div class="lg-devhint" id="wxBindDevHint" hidden></div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ 注册/登录后：本机生物识别引导 ============ -->
+<div id="bioOnboardModal" class="sec-overlay" hidden>
+    <div class="sec-card glass lg-flow-card bio-onboard-card">
+        <div class="bio-onboard-orb"><span data-icon="key"></span></div>
+        <h1>开启面容 / 触控登录</h1>
+        <p class="sec-sub">检测到本机支持系统生物识别（Face ID / 指纹 / Windows Hello）<br>开启后可一键免密登录；授权其他设备登录时，也将强制本机生物验证</p>
+        <button type="button" class="btn-primary lg-block-btn" id="bioEnableBtn">立即开启生物登录</button>
+        <button type="button" class="btn-ghost lg-block-btn" id="bioLaterBtn">稍后再说</button>
     </div>
 </div>
 

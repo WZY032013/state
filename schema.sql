@@ -6,8 +6,11 @@ CREATE TABLE IF NOT EXISTS users (
   passHash TEXT NOT NULL,
   passSalt TEXT NOT NULL,
   joinedGroups TEXT DEFAULT '[]',
-  createdAt INTEGER NOT NULL
+  createdAt INTEGER NOT NULL,
+  wx_openid TEXT DEFAULT '',
+  wx_unionid TEXT DEFAULT ''
 );
+CREATE INDEX IF NOT EXISTS idx_users_wxopenid ON users(wx_openid);
 
 CREATE TABLE IF NOT EXISTS groups (
   code TEXT PRIMARY KEY,
@@ -168,4 +171,39 @@ CREATE TABLE IF NOT EXISTS sec_rate (
   k TEXT PRIMARY KEY,
   c INTEGER DEFAULT 0,
   ws INTEGER DEFAULT 0
+);
+
+-- ============ 本机号码：短信验证码登录/注册 ============
+-- 验证码按 scene:phone 存储，5 分钟过期，最多错 5 次
+CREATE TABLE IF NOT EXISTS sms_codes (
+  k TEXT PRIMARY KEY,
+  phone TEXT NOT NULL,
+  scene TEXT NOT NULL,
+  code TEXT NOT NULL,
+  expires INTEGER NOT NULL,
+  attempts INTEGER DEFAULT 0
+);
+-- 新号码验证码核验后的一次性注册票（10 分钟）
+CREATE TABLE IF NOT EXISTS sms_tickets (
+  id TEXT PRIMARY KEY,
+  phone TEXT NOT NULL,
+  expires INTEGER NOT NULL
+);
+
+-- ============ 微信 OAuth2 登录/注册/绑定 ============
+-- 扫码授权态（5 分钟）；confirmed 时携带一次性 ticket
+CREATE TABLE IF NOT EXISTS wx_states (
+  state TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  ticket TEXT DEFAULT '',
+  expires INTEGER NOT NULL
+);
+-- 微信资料票据（10 分钟）；已绑定则换登录 token，未绑定走手机号验证
+CREATE TABLE IF NOT EXISTS wx_tickets (
+  ticket TEXT PRIMARY KEY,
+  openid TEXT NOT NULL,
+  unionid TEXT DEFAULT '',
+  nickname TEXT DEFAULT '',
+  avatar TEXT DEFAULT '',
+  expires INTEGER NOT NULL
 );

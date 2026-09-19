@@ -267,7 +267,7 @@ async function api(path, options = {}) {
             if (lsHit) return lsHit.data;
             throw new Error(data.error || '请求失败');
         }
-        if (!data.ok) throw new Error(data.error || '请求失败');
+        if (!data.ok) { const err0 = new Error(data.error || '请求失败'); err0.data = data; throw err0; }
 
         // 写入缓存
         if (method === 'GET') _apiMemCache.set(ckey, { ts: Date.now(), data });
@@ -1342,6 +1342,13 @@ function showMainOrQr() {
     const qrId = consumePendingQr();
     if (qrId) { openQrConfirmFlow(qrId); return; }
     showMain();
+    // 本次会话首次进入应用时，引导开启本机生物识别（内部自判平台可用性/是否已绑定）
+    try {
+        if (sessionStorage.getItem('lg_bio_seen') !== '1') {
+            sessionStorage.setItem('lg_bio_seen', '1');
+            maybeBioOnboardSoon();
+        }
+    } catch { maybeBioOnboardSoon(); }
 }
 async function confirmQrLogin() {
     if (!pendingQrId) return;
@@ -5690,6 +5697,11 @@ async function openSecurityCenter() {
     $('#dcAuthError').textContent = '';
     $('#dcAuthInput').value = '';
     renderPasskeyList();
+    // 有 Passkey 时提示：设备授权会强制本机生物验证
+    try {
+        const r = await api('/passkeys');
+        $('#dcBioNote').hidden = !(r.passkeys && r.passkeys.length);
+    } catch { $('#dcBioNote').hidden = true; }
 }
 async function deviceAuthorize() {
     const err = $('#dcAuthError');
@@ -5697,9 +5709,23 @@ async function deviceAuthorize() {
     const code = $('#dcAuthInput').value.trim();
     if (!code) { err.textContent = '请输入设备码'; return; }
     try {
-        await api('/devicecode/authorize', { method: 'POST', body: { userCode: code } });
-        showToast('已授权该设备登录');
+        // 第一步：服务端对已绑定 Passkey 的账号返回 needBio 挑战（原生设备联动）
+        let r;
+        try {
+            r = await api('/devicecode/authorize', { method: 'POST', body: { userCode: code } });
+        } catch (e) {
+            if (e.data && e.data.needBio) {
+                if (!waAvailable()) { err.textContent = '本设备浏览器不支持生物识别，请在已开启生物验证的设备上授权'; return; }
+                let cred;
+                try { cred = await waGet(e.data.publicKey); }
+                catch (ce) { err.textContent = ce && ce.name === 'NotAllowedError' ? '已取消生物验证' : '生物验证未完成'; return; }
+                r = await api('/devicecode/authorize', { method: 'POST',
+                    body: { userCode: code, bio: { challengeId: e.data.challengeId, ...cred } } });
+            } else { throw e; }
+        }
+        showToast(r.bioVerified ? '生物验证通过，已授权该设备' : '已授权该设备登录');
         $('#dcAuthInput').value = '';
+        if (navigator.vibrate) navigator.vibrate(10);
     } catch (e) {
         err.textContent = e.message || '授权失败';
     }
@@ -6015,6 +6041,426 @@ async function openSecLog() {
     }
 }
 
+/* ============================================================
+   本机号码（短信验证码 + WebOTP）/ 微信 OAuth2 登录注册
+   + 原生生物设备联动（platform passkey 引导 / 条件 UI / 设备码生物授权）
+   ============================================================ */
+
+// ---------- 6 位验证码输入：自动跳格 / 粘贴分发 / 退格回跳 ----------
+function buildOtp(boxId, onFull) {
+    const box = $(boxId);
+    box.innerHTML = '';
+    const inputs = [];
+    for (let i = 0; i < 6; i++) {
+        const inp = document.createElement('input');
+        inp.type = 'tel'; inp.inputMode = 'numeric'; inp.maxLength = 1;
+        inp.className = 'lg-otp-d glass';
+        if (i === 0) inp.autocomplete = 'one-time-code';
+        inp.addEventListener('input', () => {
+            inp.value = inp.value.replace(/\D/g, '').slice(-1);
+            if (inp.value && i < 5) inputs[i + 1].focus();
+            const code = inputs.map(x => x.value).join('');
+            if (code.length === 6 && onFull) onFull(code);
+        });
+        inp.addEventListener('keydown', e => {
+            if (e.key === 'Backspace' && !inp.value && i > 0) { inputs[i - 1].focus(); e.preventDefault(); }
+        });
+        inp.addEventListener('paste', e => {
+            e.preventDefault();
+            const txt = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+            if (!txt) return;
+            txt.split('').forEach((d, j) => { if (inputs[j]) inputs[j].value = d; });
+            const next = inputs[Math.min(txt.length, 5)];
+            if (next) next.focus();
+            if (txt.length === 6 && onFull) onFull(txt);
+        });
+        box.appendChild(inp);
+        inputs.push(inp);
+    }
+    return {
+        inputs,
+        value: () => inputs.map(x => x.value).join(''),
+        fill(code) {
+            String(code).replace(/\D/g, '').slice(0, 6).split('').forEach((d, j) => { if (inputs[j]) inputs[j].value = d; });
+            inputs[5].focus();
+        },
+        clear() { inputs.forEach(x => x.value = ''); inputs[0].focus(); },
+        focus() { setTimeout(() => inputs[0].focus(), 60); }
+    };
+}
+
+// ---------- WebOTP：Android Chrome 收到短信自动读取验证码（iOS/桌面静默降级手动输入） ----------
+let _webOtpAc = null;
+async function startWebOtpAutofill(onCode) {
+    stopWebOtpAutofill();
+    if (!('OTPCredential' in window) || !navigator.credentials || !navigator.credentials.get) return;
+    try {
+        _webOtpAc = new AbortController();
+        const c = await navigator.credentials.get({ signal: _webOtpAc.signal, otp: { transport: ['sms'] } });
+        const m = c && c.code && c.code.match(/\d{6}/);
+        if (m) onCode(m[0]);
+    } catch (e) { /* 用户取消 / 无短信，静默 */ }
+}
+function stopWebOtpAutofill() { if (_webOtpAc) { try { _webOtpAc.abort(); } catch {} _webOtpAc = null; } }
+
+// 登录成功统一收口
+function lgLoginSuccess(t, u) {
+    token = t;
+    localStorage.setItem('stating_token', token);
+    me = u;
+    stopWebOtpAutofill();
+    $('#smsModal').hidden = true;
+    $('#wxModal').hidden = true;
+    showMainOrQr();
+}
+
+// 倒计时按钮
+function lgCountdown(btn, secs, idleText) {
+    let n = secs;
+    btn.disabled = true;
+    btn.textContent = '重新发送（' + n + 's）';
+    const t = setInterval(() => {
+        n--;
+        if (n <= 0) { clearInterval(t); btn.disabled = false; btn.textContent = idleText; }
+        else btn.textContent = '重新发送（' + n + 's）';
+    }, 1000);
+    return t;
+}
+// 倒计时（div 文本版，结束后可点击重发）
+function bindResend(el, secs, onResend) {
+    if (!el) return null;
+    let n = secs;
+    el.classList.add('is-cd');
+    el.onclick = null;
+    const paint = () => { el.innerHTML = '重新发送（<b>' + n + '</b>s）'; };
+    paint();
+    const t = setInterval(() => {
+        n--;
+        if (n <= 0) {
+            clearInterval(t);
+            el.classList.remove('is-cd');
+            el.textContent = '重新发送验证码';
+            el.onclick = onResend;
+        } else paint();
+    }, 1000);
+    return t;
+}
+const LG_AVATARS = ['😀', '😎', '🦊', '🐱', '🐼', '🦁', '🐸', '👾'];
+function buildAvatarRow(containerId, cb) {
+    const box = $(containerId);
+    box.innerHTML = '';
+    let chosen = LG_AVATARS[0];
+    LG_AVATARS.forEach((a, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'lg-avatar' + (i === 0 ? ' selected' : '');
+        b.textContent = a;
+        b.onclick = () => {
+            box.querySelectorAll('.lg-avatar').forEach(x => x.classList.remove('selected'));
+            b.classList.add('selected');
+            chosen = a; cb(a);
+        };
+        box.appendChild(b);
+    });
+    cb(chosen);
+}
+
+// ---------- 本机号码（短信验证码）登录 / 注册 ----------
+let smsCtx = { phone: '', ticket: '', otp: null, avatar: LG_AVATARS[0], busy: false };
+function smsStep(name) {
+    document.querySelectorAll('#smsModal [data-smsstep]').forEach(el => { el.hidden = el.dataset.smsstep !== name; });
+}
+function openSmsModal() {
+    stopWebOtpAutofill();
+    $('#smsModal').hidden = false;
+    smsCtx = { phone: '', ticket: '', otp: null, avatar: LG_AVATARS[0], busy: false };
+    $('#smsPhone').value = '';
+    $('#smsNick').value = '';
+    $('#smsErr').textContent = '';
+    $('#smsCodeErr').textContent = '';
+    $('#smsRegErr').textContent = '';
+    $('#smsDevHint').hidden = true;
+    smsStep('phone');
+    setTimeout(() => $('#smsPhone').focus(), 80);
+}
+async function smsSendCode(scene, phone, errEl, hintEl) {
+    try {
+        const r = await api('/sms/send', { method: 'POST', body: { phone, scene } });
+        if (hintEl && r.devCode) {
+            hintEl.hidden = false;
+            hintEl.textContent = '开发模式：固定验证码 ' + r.devCode + '（生产环境由短信下发，不回传）';
+        }
+        return true;
+    } catch (e) {
+        if (errEl) errEl.textContent = e.message || '验证码发送失败';
+        return false;
+    }
+}
+async function smsDoSend() {
+    const err = $('#smsErr');
+    err.textContent = '';
+    const phone = $('#smsPhone').value.trim();
+    if (!/^\d{6,15}$/.test(phone)) { err.textContent = '请输入正确的手机号'; return; }
+    const btn = $('#smsSendBtn');
+    btn.disabled = true; btn.textContent = '发送中…';
+    const ok = await smsSendCode('login', phone, err, $('#smsDevHint'));
+    if (!ok) { btn.disabled = false; btn.textContent = '获取验证码'; return; }
+    smsCtx.phone = phone;
+    $('#smsPhoneShown').textContent = phone;
+    smsStep('code');
+    smsCtx.otp = buildOtp('#smsOtp', smsDoVerify);
+    smsCtx.otp.focus();
+    bindResend($('#smsResendWrap'), 60, smsResend);
+    startWebOtpAutofill(code => { if (smsCtx.otp) { smsCtx.otp.fill(code); smsDoVerify(code); } });
+}
+async function smsResend() {
+    const err = $('#smsCodeErr');
+    err.textContent = '';
+    if (!smsCtx.phone) return;
+    const ok = await smsSendCode('login', smsCtx.phone, err, $('#smsDevHint'));
+    if (!ok) return;
+    if (smsCtx.otp) smsCtx.otp.clear();
+    bindResend($('#smsResendWrap'), 60, smsResend);
+    startWebOtpAutofill(code => { if (smsCtx.otp) { smsCtx.otp.fill(code); smsDoVerify(code); } });
+    showToast('验证码已重新发送');
+}
+async function smsDoVerify(codeArg) {
+    if (smsCtx.busy) return;
+    const code = codeArg || (smsCtx.otp && smsCtx.otp.value()) || '';
+    const err = $('#smsCodeErr');
+    err.textContent = '';
+    if (!/^\d{6}$/.test(code)) { err.textContent = '请输入6位验证码'; return; }
+    smsCtx.busy = true;
+    try {
+        const r = await api('/sms/login', { method: 'POST', body: { phone: smsCtx.phone, code } });
+        if (r.needRegister) {
+            smsCtx.ticket = r.smsTicket;
+            stopWebOtpAutofill();
+            smsStep('profile');
+            buildAvatarRow('#smsAvatars', a => { smsCtx.avatar = a; });
+            setTimeout(() => $('#smsNick').focus(), 80);
+        } else {
+            showToast('本机号码登录成功');
+            lgLoginSuccess(r.token, r.user);
+        }
+    } catch (e) {
+        err.textContent = e.message || '验证失败';
+        if (smsCtx.otp && /验证码不正确|次数过多/.test(e.message)) smsCtx.otp.clear();
+    } finally { smsCtx.busy = false; }
+}
+async function smsDoRegister() {
+    const err = $('#smsRegErr');
+    err.textContent = '';
+    const nickname = $('#smsNick').value.trim();
+    if (!nickname) { err.textContent = '请填写昵称'; return; }
+    try {
+        const r = await api('/sms/register', { method: 'POST',
+            body: { smsTicket: smsCtx.ticket, nickname, avatar: smsCtx.avatar } });
+        showToast('注册成功，已自动登录');
+        lgLoginSuccess(r.token, r.user);
+        maybeBioOnboardSoon();
+    } catch (e) { err.textContent = e.message || '注册失败'; }
+}
+
+// ---------- 微信 OAuth2 登录 / 注册 / 绑定 ----------
+let wxCtx = { state: '', ticket: '', mock: false, otp: null, pollTimer: null, profile: null };
+function wxStep(name) {
+    document.querySelectorAll('#wxModal [data-wxstep]').forEach(el => { el.hidden = el.dataset.wxstep !== name; });
+}
+function wxStopPoll() { if (wxCtx.pollTimer) { clearTimeout(wxCtx.pollTimer); wxCtx.pollTimer = null; } }
+async function openWxModal(ticket) {
+    $('#wxModal').hidden = false;
+    $('#wxBindErr').textContent = '';
+    $('#wxHint').textContent = '';
+    if (ticket) { await wxHandleTicket(ticket); return; }
+    wxStep('qr');
+    $('#wxQr').innerHTML = '<div class="wx-qr-loading"><div class="loading-spinner"></div></div>';
+    $('#wxState').textContent = '正在生成微信登录二维码…';
+    $('#wxMockBtn').hidden = true;
+    $('#wxOpenBtn').hidden = true;
+    try {
+        const r = await api('/wechat/start', { method: 'POST', body: { mode: 'mp' } });
+        wxCtx.state = r.state; wxCtx.mock = !!r.mock;
+        if (r.mock) {
+            await loadLib(QRLIB, 'qrcode').catch(() => {});
+            try {
+                const qr = qrcode(0, 'M');
+                qr.addData('stating:wxlgin:' + r.state);
+                qr.make();
+                $('#wxQr').innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true });
+            } catch { $('#wxQr').textContent = '二维码生成失败'; }
+            $('#wxState').textContent = '开发模拟：请点击下方按钮模拟微信扫码确认';
+            $('#wxMockBtn').hidden = false;
+            $('#wxHint').textContent = r.hint || '';
+            wxPoll();
+        } else {
+            $('#wxQr').innerHTML = '<div class="wx-qr-real"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.74-1.78 6.22.942 2.452 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-3.044-5.837-7.062-6.122zm-2.095 2.98c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/></svg></div>';
+            $('#wxState').textContent = '点击按钮前往微信完成授权';
+            const ob = $('#wxOpenBtn');
+            ob.hidden = false;
+            ob.textContent = '前往微信授权页';
+            ob.onclick = () => { location.href = r.authorizeUrl; };
+        }
+    } catch (e) {
+        $('#wxState').textContent = e.message || '初始化失败，请重试';
+    }
+}
+async function wxPoll() {
+    wxStopPoll();
+    const tick = async () => {
+        if ($('#wxModal').hidden) return;
+        try {
+            const s = await api('/wechat/status?state=' + encodeURIComponent(wxCtx.state) + '&_t=' + Date.now());
+            if (s.status === 'confirmed') { await wxHandleTicket(s.ticket); return; }
+            if (s.status === 'expired') { $('#wxState').textContent = '二维码已过期，请关闭后重试'; return; }
+        } catch {}
+        wxCtx.pollTimer = setTimeout(tick, 1500);
+    };
+    wxCtx.pollTimer = setTimeout(tick, 1200);
+}
+async function wxMockConfirm() {
+    const btn = $('#wxMockBtn');
+    btn.disabled = true; btn.textContent = '模拟确认中…';
+    try {
+        await api('/wechat/mockscan', { method: 'POST', body: { state: wxCtx.state, confirm: true } });
+        $('#wxState').textContent = '已在微信中确认，正在登录…';
+    } catch (e) {
+        $('#wxState').textContent = e.message || '模拟确认失败';
+        btn.disabled = false; btn.textContent = '模拟微信中确认授权';
+    }
+}
+async function wxHandleTicket(ticket) {
+    wxStopPoll();
+    try {
+        const ex = await api('/wechat/exchange', { method: 'POST', body: { ticket } });
+        if (ex.bound) { showToast('微信登录成功'); lgLoginSuccess(ex.token, ex.user); return; }
+        // 未绑定 → 手机号验证（老用户绑定登录 / 新用户自动注册）
+        wxCtx.ticket = ex.wxTicket;
+        wxCtx.profile = ex.profile;
+        $('#wxProfileChip .wx-profile-ic').textContent = (ex.profile && ex.profile.avatar) || '💬';
+        $('#wxProfileChip .wx-profile-name').textContent = (ex.profile && ex.profile.nickname) || '微信用户';
+        $('#wxBindPhone').value = '';
+        $('#wxBindErr').textContent = '';
+        $('#wxBindDevHint').hidden = true;
+        wxStep('bind');
+        wxCtx.otp = buildOtp('#wxBindOtp', wxBindConfirm);
+        setTimeout(() => $('#wxBindPhone').focus(), 80);
+    } catch (e) {
+        $('#wxState').textContent = e.message || '微信登录失败，请重试';
+        wxStep('qr');
+    }
+}
+async function wxBindSend() {
+    const err = $('#wxBindErr');
+    err.textContent = '';
+    const phone = $('#wxBindPhone').value.trim();
+    if (!/^\d{6,15}$/.test(phone)) { err.textContent = '请输入正确的手机号'; return; }
+    const btn = $('#wxBindSendBtn');
+    btn.disabled = true; btn.textContent = '发送中…';
+    const ok = await smsSendCode('bind', phone, err, $('#wxBindDevHint'));
+    if (!ok) { btn.disabled = false; btn.textContent = '发送验证码'; return; }
+    lgCountdown(btn, 60, '重新发送验证码');
+    wxCtx.otp.focus();
+    startWebOtpAutofill(code => { if (wxCtx.otp) { wxCtx.otp.fill(code); wxBindConfirm(code); } });
+}
+async function wxBindConfirm(codeArg) {
+    const err = $('#wxBindErr');
+    err.textContent = '';
+    const phone = $('#wxBindPhone').value.trim();
+    const code = codeArg || (wxCtx.otp && wxCtx.otp.value()) || '';
+    if (!/^\d{6,15}$/.test(phone)) { err.textContent = '请输入正确的手机号'; return; }
+    if (!/^\d{6}$/.test(code)) { err.textContent = '请输入6位验证码'; return; }
+    try {
+        const r = await api('/wechat/bind', { method: 'POST',
+            body: { wxTicket: wxCtx.ticket, phone, code, nickname: (wxCtx.profile && wxCtx.profile.nickname) || '', avatar: (wxCtx.profile && wxCtx.profile.avatar) || '' } });
+        showToast(r.isNew ? '注册成功，微信与本机号码已绑定' : '绑定成功，已登录');
+        lgLoginSuccess(r.token, r.user);
+        maybeBioOnboardSoon();
+    } catch (e) {
+        err.textContent = e.message || '验证失败';
+        if (wxCtx.otp && /验证码不正确|次数过多/.test(e.message)) wxCtx.otp.clear();
+    }
+}
+// 微信回跳：/#wxticket=xxx
+async function checkWxHash() {
+    const m = location.hash.match(/wxticket=([a-zA-Z0-9]+)/);
+    if (m) {
+        try { history.replaceState(null, '', location.pathname + location.search); } catch {}
+        await openWxModal(m[1]);
+    }
+}
+
+// ---------- 原生生物识别：注册/登录后的 platform passkey 引导 + 条件 UI ----------
+async function platformBioAvailable() {
+    try { return !!(window.PublicKeyCredential && (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())); } catch { return false; }
+}
+let _bioOnboardTimer = null;
+function maybeBioOnboardSoon() {
+    if (_bioOnboardTimer) clearTimeout(_bioOnboardTimer);
+    _bioOnboardTimer = setTimeout(maybeBioOnboard, 1200);
+}
+async function maybeBioOnboard() {
+    if (!me || !(await platformBioAvailable())) return;
+    let hasPlatform = false;
+    try {
+        const r = await api('/passkeys');
+        hasPlatform = (r.passkeys || []).some(p => String(p.device || '').indexOf('本机') !== -1);
+    } catch { return; }
+    if (hasPlatform) return;
+    let skip = false;
+    try { skip = localStorage.getItem('bio_onboard_later_' + me.phone) === '1'; } catch {}
+    if (skip) return;
+    $('#bioOnboardModal').hidden = false;
+}
+async function enablePlatformBio() {
+    const btn = $('#bioEnableBtn');
+    btn.disabled = true; btn.textContent = '正在唤起系统生物识别…';
+    try {
+        const o = await api('/passkey/register/options', { method: 'POST', body: { attachment: 'platform' } });
+        const cred = await waRegister(o.publicKey);
+        await api('/passkey/register', { method: 'POST', body: { challengeId: o.challengeId, ...cred } });
+        $('#bioOnboardModal').hidden = true;
+        showToast('已开启本机面容 / 指纹登录');
+        try { refreshSecurityBrief(); } catch {}
+    } catch (e) {
+        showToast(e && e.name === 'NotAllowedError' ? '已取消，可稍后在安全中心开启' : (e.message || '开启失败'));
+    } finally {
+        btn.disabled = false; btn.textContent = '立即开启生物登录';
+    }
+}
+// 条件 UI（Conditional Mediation）：聚焦手机号输入框时，浏览器自动填充栏直接提供 Passkey
+let _condAc = null;
+async function startConditionalPasskey() {
+    if (!waAvailable() || !window.PublicKeyCredential || !PublicKeyCredential.isConditionalMediationAvailable) return;
+    let supported = false;
+    try { supported = await PublicKeyCredential.isConditionalMediationAvailable(); } catch {}
+    if (!supported) return;
+    try {
+        const o = await api('/passkey/options', { method: 'POST', body: { mode: 'login' } });
+        _condAc = new AbortController();
+        const cred = await navigator.credentials.get({
+            signal: _condAc.signal,
+            publicKey: {
+                challenge: SB64.dec(o.publicKey.challenge), rpId: o.publicKey.rpId,
+                timeout: o.publicKey.timeout, userVerification: o.publicKey.userVerification || 'preferred',
+                allowCredentials: []
+            }
+        });
+        const out = { id: cred.id, response: {
+            clientDataJSON: SB64.enc(cred.response.clientDataJSON),
+            authenticatorData: SB64.enc(cred.response.authenticatorData),
+            signature: SB64.enc(cred.response.signature),
+            userHandle: cred.response.userHandle ? SB64.enc(cred.response.userHandle) : ''
+        } };
+        const r = await api('/passkey/verify', { method: 'POST', body: { mode: 'login', challengeId: o.challengeId, ...out } });
+        token = r.token;
+        localStorage.setItem('stating_token', token);
+        me = r.user;
+        showMainOrQr();
+        showToast('Passkey 登录成功');
+    } catch (e) { /* 用户未选择自动填充凭据，静默 */ }
+}
+
 // ---- 统一初始化 ----
 function initSecurityUI() {
     if (waAvailable()) $('#passkeyLoginBtn').hidden = false;
@@ -6045,6 +6491,29 @@ function initSecurityUI() {
     $('#signKeyBackupBtn').onclick = signKeyBackup;
     $('#signKeyImportBtn').onclick = () => $('#signKeyFile').click();
     $('#signKeyFile').addEventListener('change', signKeyImport);
+    // ---- 本机号码 / 微信 / 生物引导 ----
+    $('#smsLoginBtn').onclick = openSmsModal;
+    $('#smsCloseBtn').onclick = () => { $('#smsModal').hidden = true; stopWebOtpAutofill(); };
+    $('#smsSendBtn').onclick = smsDoSend;
+    $('#smsVerifyBtn').onclick = () => smsDoVerify();
+    $('#smsBackBtn').onclick = () => { stopWebOtpAutofill(); smsStep('phone'); };
+    $('#smsRegBtn').onclick = smsDoRegister;
+    $('#smsPhone').addEventListener('keydown', e => { if (e.key === 'Enter') smsDoSend(); });
+    $('#wxLoginBtn').onclick = () => openWxModal('');
+    $('#wxCloseBtn').onclick = () => { $('#wxModal').hidden = true; wxStopPoll(); stopWebOtpAutofill(); };
+    $('#wxCancelBtn').onclick = () => { $('#wxModal').hidden = true; wxStopPoll(); };
+    $('#wxMockBtn').onclick = wxMockConfirm;
+    $('#wxBindSendBtn').onclick = wxBindSend;
+    $('#wxBindConfirmBtn').onclick = () => wxBindConfirm();
+    $('#wxBindBackBtn').onclick = () => { stopWebOtpAutofill(); openWxModal(''); };
+    $('#bioEnableBtn').onclick = enablePlatformBio;
+    $('#bioLaterBtn').onclick = () => {
+        $('#bioOnboardModal').hidden = true;
+        try { if (me) localStorage.setItem('bio_onboard_later_' + me.phone, '1'); } catch {}
+    };
+    // 微信回跳票据 + 登录页 Passkey 条件 UI（自动填充栏）
+    checkWxHash();
+    startConditionalPasskey();
     updateKeyStatus();
 }
 })();
