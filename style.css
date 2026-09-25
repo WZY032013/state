@@ -1439,21 +1439,19 @@ body.dark .lg-hover > .lg-glint { opacity: .8; }
     padding: 20px;
     display: flex; flex-direction: column;
     gap: 3px;
-    scroll-behavior: smooth;
+    /* 不使用全局 scroll-behavior:smooth：进入房间/新消息需要“瞬间就位”，
+       只有用户主动触发的跳转才显式 smooth，避免打开聊天时长距离滚动扫动 */
     position: relative;
     z-index: 3;
-    /* 性能：contain:layout 告诉浏览器子元素不影响外部布局，减少重排范围；
-       滚动时 offscreen 消息的样式/布局计算成本由 content-visibility:auto 自动跳过 */
+    /* 性能：contain 把子元素布局/绘制限制在容器内，缩小重排重绘范围；
+       独立合成层让滚动只合成这一层，玻璃背景不必重绘。
+       不在消息行上使用 content-visibility:auto：它会让屏外行使用占位高度，
+       导致进入聊天时无法滚到底部（停在最早消息），且手动滚动时占位高度
+       反复撑开造成滚动条跳动，损害原生顺滑感。 */
     contain: layout paint style;
-    /* 独立合成层：滚动时只合成这一层，玻璃层不必重绘 */
     transform: translateZ(0);
-    will-change: scroll-position;
-}
-/* 屏外消息跳过布局计算（屏外 500px 内仍预计算以保证滚动顺畅） */
-.messages > .msg-row,
-.messages > .day-sep {
-    content-visibility: auto;
-    contain-intrinsic-height: auto 24px 120px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 }
 .day-sep { text-align: center; margin: 14px 0 10px; }
 .day-sep span {
@@ -1571,21 +1569,24 @@ body.dark .lg-hover > .lg-glint { opacity: .8; }
     overflow: hidden;
 }
 .msg-bubble.theirs {
-    background: linear-gradient(180deg, rgba(255,255,255,.88), var(--bubble-in));
+    /* iMessage 灰：接近系统 #E9E9EB，顶部略亮，柔和、不发脏 */
+    background: linear-gradient(180deg, rgba(255,255,255,.96), #E9E9EB);
     color: var(--bubble-in-ink);
     border-bottom-left-radius: 8px;
-    box-shadow: 0 1px 2px rgba(31,45,80,.06), 0 1px 0 rgba(255,255,255,.6) inset;
+    box-shadow: 0 1px 2px rgba(31,45,80,.05), 0 1px 0 rgba(255,255,255,.7) inset;
 }
 .msg-bubble.mine {
-    background: var(--primary-grad);
+    /* iMessage 蓝：干净的纵向渐变（上略亮、下略深），取代偏暗的对角渐变 */
+    background: linear-gradient(180deg, #2BA6FF 0%, #0784F6 100%);
     color: #fff;
     border-bottom-right-radius: 8px;
-    box-shadow: 0 3px 14px rgba(0,0,0,.14), 0 1px 0 rgba(255,255,255,.4) inset, 0 -1px 0 rgba(0,0,0,.08) inset;
+    box-shadow: 0 2px 9px rgba(11, 110, 220, .24), 0 1px 0 rgba(255,255,255,.32) inset;
 }
 .msg-bubble.mine::before {
     content: "";
     position: absolute; top: 0; left: 0; right: 0; height: 52%;
-    background: linear-gradient(180deg, rgba(255,255,255,.3), transparent);
+    /* 顶部柔和高光，强度克制，避免“塑料感” */
+    background: linear-gradient(180deg, rgba(255,255,255,.22), transparent);
     pointer-events: none;
 }
 .msg-bubble .msg-meta {
@@ -4834,6 +4835,7 @@ body.dark .auth-more-btn:hover { background: rgba(72,74,92,.6); }
 .oauth-ic span[data-icon] svg { width: 100%; height: 100%; }
 .oauth-ic svg { width: 22px; height: 22px; }
 .oauth-sms .oauth-ic { background: linear-gradient(145deg, #4f9cff, #3a6ff0); }
+.oauth-sim .oauth-ic { background: linear-gradient(145deg, #11998e, #38ef7d); color: #fff; }
 .oauth-wx .oauth-ic { background: linear-gradient(145deg, #1ed07a, #07a352); }
 .oauth-tx { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .oauth-tx b { font-size: 14.5px; font-weight: 700; letter-spacing: .01em; }
@@ -4977,6 +4979,337 @@ body.dark .oauth-tx small, body.dark .auth-oauth-note { color: rgba(180,190,215,
 body.dark .lg-otp-d { background: linear-gradient(160deg, rgba(52,58,86,.6), rgba(34,39,62,.5)); border-color: rgba(255,255,255,.16); color: #f2f4fa; }
 body.dark .lg-avatar { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); }
 body.dark .wx-state, body.dark .lg-code-tip { color: rgba(190,198,222,.75); }
+
+/* ============ 批次1：消息模式指示条 ============ */
+.composer-mode-bar {
+    display: flex; align-items: center; gap: 8px;
+    margin: 0 12px 8px; padding: 8px 12px; border-radius: 14px;
+    background: linear-gradient(150deg, rgba(255,255,255,.55), rgba(240,244,255,.4));
+    border: 1px solid rgba(255,255,255,.6);
+    box-shadow: 0 4px 14px rgba(80,110,200,.12), inset 0 1px 0 rgba(255,255,255,.6);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    font-size: 13px; color: #2a3150;
+    animation: lgSlideUp .3s var(--spring, cubic-bezier(.22,1,.36,1));
+}
+.cmb-icon { font-size: 16px; }
+.cmb-text { flex: 1; }
+.cmb-cancel {
+    width: 22px; height: 22px; border-radius: 50%; border: none;
+    background: rgba(255,255,255,.5); color: #5a6380; font-size: 16px; line-height: 1;
+    cursor: pointer; transition: transform .2s var(--spring, ease);
+}
+.cmb-cancel:hover { transform: rotate(90deg) scale(1.1); }
+
+/* 阅后即焚 / 胶囊 选择器 */
+.ephemeral-picker, .capsule-picker {
+    position: absolute; bottom: 72px; left: 12px; z-index: 60;
+    padding: 14px; border-radius: 18px;
+    background: linear-gradient(150deg, rgba(255,255,255,.65), rgba(235,240,255,.5));
+    border: 1px solid rgba(255,255,255,.7);
+    box-shadow: 0 10px 30px rgba(60,90,180,.18), inset 0 1px 0 rgba(255,255,255,.7);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+    animation: lgSlideUp .25s var(--spring, cubic-bezier(.22,1,.36,1));
+}
+.ep-title, .cp-title { font-size: 12px; color: #6b7390; margin-bottom: 10px; font-weight: 600; }
+.ep-options { display: flex; gap: 8px; }
+.ep-options button, .cp-quick button {
+    padding: 7px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.6);
+    background: rgba(255,255,255,.4); color: #3a4266; font-size: 13px;
+    cursor: pointer; transition: all .2s var(--spring, ease);
+}
+.ep-options button:hover, .cp-quick button:hover {
+    background: rgba(120,150,255,.22); transform: translateY(-1px);
+}
+.cp-time {
+    width: 100%; padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,.6);
+    background: rgba(255,255,255,.5); color: #2a3150; font-size: 14px; margin-bottom: 10px;
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.cp-quick { display: flex; gap: 8px; margin-bottom: 10px; }
+.cp-confirm {
+    width: 100%; padding: 10px; border-radius: 14px; border: none;
+    background: linear-gradient(135deg, #6a8cff, #8a6dff); color: #fff; font-weight: 600;
+    cursor: pointer; transition: transform .2s var(--spring, ease);
+}
+.cp-confirm:hover { transform: translateY(-1px); }
+
+/* ============ 定时胶囊（冰封玻璃球） ============ */
+.capsule-locked {
+    background: radial-gradient(circle at 50% 40%, rgba(180,220,255,.35), rgba(120,160,230,.18)) !important;
+    border: 1px solid rgba(180,210,255,.5) !important;
+}
+.capsule-orb {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 8px 14px;
+}
+.capsule-orb-inner {
+    width: 56px; height: 56px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 28px;
+    background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.55), rgba(150,190,240,.3) 60%, rgba(90,140,210,.25));
+    border: 1px solid rgba(255,255,255,.5);
+    box-shadow: 0 6px 18px rgba(80,130,210,.3), inset 0 2px 6px rgba(255,255,255,.6), inset 0 -4px 10px rgba(60,100,180,.2);
+    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    animation: capsuleFloat 3s ease-in-out infinite;
+}
+.capsule-unlock-time { font-size: 11px; color: #5a6a90; }
+@keyframes capsuleFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+/* ============ 阅后即焚 ============ */
+.ephemeral-msg {
+    box-shadow: 0 2px 10px rgba(255,120,60,.15), inset 0 0 0 1px rgba(255,140,80,.25);
+}
+.ephemeral-tag {
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: 11px; color: #ff6a3d; font-weight: 600;
+}
+.ep-cd { font-variant-numeric: tabular-nums; }
+
+/* ============ 融化动画 N2 ============ */
+.msg-row.melting {
+    animation: msgMelt .6s cubic-bezier(.4,0,.2,1) forwards;
+    pointer-events: none;
+}
+.msg-row.melting .msg-bubble {
+    animation: bubbleMelt .6s cubic-bezier(.4,0,.2,1) forwards;
+}
+@keyframes msgMelt {
+    0%   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    40%  { opacity: .8; transform: translateY(4px) scale(.97); filter: blur(1px); }
+    100% { opacity: 0; transform: translateY(24px) scale(.8); filter: blur(8px); }
+}
+@keyframes bubbleMelt {
+    0%   { border-radius: 16px; }
+    50%  { border-radius: 24px 24px 30px 30px / 20px 20px 40px 40px; box-shadow: 0 8px 24px rgba(100,140,255,.3); }
+    100% { border-radius: 40px; opacity: 0; }
+}
+
+/* ============ 多选模式 P4 ============ */
+.multi-select-active .msg-row { cursor: pointer; }
+.multi-select-active .msg-row .msg-bubble { transition: transform .2s var(--spring, ease), box-shadow .2s; }
+.msg-row.selected .msg-bubble {
+    box-shadow: 0 0 0 2px #6a8cff, 0 4px 14px rgba(106,140,255,.35) !important;
+    transform: scale(.98);
+}
+.msg-row.selected::before {
+    content: '✓'; position: absolute; top: 6px; left: 6px; z-index: 5;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: linear-gradient(135deg, #6a8cff, #8a6dff); color: #fff;
+    font-size: 12px; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(106,140,255,.4);
+}
+.multi-select-bar {
+    position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; border-radius: 18px; z-index: 80;
+    background: linear-gradient(150deg, rgba(255,255,255,.7), rgba(235,240,255,.55));
+    border: 1px solid rgba(255,255,255,.7);
+    box-shadow: 0 12px 36px rgba(60,90,180,.22), inset 0 1px 0 rgba(255,255,255,.7);
+    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+    animation: lgSlideUp .3s var(--spring, cubic-bezier(.22,1,.36,1));
+}
+.msb-count { font-size: 13px; font-weight: 600; color: #2a3150; min-width: 70px; }
+.msb-actions { display: flex; gap: 6px; }
+.msb-btn {
+    display: flex; align-items: center; gap: 4px;
+    padding: 7px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.6);
+    background: rgba(255,255,255,.45); color: #3a4266; font-size: 13px;
+    cursor: pointer; transition: all .2s var(--spring, ease);
+}
+.msb-btn:hover { background: rgba(120,150,255,.2); transform: translateY(-1px); }
+.msb-btn.msb-danger { color: #ff3b30; }
+.msb-btn.msb-danger:hover { background: rgba(255,59,48,.12); }
+.msb-cancel {
+    padding: 7px 14px; border-radius: 12px; border: none;
+    background: linear-gradient(135deg, #6a8cff, #8a6dff); color: #fff; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: transform .2s var(--spring, ease);
+}
+.msb-cancel:hover { transform: translateY(-1px); }
+
+/* ============ 文字动效 Q6 ============ */
+.text-effect-layer {
+    position: fixed; inset: 0; z-index: 200; pointer-events: none; overflow: hidden;
+}
+.te-particle {
+    position: absolute; top: -60px; opacity: 0;
+    animation: teFall 3s cubic-bezier(.4,0,.2,1) forwards;
+    text-shadow: 0 2px 10px rgba(0,0,0,.15);
+}
+@keyframes teFall {
+    0%   { opacity: 0; transform: translateY(-40px) rotate(0deg) scale(.5); }
+    15%  { opacity: 1; transform: translateY(20px) rotate(15deg) scale(1.1); }
+    100% { opacity: 0; transform: translateY(110vh) rotate(360deg) scale(.7); }
+}
+
+@keyframes lgSlideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 深色适配 */
+body.dark .composer-mode-bar {
+    background: linear-gradient(150deg, rgba(46,52,78,.6), rgba(30,35,56,.5));
+    border-color: rgba(255,255,255,.14); color: #e4e8f5;
+}
+body.dark .ephemeral-picker, body.dark .capsule-picker {
+    background: linear-gradient(150deg, rgba(46,52,78,.7), rgba(30,35,56,.6));
+    border-color: rgba(255,255,255,.16);
+}
+body.dark .ep-title, body.dark .cp-title { color: rgba(180,190,215,.7); }
+body.dark .ep-options button, body.dark .cp-quick button {
+    background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); color: #e4e8f5;
+}
+body.dark .cp-time { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); color: #f2f4fa; }
+body.dark .multi-select-bar {
+    background: linear-gradient(150deg, rgba(46,52,78,.75), rgba(30,35,56,.65));
+    border-color: rgba(255,255,255,.16);
+}
+body.dark .msb-count, body.dark .msb-btn { color: #e4e8f5; }
+body.dark .msb-btn { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); }
+body.dark .msg-row.selected .msg-bubble { box-shadow: 0 0 0 2px #7b9bff, 0 4px 14px rgba(123,155,255,.4) !important; }
+
+/* 移动端适配 */
+@media (max-width: 480px) {
+    .multi-select-bar { width: calc(100% - 24px); flex-wrap: wrap; gap: 8px; }
+    .msb-count { min-width: auto; }
+    .ephemeral-picker, .capsule-picker { left: 8px; right: 8px; }
+}
+/* 减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+    .capsule-orb-inner, .te-particle, .msg-row.melting, .msg-row.melting .msg-bubble { animation: none !important; }
+}
+
+/* ============ 批次2：悄悄话 / 生物签名 ============ */
+.whisper-locked {
+    background: linear-gradient(135deg, rgba(120,100,200,.18), rgba(80,60,160,.12)) !important;
+    border: 1px dashed rgba(140,120,220,.5) !important;
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    min-width: 180px;
+}
+.whisper-lock-icon { font-size: 24px; }
+.whisper-lock-text { font-size: 13px; color: #6b5a9e; font-weight: 600; line-height: 1.4; }
+.whisper-lock-text span { font-size: 11px; font-weight: 400; opacity: .7; }
+.whisper-revealed { animation: whisperReveal .4s ease; }
+.whisper-content { font-size: 15px; }
+.whisper-hint { font-size: 11px; color: #ff6a3d; margin-top: 4px; }
+@keyframes whisperReveal {
+    from { transform: scale(.9); opacity: .5; }
+    to { transform: scale(1); opacity: 1; }
+}
+.whisper-self { position: relative; }
+.whisper-self::before { content: '🔒'; position: absolute; top: -6px; right: -6px; font-size: 12px; }
+
+.bio-signed-tag {
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: 11px; color: #34c759; font-weight: 600;
+}
+body.dark .whisper-locked { background: linear-gradient(135deg, rgba(120,100,200,.28), rgba(80,60,160,.18)) !important; border-color: rgba(160,140,240,.4) !important; }
+body.dark .whisper-lock-text { color: #b8a8e8; }
+
+/* ============ 批次3：语气提醒 / 翻译 / 表情包 ============ */
+.composer-input.tone-warn {
+    box-shadow: 0 0 0 2px rgba(255,159,10,.5), 0 0 16px rgba(255,159,10,.25);
+    transition: box-shadow .3s ease;
+}
+.msg-translation {
+    margin-top: 6px; padding: 6px 10px; border-radius: 10px;
+    background: rgba(120,150,255,.12); border-left: 3px solid #6a8cff;
+    font-size: 13px; color: #3a4266; line-height: 1.5;
+}
+.mt-label {
+    display: inline-block; padding: 1px 6px; border-radius: 6px;
+    background: linear-gradient(135deg, #6a8cff, #8a6dff); color: #fff;
+    font-size: 10px; font-weight: 600; margin-right: 6px; vertical-align: middle;
+}
+body.dark .msg-translation { color: #c8d0ea; background: rgba(120,150,255,.1); }
+
+/* 自定义表情包 */
+.custom-stickers { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; align-items: center; }
+.cs-title { width: 100%; font-size: 11px; color: #8a92b0; font-weight: 600; margin-bottom: 4px; }
+.cs-item {
+    width: 52px; height: 52px; border-radius: 14px; object-fit: cover; cursor: pointer;
+    border: 1px solid rgba(255,255,255,.6);
+    box-shadow: 0 4px 12px rgba(100,130,220,.2);
+    transition: transform .2s var(--spring, ease);
+}
+.cs-item:hover { transform: scale(1.1) rotate(-3deg); }
+.cs-add {
+    width: 52px; height: 52px; border-radius: 14px; border: 2px dashed rgba(120,150,255,.5);
+    background: rgba(120,150,255,.08); color: #6a8cff; font-size: 24px; cursor: pointer;
+    transition: all .2s var(--spring, ease);
+}
+.cs-add:hover { background: rgba(120,150,255,.18); transform: scale(1.05); }
+
+/* ============ 批次4：热力图 / 年度报告 / 生物房间 ============ */
+.heatmap-grid {
+    display: flex; gap: 3px; overflow-x: auto; padding: 8px 0;
+    justify-content: center;
+}
+.hm-col { display: flex; flex-direction: column; gap: 3px; }
+.hm-cell {
+    width: 12px; height: 12px; border-radius: 3px;
+    background: rgba(120,140,180,.12);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.3);
+}
+.hm-cell.hl-1 { background: rgba(106,140,255,.25); }
+.hm-cell.hl-2 { background: rgba(106,140,255,.5); }
+.hm-cell.hl-3 { background: rgba(106,140,255,.75); }
+.hm-cell.hl-4 { background: linear-gradient(135deg, #6a8cff, #8a6dff); }
+.heatmap-legend { display: flex; align-items: center; gap: 4px; justify-content: center; font-size: 11px; color: #8a92b0; margin: 10px 0; }
+.heatmap-legend i { width: 12px; height: 12px; border-radius: 3px; }
+.hl-0 { background: rgba(120,140,180,.12); }
+.hl-1 { background: rgba(106,140,255,.25); }
+.hl-2 { background: rgba(106,140,255,.5); }
+.hl-3 { background: rgba(106,140,255,.75); }
+.hl-4 { background: linear-gradient(135deg, #6a8cff, #8a6dff); }
+.heatmap-stats { text-align: center; font-size: 13px; color: #5a6380; margin-top: 8px; }
+.heatmap-stats b { color: #6a8cff; }
+
+/* 年度报告 */
+.yr-orb {
+    width: 72px; height: 72px; margin: 0 auto 16px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 36px;
+    background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.55), rgba(150,190,240,.3) 60%, rgba(90,140,210,.25));
+    border: 1px solid rgba(255,255,255,.5);
+    box-shadow: 0 8px 24px rgba(80,130,210,.3), inset 0 2px 6px rgba(255,255,255,.6);
+    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    animation: capsuleFloat 3s ease-in-out infinite;
+}
+.yr-content { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.yr-card {
+    padding: 14px; border-radius: 16px; text-align: center;
+    background: linear-gradient(150deg, rgba(255,255,255,.55), rgba(235,240,255,.4));
+    border: 1px solid rgba(255,255,255,.6);
+    box-shadow: 0 4px 14px rgba(80,110,200,.12), inset 0 1px 0 rgba(255,255,255,.6);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.yr-num { font-size: 28px; font-weight: 800; background: linear-gradient(135deg, #6a8cff, #8a6dff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.yr-label { font-size: 12px; color: #8a92b0; margin-top: 4px; }
+.yr-highlight { grid-column: 1 / -1; font-size: 13px; color: #3a4266; }
+
+/* 双人生物房间 */
+.br-actions { display: flex; flex-direction: column; gap: 12px; }
+.br-join-row { display: flex; gap: 8px; }
+.br-join-row input { flex: 1; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.6); background: rgba(255,255,255,.5); color: #2a3150; font-size: 14px; }
+.br-code { text-align: center; font-size: 16px; padding: 12px; border-radius: 14px; background: rgba(120,150,255,.12); color: #3a4266; letter-spacing: 2px; }
+.br-chat { max-height: 280px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.br-msg { max-width: 80%; padding: 8px 12px; border-radius: 14px; font-size: 14px; }
+.br-msg.me { align-self: flex-end; background: linear-gradient(135deg, #6a8cff, #8a6dff); color: #fff; }
+.br-msg.other { align-self: flex-start; background: rgba(255,255,255,.6); color: #2a3150; }
+.br-input-row { display: flex; gap: 8px; margin-top: 10px; }
+.br-input-row input { flex: 1; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.6); background: rgba(255,255,255,.5); color: #2a3150; }
+
+body.dark .yr-card { background: linear-gradient(150deg, rgba(46,52,78,.6), rgba(30,35,56,.5)); border-color: rgba(255,255,255,.14); }
+body.dark .yr-label, body.dark .heatmap-stats { color: rgba(180,190,215,.7); }
+body.dark .yr-highlight { color: #e4e8f5; }
+body.dark .br-join-row input, body.dark .br-input-row input { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); color: #f2f4fa; }
+body.dark .br-code { background: rgba(120,150,255,.18); color: #c8d0ea; }
+body.dark .br-msg.other { background: rgba(255,255,255,.12); color: #e4e8f5; }
+
+
+
 body.dark .lg-devhint { color: #ffd089; background: linear-gradient(150deg, rgba(120,88,20,.35), rgba(90,64,12,.25)); border-color: rgba(255,190,80,.28); }
 
 @media (max-width: 480px) {
@@ -5187,3 +5520,100 @@ body.dark .btn-text { color: rgba(235,238,250,.7); background: rgba(255,255,255,
     .auth-more-btn { padding: 8px 13px; font-size: 12px; }
 }
 
+
+/* ============================================================
+   性能精炼层（Performance refinement）
+   原则：backdrop-filter 只保留在“覆盖动态内容的主要玻璃面”上
+   （顶栏 .topbar、聊天面板 .chat-main、输入框、各模态/弹层卡片）。
+   下列元素本身已有接近不透明的底色，或被图片铺满，且都位于已经模糊过的
+   玻璃面之上——再次 backdrop-filter 视觉上几乎无差别，却会在滚动/动画时
+   反复采样背景、产生大量合成层，是滚动卡顿与耗电的重要来源。这里统一关闭，
+   手感更接近 iOS 原生（原生只在少数大表面做模糊）。
+   ============================================================ */
+
+/* 各类头像圆圈：emoji 头像已有近白底，图片头像被 img 铺满，模糊不可见 */
+.msg-avatar,
+.hero-avatar,
+.oi-avatar,
+.op-group-avatar,
+.ou-avatar,
+.ch-avatar,
+.ch-avatars .ha,
+.uc-avatar,
+.ap-avatar,
+.ap-group-avatar,
+.mg-avatar,
+.profile-avatar,
+.call-banner-avatar,
+/* 日期胶囊（已有半透明白底） */
+.day-sep span,
+/* 气泡/面板内的小按钮与小指示器（自身有底色） */
+.voice-play-btn,
+.avatar-upload-btn,
+.loading-spinner,
+/* 气泡内极小的玻璃球（在气泡内部，背后是气泡本身） */
+.capsule-orb-inner,
+.yr-orb {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+/* 头像圆圈去掉模糊后，略微提高底色，保证任何背景下都干净、有边界感 */
+.msg-avatar,
+.oi-avatar,
+.op-group-avatar,
+.ou-avatar,
+.ch-avatar,
+.ch-avatars .ha,
+.uc-avatar,
+.ap-avatar,
+.ap-group-avatar,
+.mg-avatar,
+.profile-avatar,
+.hero-avatar {
+    background-color: rgba(255, 255, 255, .78);
+}
+
+/* ===== Emoji 面板“不显示”修复 =====
+   面板打开时 reparent 到 <body>，并采用 iOS 表情键盘式的近不透明浅色面板；
+   去掉自身 backdrop-filter（嵌套在多层 backdrop-filter 祖先内会导致 Chromium
+   合成层空白/错位）；基础 transform 与 fadeUp 终态(none)保持一致。 */
+#emojiPanel.emoji-panel {
+    background: linear-gradient(180deg, rgba(255,255,255,.97), rgba(243,244,247,.95));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    transform: none;
+    -webkit-transform: none;
+}
+body.dark #emojiPanel.emoji-panel {
+    background: linear-gradient(180deg, rgba(48,48,56,.98), rgba(33,33,39,.97));
+    border-color: rgba(255,255,255,.08);
+}
+
+/* ===== 多功能“+”菜单 / 位置菜单“不显示”修复 =====
+   与表情面板同理：打开时 reparent 到 <body>，采用 iOS 动作菜单式近不透明浅色面板，
+   去掉自身 backdrop-filter，避免嵌套多层 backdrop-filter 造成合成层空白。 */
+#multiMenu.multi-menu,
+#locMenu.loc-menu {
+    background: linear-gradient(180deg, rgba(255,255,255,.97), rgba(244,245,248,.95));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+body.dark #multiMenu.multi-menu,
+body.dark #locMenu.loc-menu {
+    background: linear-gradient(180deg, rgba(48,48,56,.98), rgba(33,33,39,.97));
+    border-color: rgba(255,255,255,.08);
+}
+
+/* ===== 阅后即焚 / 定时胶囊选择器“不显示”修复（同表情面板原理） ===== */
+#ephemeralPicker.ephemeral-picker,
+#capsulePicker.capsule-picker {
+    background: linear-gradient(180deg, rgba(255,255,255,.97), rgba(244,245,248,.95));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+body.dark #ephemeralPicker.ephemeral-picker,
+body.dark #capsulePicker.capsule-picker {
+    background: linear-gradient(180deg, rgba(48,48,56,.98), rgba(33,33,39,.97));
+    border-color: rgba(255,255,255,.08);
+}

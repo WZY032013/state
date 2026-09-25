@@ -641,13 +641,17 @@ async function handleSendMessage(env, user, code, body) {
   const group = await getGroup(env, code);
   if (!group) return fail('群聊不存在', 404);
   if (!group.members.includes(user.phone)) return fail('你不是群成员', 403);
-  const { type, text, content, imageData, voiceData, voiceDuration, fileData, fileName, fileType, fileSize, mediaUrl, location, lat, lng, replyToId } = body;
+  const { type, text, content, imageData, voiceData, voiceDuration, fileData, fileName, fileType, fileSize, mediaUrl, location, lat, lng, replyToId, ephemeral, ephemeralSec, unlockAt, whisper, bioSigned, bioSig } = body;
   const msg = {
     id: makeId(), senderPhone: user.phone, type: type || 'text',
     content: content || text || '', ts: Date.now(), readBy: [user.phone],
     senderNickname: user.nickname, senderAvatar: user.avatar
   };
   if (replyToId) msg.replyToId = replyToId;
+  if (ephemeral) { msg.ephemeral = true; msg.ephemeralSec = parseInt(ephemeralSec) || 10; }
+  if (unlockAt) { msg.unlockAt = parseInt(unlockAt); msg.capsule = true; }
+  if (whisper) msg.whisper = true;
+  if (bioSigned) { msg.bioSigned = true; msg.bioSig = bioSig || ''; }
   // 解析@提及
   const textContent = content || text || '';
   const mentionMatches = textContent.match(/@(\d{6,15})/g);
@@ -1182,6 +1186,18 @@ async function handleEditMessage(env, user, code, msgId, body) {
   if (row.senderPhone !== user.phone) return fail('只能编辑自己的消息', 403);
   await env.DB.prepare('UPDATE messages SET content = ?, edited = 1, editedAt = ? WHERE id = ?').bind(content.trim(), Date.now(), msgId).run();
   return ok({ edited: true });
+}
+
+// 悄悄话查看即焚
+async function handleWhisperView(env, user, code, msgId) {
+  code = code.toUpperCase();
+  const row = await env.DB.prepare('SELECT * FROM messages WHERE id = ? AND groupCode = ?').bind(msgId, code).first();
+  if (!row) return fail('消息不存在', 404);
+  if (!row.data || !JSON.parse(row.data || '{}').whisper) return fail('非悄悄话', 400);
+  if (row.senderPhone === user.phone) return fail('不能查看自己的悄悄话', 403);
+  const content = row.content;
+  await env.DB.prepare('DELETE FROM messages WHERE id = ?').bind(msgId).run();
+  return ok({ content });
 }
 
 // 表情回复（切换：有则删，无则加）
@@ -1797,6 +1813,16 @@ export async function onRequest(context) {
       await ensureLoginExtras(env);
       return handleSmsRegister(env, await request.json().catch(() => ({})));
     }
+    // ---- SIM 卡运营商一键取号（阿里云/腾讯云号码认证） ----
+    if (parts[0] === 'sim' && parts[1] === 'start' && method === 'POST') return handleSimStart(env);
+    if (parts[0] === 'sim' && parts[1] === 'login' && method === 'POST') {
+      await ensureLoginExtras(env);
+      return handleSimLogin(env, await request.json().catch(() => ({})), request.headers.get('user-agent') || '');
+    }
+    if (parts[0] === 'sim' && parts[1] === 'register' && method === 'POST') {
+      await ensureLoginExtras(env);
+      return handleSmsRegister(env, await request.json().catch(() => ({})));
+    }
     // ---- 微信 OAuth2 登录/注册/绑定（配置 WX_APPID/WX_SECRET 后生效） ----
     if (parts[0] === 'wechat' && parts[1] === 'start' && method === 'POST') {
       await ensureLoginExtras(env);
@@ -1831,9 +1857,70 @@ export async function onRequest(context) {
     const user = await authUser(env, request);
     if (!user) return fail('未登录', 401);
     // 获取当前用户信息
-    if (parts[0] === 'me' && method === 'GET') {
+    if (parts[0] === 'me' && parts.length === 1 && method === 'GET') {
       ensureMediaTable(env).catch(() => {});
       return ok({ user: publicUser(user) });
+    }
+    // 聊天统计 Q10/Q11
+    if (parts[0] === 'me' && parts[1] === 'chat-stats' && method === 'GET') {
+      const days = parseInt(url.searchParams.get('days')) || 365;
+      const since = Date.now() - days * 86400000;
+      const res = await env.DB.prepare('SELECT ts, groupCode FROM messages WHERE senderPhone = ? AND ts > ?').bind(user.phone, since).all();
+      const stats = {}; const hourStats = new Array(24).fill(0);
+      for (const row of res.results) {
+        const d = new Date(row.ts);
+        const key = d.toISOString().slice(0, 10);
+        stats[key] = (stats[key] || 0) + 1;
+        hourStats[d.getHours()]++;
+      }
+      return ok({ stats, hourStats, totalMsgs: res.results.length });
+    }
+    // 双人生物房间 N6
+    if (parts[0] === 'bioroom' && parts.length === 1 && method === 'POST') {
+      const code = 'BIO' + Math.random().toString(36).slice(2, 8).toUpperCase();
+      await env.DB.prepare('INSERT INTO biorooms (code, createdBy, members, status, ts) VALUES (?, ?, ?, ?, ?)').bind(code, user.phone, JSON.stringify([user.phone]), 'pending', Date.now()).run();
+      return ok({ code });
+    }
+    if (parts[0] === 'bioroom' && parts[1] && !['join','close','messages'].includes(parts[1]) && method === 'GET') {
+      const row = await env.DB.prepare('SELECT * FROM biorooms WHERE code = ?').bind(parts[1]).first();
+      if (!row) return fail('房间不存在', 404);
+      row.members = JSON.parse(row.members || '[]');
+      return ok({ room: row });
+    }
+    if (parts[0] === 'bioroom' && parts[1] === 'join' && method === 'POST') {
+      const room = await env.DB.prepare('SELECT * FROM biorooms WHERE code = ?').bind(body.code).first();
+      if (!room) return fail('房间不存在', 404);
+      let members = JSON.parse(room.members || '[]');
+      if (!members.includes(user.phone)) members.push(user.phone);
+      const status = members.length >= 2 ? 'active' : room.status;
+      await env.DB.prepare('UPDATE biorooms SET members = ?, status = ? WHERE code = ?').bind(JSON.stringify(members), status, body.code).run();
+      return ok({ room: { ...room, members, status } });
+    }
+    if (parts[0] === 'bioroom' && parts[1] === 'close' && method === 'POST') {
+      await env.DB.prepare('DELETE FROM biorooms WHERE code = ?').bind(body.code).run();
+      await env.DB.prepare('DELETE FROM bioroom_msgs WHERE code = ?').bind(body.code).run();
+      return ok({ closed: true });
+    }
+    if (parts[0] === 'bioroom' && parts[1] === 'messages' && method === 'POST') {
+      const room = await env.DB.prepare('SELECT * FROM biorooms WHERE code = ?').bind(body.code).first();
+      if (!room || room.status !== 'active') return fail('房间未激活', 400);
+      await env.DB.prepare('INSERT INTO bioroom_msgs (code, senderPhone, text, ts) VALUES (?, ?, ?, ?)').bind(body.code, user.phone, body.text, Date.now()).run();
+      return ok({});
+    }
+    if (parts[0] === 'bioroom' && parts[1] === 'messages' && method === 'GET') {
+      const code = url.searchParams.get('code');
+      const res = await env.DB.prepare('SELECT * FROM bioroom_msgs WHERE code = ? ORDER BY ts ASC').bind(code).all();
+      return ok({ messages: res.results });
+    }
+    // 登录会话列表（伪登录警告 Q1）
+    if (parts[0] === 'me' && parts[1] === 'sessions' && method === 'GET') {
+      const res = await env.DB.prepare('SELECT id as token, userAgent as ua, createdAt as ts FROM sessions WHERE phone = ? ORDER BY createdAt DESC LIMIT 10').bind(user.phone).all();
+      return ok({ sessions: res.results });
+    }
+    if (parts[0] === 'me' && parts[1] === 'sessions' && parts[2] && method === 'DELETE') {
+      await env.DB.prepare('DELETE FROM tokens WHERE token = ?').bind(parts[2]).run();
+      await env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(parts[2]).run();
+      return ok({});
     }
 
     // 扫码登录：手机端已登录接口（扫码/确认/取消）
@@ -2005,6 +2092,10 @@ export async function onRequest(context) {
       // 转发消息
       if (parts[2] === 'messages' && parts[4] === 'forward' && method === 'POST') {
         return handleForwardMessage(env, user, parts[1], parts[3], await request.json().catch(() => ({})));
+      }
+      // 悄悄话查看即焚
+      if (parts[2] === 'messages' && parts[4] === 'whisper-view' && method === 'POST') {
+        return handleWhisperView(env, user, parts[1], parts[3]);
       }
       // 搜索消息
       if (parts[2] === 'search' && method === 'GET') {
@@ -2442,6 +2533,16 @@ async function ensureLoginExtras(env) {
     ticket TEXT PRIMARY KEY, openid TEXT NOT NULL, unionid TEXT DEFAULT '',
     nickname TEXT DEFAULT '', avatar TEXT DEFAULT '', expires INTEGER NOT NULL
   )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS login_events (
+    token TEXT PRIMARY KEY, phone TEXT NOT NULL, ua TEXT DEFAULT '', ts INTEGER NOT NULL
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS biorooms (
+    code TEXT PRIMARY KEY, createdBy TEXT NOT NULL, members TEXT NOT NULL DEFAULT '[]',
+    status TEXT DEFAULT 'pending', ts INTEGER NOT NULL
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS bioroom_msgs (
+    id TEXT PRIMARY KEY, code TEXT NOT NULL, senderPhone TEXT NOT NULL, text TEXT NOT NULL, ts INTEGER NOT NULL
+  )`).run();
   // users 表迁移微信标识列（老库平滑升级）
   try { await env.DB.prepare("ALTER TABLE users ADD COLUMN wx_openid TEXT DEFAULT ''").run(); } catch {}
   try { await env.DB.prepare("ALTER TABLE users ADD COLUMN wx_unionid TEXT DEFAULT ''").run(); } catch {}
@@ -2525,6 +2626,43 @@ async function handleSmsRegister(env, body) {
   const token = await createToken(env, phone);
   secLog(env, phone, 'sms_register', '本机号码注册成功（免密账号）');
   return ok({ token, user: publicUser(user) });
+}
+
+// ---------- SIM 卡运营商一键取号（阿里云/腾讯云号码认证 SDK） ----------
+// 生产环境变量：SIM_PROVIDER=aliyun|tencent, SIM_APPID, SIM_APPKEY
+const SIM_DEV_PHONE = '13900000099';
+function handleSimStart(env) {
+  const provider = env.SIM_PROVIDER || '';
+  if (!provider) {
+    return ok({ mock: true, phone: SIM_DEV_PHONE,
+      hint: '未配置运营商号码认证（SIM_PROVIDER=aliyun|tencent），当前返回测试号。生产接入阿里云/腾讯云号码认证 SDK' });
+  }
+  return ok({ mock: false, provider, appid: env.SIM_APPID || '' });
+}
+async function handleSimLogin(env, body, ua) {
+  const provider = env.SIM_PROVIDER || '';
+  let phone;
+  if (!provider) {
+    phone = body.phoneToken === SIM_DEV_PHONE ? SIM_DEV_PHONE : '';
+    if (!phone) return fail('取号失败');
+  } else {
+    phone = await verifySimToken(env, body.phoneToken, provider);
+    if (!phone) return fail('运营商取号校验失败');
+  }
+  const user = await getUser(env, phone);
+  if (user) {
+    const token = await createToken(env, phone);
+    secLog(env, phone, 'sim_login', 'SIM一键取号登录成功');
+    return ok({ token, user: publicUser(user) });
+  }
+  const ticket = makeId();
+  await env.DB.prepare('INSERT INTO sms_tickets (id, phone, expires) VALUES (?,?,?)').bind(ticket, phone, Date.now() + 600000).run();
+  return ok({ needRegister: true, smsTicket: ticket, phone });
+}
+async function verifySimToken(env, token, provider) {
+  // TODO: 生产对接阿里云/腾讯云号码认证校验接口
+  // 阿里云 dypnsapi GetMobile；腾讯云号码认证
+  return null;
 }
 
 // ---------- 微信 OAuth2（开放平台扫码 / 公众号内 H5） ----------

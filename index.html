@@ -109,9 +109,14 @@
         <!-- 本机号码 / 微信 免密登录注册（登录/注册/扫码三种方式下方统一入口） -->
         <div class="auth-oauth-divider"><span>免密登录 / 注册</span></div>
         <div class="auth-oauth">
+            <button type="button" class="oauth-btn oauth-sim" id="simLoginBtn">
+                <span class="oauth-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><line x1="12" y1="18" x2="12" y2="18"/></svg></span>
+                <span class="oauth-tx"><b>本机号码一键登录</b><small>运营商取号 · 免输密码短信</small></span>
+                <span class="oauth-go" data-icon="chevron"></span>
+            </button>
             <button type="button" class="oauth-btn oauth-sms" id="smsLoginBtn">
                 <span class="oauth-ic"><span data-icon="phone"></span></span>
-                <span class="oauth-tx"><b>本机号码</b><small>验证码一键登录 · 自动注册</small></span>
+                <span class="oauth-tx"><b>短信验证码登录</b><small>输入手机号 · 6 位验证码</small></span>
                 <span class="oauth-go" data-icon="chevron"></span>
             </button>
             <button type="button" class="oauth-btn oauth-wx" id="wxLoginBtn">
@@ -315,6 +320,39 @@
         <p class="sec-sub">检测到本机支持系统生物识别（Face ID / 指纹 / Windows Hello）<br>开启后可一键免密登录；授权其他设备登录时，也将强制本机生物验证</p>
         <button type="button" class="btn-primary lg-block-btn" id="bioEnableBtn">立即开启生物登录</button>
         <button type="button" class="btn-ghost lg-block-btn" id="bioLaterBtn">稍后再说</button>
+    </div>
+</div>
+
+<!-- 聊天热力图 Q10 -->
+<div id="heatmapModal" class="sec-overlay" hidden>
+    <div class="sec-card glass lg-flow-card" style="max-width:560px;">
+        <button type="button" class="sec-close" id="heatmapClose"><span data-icon="close"></span></button>
+        <h1>聊天热力图</h1>
+        <p class="sec-sub">你过去一年的聊天活跃度</p>
+        <div id="heatmapGrid" class="heatmap-grid"></div>
+        <div class="heatmap-legend"><span>少</span><i class="hl-0"></i><i class="hl-1"></i><i class="hl-2"></i><i class="hl-3"></i><i class="hl-4"></i><span>多</span></div>
+        <div id="heatmapStats" class="heatmap-stats"></div>
+    </div>
+</div>
+
+<!-- 年度聊天报告 Q11 -->
+<div id="yearReportModal" class="sec-overlay" hidden>
+    <div class="sec-card glass lg-flow-card" style="max-width:440px;">
+        <button type="button" class="sec-close" id="yearReportClose"><span data-icon="close"></span></button>
+        <div class="yr-orb">📊</div>
+        <h1>年度聊天报告</h1>
+        <div id="yrContent" class="yr-content"></div>
+    </div>
+</div>
+
+<!-- 双人生物房间 N6 -->
+<div id="bioRoomModal" class="sec-overlay" hidden>
+    <div class="sec-card glass lg-flow-card" style="max-width:440px;">
+        <button type="button" class="sec-close" id="bioRoomClose"><span data-icon="close"></span></button>
+        <div class="yr-orb">🔐</div>
+        <h1>双人生物房间</h1>
+        <p class="sec-sub">双方完成生物验证后进入，关闭后所有消息物理删除</p>
+        <div id="bioRoomBody"></div>
     </div>
 </div>
 
@@ -566,6 +604,7 @@
                         <button class="gm-item" id="gmExport"><span class="gm-icon" data-icon="download"></span> 导出聊天</button>
                         <button class="gm-item" id="gmPin"><span class="gm-icon" data-icon="pin"></span> 置顶群聊</button>
                         <button class="gm-item" id="gmMute"><span class="gm-icon" data-icon="bellOff"></span> 消息免打扰</button>
+                        <button class="gm-item" id="gmLockChat"><span class="gm-icon" data-icon="lock"></span> 聊天锁</button>
                         <button class="gm-item" id="gmCopyCode"><span class="gm-icon" data-icon="copy"></span> 复制邀请码</button>
                         <button class="gm-item" id="gmDanmaku"><span class="gm-icon" data-icon="chat"></span> 弹幕模式</button>
                         <button class="gm-item" id="gmMemories"><span class="gm-icon" data-icon="clock"></span> 去年今日</button>
@@ -652,6 +691,37 @@
                             <button class="multi-menu-item" id="mmVoiceCall" title="语音通话"><span class="mm-icon" data-icon="phone"></span><span class="mm-label">语音通话</span></button>
                             <button class="multi-menu-item" id="mmCheckin" title="位置打卡"><span class="mm-icon" data-icon="location"></span><span class="mm-label">打卡</span></button>
                             <button class="multi-menu-item" id="mmBluetooth" title="蓝牙 / 低数据模式"><span class="mm-icon" data-icon="bluetooth"></span><span class="mm-label">蓝牙</span></button>
+                            <button class="multi-menu-item" id="mmEphemeral" title="阅后即焚"><span class="mm-icon" data-icon="flame"></span><span class="mm-label">阅后即焚</span></button>
+                            <button class="multi-menu-item" id="mmCapsule" title="定时胶囊"><span class="mm-icon" data-icon="clock"></span><span class="mm-label">定时胶囊</span></button>
+                            <button class="multi-menu-item" id="mmWhisper" title="悄悄话"><span class="mm-icon" data-icon="lock"></span><span class="mm-label">悄悄话</span></button>
+                            <button class="multi-menu-item" id="mmBioSign" title="生物签名"><span class="mm-icon" data-icon="fingerprint"></span><span class="mm-label">生物签名</span></button>
+                        </div>
+                        <!-- 消息模式指示条 -->
+                        <div class="composer-mode-bar glass" id="composerModeBar" hidden>
+                            <span class="cmb-icon" id="cmbIcon"></span>
+                            <span class="cmb-text" id="cmbText"></span>
+                            <button class="cmb-cancel" id="cmbCancel">×</button>
+                        </div>
+                        <!-- 阅后即焚秒数选择 -->
+                        <div class="ephemeral-picker glass" id="ephemeralPicker" hidden>
+                            <div class="ep-title">阅后即焚 · 查看后存活</div>
+                            <div class="ep-options">
+                                <button data-sec="5">5秒</button>
+                                <button data-sec="10">10秒</button>
+                                <button data-sec="30">30秒</button>
+                                <button data-sec="60">1分钟</button>
+                            </div>
+                        </div>
+                        <!-- 定时胶囊时间选择 -->
+                        <div class="capsule-picker glass" id="capsulePicker" hidden>
+                            <div class="cp-title">定时胶囊 · 解锁时间</div>
+                            <input type="datetime-local" id="capsuleTime" class="cp-time">
+                            <div class="cp-quick">
+                                <button data-min="1">1分钟后</button>
+                                <button data-min="60">1小时后</button>
+                                <button data-min="1440">明天此时</button>
+                            </div>
+                            <button class="cp-confirm" id="capsuleConfirm">封存</button>
                         </div>
                         <!-- 长按位置菜单 -->
                         <div class="loc-menu glass" id="locMenu" hidden>
@@ -727,6 +797,9 @@
                 </div>
                 <button class="btn-sessions" id="sessionsBtn"><span data-icon="monitor"></span> 登录设备管理</button>
                 <button class="btn-sessions" id="savedBtn"><span data-icon="star"></span> 我的收藏</button>
+                <button class="btn-sessions" id="heatmapBtn"><span data-icon="chart"></span> 聊天热力图</button>
+                <button class="btn-sessions" id="yearReportBtn"><span data-icon="calendar"></span> 年度聊天报告</button>
+                <button class="btn-sessions" id="bioRoomBtn"><span data-icon="lock"></span> 双人生物房间</button>
                 <button class="btn-sessions" id="bubbleBtn"><span data-icon="chat"></span> 气泡皮肤</button>
                 <button class="btn-sessions" id="passkeyManageBtn"><span data-icon="key"></span> 安全中心 <span class="sec-count" id="passkeyCount"></span></button>
                 <button class="btn-sessions" id="signToolBtn"><span data-icon="edit"></span> 签名验签工具</button>
@@ -1124,10 +1197,26 @@
     <button class="ctx-item" data-action="react"><span data-icon="smile"></span>表情</button>
     <button class="ctx-item" data-action="forward"><span data-icon="forward"></span>转发</button>
     <button class="ctx-item" data-action="save"><span data-icon="star"></span>收藏</button>
+    <button class="ctx-item" data-action="translate"><span data-icon="globe"></span>翻译</button>
+    <button class="ctx-item" data-action="select"><span data-icon="check"></span>多选</button>
     <button class="ctx-item ctx-owner" data-action="pin"><span data-icon="pin"></span>置顶</button>
     <button class="ctx-item ctx-own" data-action="edit"><span data-icon="edit"></span>编辑</button>
     <button class="ctx-item ctx-own" data-action="recall"><span data-icon="recall"></span>撤回</button>
 </div>
+
+<!-- 多选操作栏 -->
+<div id="multiSelectBar" class="multi-select-bar glass" hidden>
+    <span class="msb-count" id="msbCount">已选 0 条</span>
+    <div class="msb-actions">
+        <button class="msb-btn" id="msbForward"><span data-icon="forward"></span>转发</button>
+        <button class="msb-btn" id="msbSave"><span data-icon="star"></span>收藏</button>
+        <button class="msb-btn msb-danger" id="msbDelete"><span data-icon="trash"></span>删除</button>
+    </div>
+    <button class="msb-cancel" id="msbCancel">取消</button>
+</div>
+
+<!-- 文字动效全屏层 -->
+<div id="textEffectLayer" class="text-effect-layer" hidden></div>
 
 <!-- 表情选择器 -->
 <div id="reactionPicker" class="reaction-picker glass" hidden>

@@ -81,6 +81,13 @@ function authUser(req) {
   return kvGet('user:' + data.phone);
 }
 
+function recordLogin(phone, token, ua) {
+  const events = kvGet('loginevents:' + phone) || [];
+  events.push({ token, ua: (ua || '').slice(0, 120), ts: Date.now(), ip: '' });
+  if (events.length > 20) events.splice(0, events.length - 20);
+  kvSet('loginevents:' + phone, events);
+}
+
 // ============ 扫码登录（二维码一次性换票，二维码内不含任何账号密码） ============
 const QRLOGIN_TTL = 2 * 60 * 1000; // 二维码 2 分钟有效
 function qrSession(id) {
@@ -167,6 +174,10 @@ async function handleAPI(req, parts, body, url) {
   if (parts[0] === 'sms' && parts[1] === 'send' && req.method === 'POST') return handleSmsSend(body);
   if (parts[0] === 'sms' && parts[1] === 'login' && req.method === 'POST') return handleSmsLogin(body);
   if (parts[0] === 'sms' && parts[1] === 'register' && req.method === 'POST') return handleSmsRegister(body);
+  // ---- SIM 卡运营商一键取号（阿里云/腾讯云号码认证 SDK） ----
+  if (parts[0] === 'sim' && parts[1] === 'start' && req.method === 'POST') return handleSimStart();
+  if (parts[0] === 'sim' && parts[1] === 'login' && req.method === 'POST') return handleSimLogin(body, req);
+  if (parts[0] === 'sim' && parts[1] === 'register' && req.method === 'POST') return handleSimRegister(body);
   // ---- 微信登录/注册（OAuth2；未配置 WX_APPID 时本地 mock） ----
   if (parts[0] === 'wechat' && parts[1] === 'start' && req.method === 'POST') return handleWxStart(body, url);
   if (parts[0] === 'wechat' && parts[1] === 'status' && req.method === 'GET') return handleWxStatus(url.searchParams);
@@ -180,7 +191,75 @@ async function handleAPI(req, parts, body, url) {
   if (!user) return { status: 401, ok: false, error: '未登录或登录已过期' };
 
   try {
-    if (parts[0] === 'me') return { ok: true, user: publicUser(user) };
+    if (parts[0] === 'me' && parts.length === 1) return { ok: true, user: publicUser(user) };
+    // 聊天统计 Q10/Q11：按日期聚合消息数
+    if (parts[0] === 'me' && parts[1] === 'chat-stats' && req.method === 'GET') {
+      const days = parseInt(url.searchParams.get('days')) || 365;
+      const since = Date.now() - days * 86400000;
+      const stats = {}; // YYYY-MM-DD -> count
+      const hourStats = new Array(24).fill(0);
+      const groups = user.joinedGroups || [];
+      for (const code of groups) {
+        const msgs = (kvGet('msgs:' + code) || []).filter(m => m.ts > since && m.senderPhone === user.phone);
+        for (const m of msgs) {
+          const d = new Date(m.ts);
+          const key = d.toISOString().slice(0, 10);
+          stats[key] = (stats[key] || 0) + 1;
+          hourStats[d.getHours()]++;
+        }
+      }
+      return { ok: true, stats, hourStats, totalMsgs: Object.values(stats).reduce((a, b) => a + b, 0) };
+    }
+    // 双人生物房间 N6
+    if (parts[0] === 'bioroom' && parts.length === 1 && req.method === 'POST') {
+      const code = 'BIO' + Math.random().toString(36).slice(2, 8).toUpperCase();
+      kvSet('bioroom:' + code, { code, createdBy: user.phone, members: [user.phone], ts: Date.now(), status: 'pending' });
+      return { ok: true, code };
+    }
+    if (parts[0] === 'bioroom' && parts[1] && !['join','close','messages'].includes(parts[1]) && req.method === 'GET') {
+      const room = kvGet('bioroom:' + parts[1]);
+      if (!room) return { ok: false, error: '房间不存在' };
+      return { ok: true, room };
+    }
+    if (parts[0] === 'bioroom' && parts[1] === 'join' && req.method === 'POST') {
+      const room = kvGet('bioroom:' + body.code);
+      if (!room) return { ok: false, error: '房间不存在' };
+      if (!room.members.includes(user.phone)) room.members.push(user.phone);
+      if (room.members.length >= 2) room.status = 'active';
+      kvSet('bioroom:' + body.code, room);
+      return { ok: true, room };
+    }
+    if (parts[0] === 'bioroom' && parts[1] === 'close' && req.method === 'POST') {
+      const room = kvGet('bioroom:' + body.code);
+      if (!room) return { ok: false, error: '房间不存在' };
+      // 物理删除房间内消息（模拟）
+      kvDel('bioroom:' + body.code);
+      kvDel('bioroomsgs:' + body.code);
+      return { ok: true, closed: true };
+    }
+    if (parts[0] === 'bioroom' && parts[1] === 'messages' && req.method === 'POST') {
+      const room = kvGet('bioroom:' + body.code);
+      if (!room || room.status !== 'active') return { ok: false, error: '房间未激活' };
+      const msgs = kvGet('bioroomsgs:' + body.code) || [];
+      msgs.push({ id: makeId(), senderPhone: user.phone, text: body.text, ts: Date.now() });
+      kvSet('bioroomsgs:' + body.code, msgs);
+      return { ok: true };
+    }
+    if (parts[0] === 'bioroom' && parts[1] === 'messages' && req.method === 'GET') {
+      const msgs = kvGet('bioroomsgs:' + url.searchParams.get('code')) || [];
+      return { ok: true, messages: msgs };
+    }
+    // 登录会话列表（伪登录警告 Q1）
+    if (parts[0] === 'me' && parts[1] === 'sessions' && req.method === 'GET') {
+      const events = kvGet('loginevents:' + user.phone) || [];
+      return { ok: true, sessions: events.slice(-10) };
+    }
+    if (parts[0] === 'me' && parts[1] === 'sessions' && parts[2] && req.method === 'DELETE') {
+      kvDel('token:' + parts[2]);
+      const events = (kvGet('loginevents:' + user.phone) || []).filter(e => e.token !== parts[2]);
+      kvSet('loginevents:' + user.phone, events);
+      return { ok: true };
+    }
 
     // 扫码登录：手机端已登录接口（扫码/确认/取消）
     if (parts[0] === 'qrlogin' && parts[1] === 'scan' && req.method === 'POST') return handleQrScan(user, body);
@@ -290,13 +369,63 @@ async function handleAPI(req, parts, body, url) {
       if (parts[2] === 'messages' && parts.length === 3 && req.method === 'POST') {
         if (!g) return { ok: false, error: '群聊不存在' };
         if (!g.members.includes(user.phone)) return { ok: false, error: '你不是群成员' };
-        const { text, type, imageData } = body;
+        const { text, type, imageData, replyToId, ephemeral, ephemeralSec, unlockAt, whisper, bioSigned, bioSig } = body;
         if (!text && !imageData) return { ok: false, error: '消息内容不能为空' };
         const msg = { id: makeId(), senderPhone: user.phone, senderNickname: user.nickname, senderAvatar: user.avatar, text: text || '', type: type || 'text', imageData: imageData || null, ts: Date.now() };
+        if (replyToId) msg.replyToId = replyToId;
+        if (ephemeral) { msg.ephemeral = true; msg.ephemeralSec = parseInt(ephemeralSec) || 10; }
+        if (unlockAt) { msg.unlockAt = parseInt(unlockAt); msg.capsule = true; }
+        if (whisper) msg.whisper = true;
+        if (bioSigned) { msg.bioSigned = true; msg.bioSig = bioSig || ''; }
         let msgs = (kvGet('msgs:' + code) || []).filter(m => m.ts > Date.now() - MSG_TTL);
         msgs.push(msg); if (msgs.length > MAX_MSGS) msgs = msgs.slice(-MAX_MSGS);
         kvSet('msgs:' + code, msgs);
         return { ok: true, message: msg };
+      }
+
+      // 消息级操作：撤回 / 表情 / 编辑
+      if (parts[2] === 'messages' && parts.length >= 5) {
+        const msgId = parts[3]; const action = parts[4];
+        let msgs = kvGet('msgs:' + code) || [];
+        const idx = msgs.findIndex(m => m.id === msgId);
+        if (idx < 0) return { ok: false, error: '消息不存在' };
+        const msg = msgs[idx];
+        if (action === 'recall' && req.method === 'POST') {
+          if (msg.senderPhone !== user.phone && user.phone !== ADMIN_PHONE) return { ok: false, error: '只能撤回自己的消息' };
+          if (Date.now() - msg.ts > 120000 && user.phone !== ADMIN_PHONE) return { ok: false, error: '超过撤回时限' };
+          msgs.splice(idx, 1); kvSet('msgs:' + code, msgs);
+          return { ok: true, recalled: true };
+        }
+        if (action === 'react' && req.method === 'POST') {
+          const emoji = String(body.emoji || '').trim();
+          if (!emoji) return { ok: false, error: '缺少表情' };
+          msg.reactions = msg.reactions || [];
+          const ex = msg.reactions.find(r => r.emoji === emoji);
+          if (ex) {
+            if (ex.users && ex.users.includes(user.phone)) { ex.users = ex.users.filter(p => p !== user.phone); ex.count--; }
+            else { ex.users = ex.users || []; ex.users.push(user.phone); ex.count++; }
+            if (ex.count <= 0) msg.reactions = msg.reactions.filter(r => r.emoji !== emoji);
+          } else {
+            msg.reactions.push({ emoji, count: 1, users: [user.phone] });
+          }
+          msgs[idx] = msg; kvSet('msgs:' + code, msgs);
+          return { ok: true };
+        }
+        if (action === 'edit' && req.method === 'POST') {
+          if (msg.senderPhone !== user.phone) return { ok: false, error: '只能编辑自己的消息' };
+          if (Date.now() - msg.ts > 300000) return { ok: false, error: '超过编辑时限' };
+          msg.text = String(body.content || '').trim(); msg.edited = true;
+          msgs[idx] = msg; kvSet('msgs:' + code, msgs);
+          return { ok: true };
+        }
+        // 悄悄话查看即焚：验证后取内容并删除
+        if (action === 'whisper-view' && req.method === 'POST') {
+          if (!msg.whisper) return { ok: false, error: '非悄悄话' };
+          if (msg.senderPhone === user.phone) return { ok: false, error: '不能查看自己的悄悄话' };
+          const content = msg.text;
+          msgs.splice(idx, 1); kvSet('msgs:' + code, msgs);
+          return { ok: true, content };
+        }
       }
 
       if (parts[2] === 'messages' && parts[3] === 'clear' && req.method === 'POST') {
@@ -456,11 +585,58 @@ const server = http.createServer(async (req, res) => {
 
   // API
   if (url.pathname.startsWith('/api/')) {
+    const parts = url.pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean);
+
+    // SSE 实时推送（token 通过 query 参数传递，因为 EventSource 不支持自定义 header）
+    if (parts[0] === 'events' && req.method === 'GET') {
+      const code = (url.searchParams.get('code') || '').toUpperCase();
+      const sseToken = url.searchParams.get('token');
+      const since = parseInt(url.searchParams.get('since')) || 0;
+      let sseUser = null;
+      if (sseToken) {
+        const td = kvGet('token:' + sseToken);
+        if (td && td.expires >= Date.now()) sseUser = kvGet('user:' + td.phone);
+      }
+      if (!sseUser) { res.writeHead(401, { 'Content-Type': 'text/plain' }); res.end('未登录'); return; }
+      const group = kvGet('group:' + code);
+      if (!group) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('群聊不存在'); return; }
+      if (!group.members.includes(sseUser.phone) && sseUser.phone !== ADMIN_PHONE) { res.writeHead(403, { 'Content-Type': 'text/plain' }); res.end('你不是群成员'); return; }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+      });
+      res.write(`: connected ${Date.now()}\n\n`);
+
+      // 推送初始新消息
+      const allMsgs = kvGet('msgs:' + code) || [];
+      const initMsgs = allMsgs.filter(m => m.ts > since);
+      let lastTs = since;
+      for (const m of initMsgs) { res.write(`data: ${JSON.stringify(m)}\n\n`); lastTs = m.ts; }
+
+      // 初始在线状态 & 已读
+      const presence = (group.members || []).map(p => ({ phone: p, nickname: kvGet('user:' + p)?.nickname || p, avatar: kvGet('user:' + p)?.avatar || '😀', online: true, lastSeen: Date.now() }));
+      res.write(`event: presence\ndata: ${JSON.stringify(presence)}\n\n`);
+      res.write(`event: readstatus\ndata: ${JSON.stringify({})}\n\n`);
+
+      // 轮询新消息
+      const startTime = Date.now();
+      const iv = setInterval(() => {
+        if (Date.now() - startTime > 55000 || req.destroyed) { clearInterval(iv); res.end(); return; }
+        const fresh = (kvGet('msgs:' + code) || []).filter(m => m.ts > lastTs);
+        for (const m of fresh) { res.write(`data: ${JSON.stringify(m)}\n\n`); lastTs = m.ts; }
+      }, 2000);
+
+      req.on('close', () => { clearInterval(iv); });
+      return;
+    }
+
     let body = {};
     if (req.method === 'POST' || req.method === 'DELETE') {
       body = await new Promise(r => { let d = ''; req.on('data', c => d += c); req.on('end', () => { try { r(JSON.parse(d || '{}')); } catch { r({}); } }); });
     }
-    const parts = url.pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean);
     const result = await handleAPI(req, parts, body, url);
     if (result.redirect) {
       res.writeHead(result.httpStatus || 302, { 'Location': result.redirect, 'Access-Control-Allow-Origin': '*' });
@@ -858,6 +1034,7 @@ function handleSmsLogin(body) {
   if (user) {
     const token = makeToken();
     kvSet('token:' + token, { phone, expires: Date.now() + TOKEN_TTL * 1000 });
+    recordLogin(phone, token, req.headers['user-agent'] || '');
     secLog(phone, 'sms_login', '本机号码验证码登录成功');
     return { ok: true, token, user: publicUser(user) };
   }
@@ -875,8 +1052,63 @@ function handleSmsRegister(body) {
   kvDel('smsticket:' + body.smsTicket);
   const token = makeToken();
   kvSet('token:' + token, { phone, expires: Date.now() + TOKEN_TTL * 1000 });
+  recordLogin(phone, token, '');
   secLog(phone, 'sms_register', '本机号码注册成功（免密账号）');
   return { ok: true, token, user: publicUser(user) };
+}
+
+// ============ SIM 卡运营商一键取号（阿里云号码认证 / 腾讯云号码认证 SDK） ============
+// 生产需配置环境变量：SIM_PROVIDER=aliyun|tencent, SIM_APPID, SIM_APPKEY（或腾讯云 SecretId/SecretKey）
+// 浏览器端通过运营商 SDK 静默取号，用户一键确认后拿到 phoneToken，后端调用运营商校验接口换手机号。
+// 未配置时 dev 模式返回固定测试号 13900000099，便于前端联调。
+const SIM_DEV_PHONE = '13900000099';
+function handleSimStart() {
+  const provider = process.env.SIM_PROVIDER || '';
+  if (!provider) {
+    return { ok: true, mock: true, phone: SIM_DEV_PHONE,
+      hint: '未配置运营商号码认证服务（SIM_PROVIDER=aliyun|tencent），当前返回测试号 ' + SIM_DEV_PHONE + '。生产需接入阿里云/腾讯云号码认证 SDK' };
+  }
+  // 生产：返回运营商 SDK 所需参数（appid、token 等），前端调 SDK 静默取号
+  // 阿里云号码认证：GetMobile 接口；腾讯云：号码认证服务
+  return { ok: true, mock: false, provider, appid: process.env.SIM_APPID || '' };
+}
+function handleSimLogin(body, req) {
+  const provider = process.env.SIM_PROVIDER || '';
+  let phone;
+  if (!provider) {
+    // dev 模式：phoneToken 即手机号
+    phone = body.phoneToken === SIM_DEV_PHONE ? SIM_DEV_PHONE : '';
+    if (!phone) return { ok: false, error: '取号失败' };
+  } else {
+    // 生产：用 phoneToken 调用运营商接口校验换取真实手机号
+    // 阿里云：POST https://dypnsapi.aliyuncs.com/ GetMobile
+    // 腾讯云：POST https://yun.tim.qq.com/v5/rtc/getphone
+    phone = verifySimToken(body.phoneToken, provider);
+    if (!phone) return { ok: false, error: '运营商取号校验失败' };
+  }
+  const user = kvGet('user:' + phone);
+  if (user) {
+    const token = makeToken();
+    kvSet('token:' + token, { phone, expires: Date.now() + TOKEN_TTL * 1000 });
+    recordLogin(phone, token, req.headers['user-agent'] || '');
+    secLog(phone, 'sim_login', 'SIM一键取号登录成功');
+    return { ok: true, token, user: publicUser(user) };
+  }
+  // 未注册：发 10 分钟票据让前端走注册
+  const ticket = makeSmsTicket(phone);
+  return { ok: true, needRegister: true, smsTicket: ticket, phone };
+}
+function handleSimRegister(body) {
+  // 复用短信注册逻辑（票据相同）
+  return handleSmsRegister(body);
+}
+function verifySimToken(token, provider) {
+  // TODO: 生产对接阿里云/腾讯云号码认证校验接口
+  // 阿里云示例：
+  // const sign = hmac('SHA256', process.env.SIM_APPKEY, ...);
+  // const r = await fetch('https://dypnsapi.aliyuncs.com/?Action=GetMobile&Token=' + token + '&...&Signature=' + sign);
+  // return r.GetMobileResult.Mobile;
+  return null;
 }
 
 // ============ 微信 OAuth2 登录/注册/绑定 ============

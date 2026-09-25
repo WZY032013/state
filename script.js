@@ -786,9 +786,9 @@ async function recallMessage(msgId) {
     if (!confirm('确定撤回这条消息吗？')) return;
     try {
         await api('/groups/' + group.code + '/messages/' + msgId + '/recall', { method: 'POST' });
-        knownMsgIds.delete(msgId);
-        const row = document.querySelector(`.msg-row[data-msg-id="${msgId}"]`);
-        if (row) row.remove();
+        const row = document.querySelector('.msg-row[data-msg-id="' + msgId + '"]');
+        if (row) meltAndRemove(row);
+        else { knownMsgIds.delete(msgId); }
         forceFullReload = true;
         await refreshGroupData();
         showToast('消息已撤回');
@@ -1342,6 +1342,8 @@ function showMainOrQr() {
     const qrId = consumePendingQr();
     if (qrId) { openQrConfirmFlow(qrId); return; }
     showMain();
+    // 伪登录警告 Q1：检查是否有新设备登录
+    checkNewLogins();
     // 本次会话首次进入应用时，引导开启本机生物识别（内部自判平台可用性/是否已绑定）
     try {
         if (sessionStorage.getItem('lg_bio_seen') !== '1') {
@@ -1878,6 +1880,17 @@ async function handleCreateGroup() {
 
 // ============ 聊天室 ============
 async function enterGroupRoom(g) {
+    // 聊天锁 Q2：锁定的群需生物验证后进入
+    if (isChatLocked(g.code)) {
+        if (waAvailable()) {
+            try {
+                const challenge = new Uint8Array(32); crypto.getRandomValues(challenge);
+                await navigator.credentials.get({ publicKey: { challenge, rpId: location.hostname, userVerification: 'required', timeout: 60000 } });
+            } catch (e) { showToast('生物验证未通过，无法进入'); return; }
+        } else {
+            showToast('当前设备不支持生物验证'); return;
+        }
+    }
     group = g;
     $('#inviteGate').hidden = true;
     $('#chatRoom').hidden = false;
@@ -1928,6 +1941,7 @@ function exitGroup() {
     group = null;
     groupReadStatus = {};
     $('#groupMenu').hidden = true;
+    $('#emojiPanel').hidden = true;
     $('#chatRoom').hidden = true;
     $('#inviteGate').hidden = false;
     const mobBar = $('#mobileOnlineBar');
@@ -2040,10 +2054,26 @@ function updateGroupMenuVisibility() {
     if (menu) menu.classList.toggle('show-owner', isOwner);
 }
 
+// 判断消息列表是否贴近底部（用于决定新内容后是否自动跟随）
+function isNearBottom(threshold = 80) {
+    const c = $('#messages');
+    if (!c) return false;
+    return c.scrollHeight - c.scrollTop - c.clientHeight < threshold;
+}
+
+// 瞬间把消息列表定位到底部（双 rAF，等待当前帧布局/图片占位稳定，不做长距离平滑扫动）
+function pinMessagesToBottom() {
+    const c = $('#messages');
+    if (!c) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        c.scrollTop = c.scrollHeight;
+    }));
+}
+
 function renderMessages(msgs, forceFull = false) {
     const container = $('#messages');
     if (!container) return;
-    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+    const atBottom = isNearBottom(100);
 
     // 场景：knownMsgIds 和输入量偏差大（说明有撤回/服务器重排），或者强制重建
     //       → 完整重建：清容器、清缓存、重置分隔/发送者
@@ -2087,6 +2117,8 @@ function renderMessages(msgs, forceFull = false) {
             av.innerHTML = avatarHtml(m.senderAvatar);
             av.style.cursor = 'pointer';
             av.onclick = (e) => { e.stopPropagation(); showUserProfile(m.senderPhone); };
+            // N3 情绪光谱头像：按活跃度加光晕
+            applyMoodGlow(av);
             wrap.appendChild(av);
         }
 
@@ -2125,14 +2157,37 @@ function renderMessages(msgs, forceFull = false) {
         }
 
         const imgSrc = m.imageData || (m.type === 'image' ? m.content : null);
-        if (m.type === 'image' && imgSrc) {
+        // 定时胶囊：未到解锁时间显示冰封玻璃球
+        if (m.capsule && m.unlockAt && m.unlockAt > Date.now()) {
+            bubble.classList.add('capsule-locked');
+            const orb = document.createElement('div');
+            orb.className = 'capsule-orb';
+            const remain = m.unlockAt - Date.now();
+            const h = Math.floor(remain / 3600000), mn = Math.floor((remain % 3600000) / 60000);
+            orb.innerHTML = '<div class="capsule-orb-inner">⏳</div>' +
+                '<div class="capsule-unlock-time">' + (h > 0 ? h + '小时' : '') + mn + '分钟后解锁</div>';
+            bubble.appendChild(orb);
+        } else if (m.whisper && !isMe) {
+            // 悄悄话（接收方）：锁定态，点击 UV 后查看即焚
+            bubble.classList.add('whisper-locked');
+            bubble.innerHTML = '<div class="whisper-lock-icon">🔒</div><div class="whisper-lock-text">一条悄悄话<br><span>点击生物验证后查看</span></div>';
+            bubble.style.cursor = 'pointer';
+            bubble.onclick = (e) => { e.stopPropagation(); viewWhisper(m.id, bubble); };
+        } else if (m.whisper && isMe) {
+            // 悄悄话（发送方）：显示内容+悄悄话标记
+            bubble.innerHTML = '<div class="whisper-self">' + linkify(m.content || m.text || '') + '</div>';
+        } else if (m.type === 'image' && imgSrc) {
             const img = document.createElement('img');
             img.src = imgSrc;
             img.className = 'msg-image';
             img.onclick = () => showImageViewer(imgSrc);
             img.decoding = 'async';
             img.loading = 'lazy';
-            img.onload = () => scanQRFromImage(img);
+            img.onload = () => {
+                scanQRFromImage(img);
+                // 图片加载后气泡高度变化：若原本贴近底部则继续吸底，避免底部露出空隙
+                if (isNearBottom(160)) pinMessagesToBottom();
+            };
             bubble.appendChild(img);
         } else if (m.type === 'voice' && (m.voiceData || m.content)) {
             const voiceSrc = m.voiceData || m.content;
@@ -2243,6 +2298,23 @@ function renderMessages(msgs, forceFull = false) {
             meta.appendChild(editedTag);
         }
 
+        // 阅后即焚标记
+        if (m.ephemeral) {
+            bubble.classList.add('ephemeral-msg');
+            const ep = document.createElement('span');
+            ep.className = 'ephemeral-tag';
+            ep.innerHTML = '🔥 <span class="ep-cd" data-msg="' + m.id + '">' + (m.ephemeralSec || 10) + '</span>s';
+            meta.appendChild(ep);
+        }
+        // 生物签名标记 N5
+        if (m.bioSigned) {
+            const bs = document.createElement('span');
+            bs.className = 'bio-signed-tag';
+            bs.innerHTML = '👆 已生物签名';
+            bs.title = '本消息经发送者指纹/面容确认';
+            meta.appendChild(bs);
+        }
+
         bubble.appendChild(meta);
 
         // reactions
@@ -2267,6 +2339,24 @@ function renderMessages(msgs, forceFull = false) {
             e.preventDefault();
             showMsgContextMenu(e.clientX, e.clientY, m, isMe);
         });
+        // 多选模式下点击选中
+        wrap.addEventListener('click', (e) => {
+            if (multiSelectMode) { e.stopPropagation(); toggleMsgSelect(m.id); }
+        });
+        // 阅后即焚：非自己的消息进入视口开始倒计时
+        if (m.ephemeral && !isMe && !m._ephemeralStarted) {
+            m._ephemeralStarted = true;
+            const cdEl = wrap.querySelector('.ep-cd');
+            let remain = m.ephemeralSec || 10;
+            const iv = setInterval(() => {
+                remain--;
+                if (cdEl) cdEl.textContent = remain;
+                if (remain <= 0) {
+                    clearInterval(iv);
+                    meltAndRemove(wrap);
+                }
+            }, 1000);
+        }
         // 移动端长按
         let longPressTimer;
         wrap.addEventListener('touchstart', () => {
@@ -2278,11 +2368,9 @@ function renderMessages(msgs, forceFull = false) {
         container.appendChild(wrap);
     });
 
-    if (atBottom) {
-        // 使用 rAF 确保布局后再滚动，避免输入时跳针
-        requestAnimationFrame(() => {
-            container.scrollTop = container.scrollHeight;
-        });
+    // 完整重建（进入房间/服务器重排）或原本就在底部 → 吸底；用户正在查看历史消息时不打断
+    if (forceFull || atBottom) {
+        pinMessagesToBottom();
     }
 }
 
@@ -2538,10 +2626,27 @@ async function sendMessage() {
     try {
         const body = { text };
         if (replyToMsg) body.replyToId = replyToMsg.id;
+        if (msgMode.ephemeralSec > 0) { body.ephemeral = true; body.ephemeralSec = msgMode.ephemeralSec; }
+        if (msgMode.capsuleUnlockAt > 0) body.unlockAt = msgMode.capsuleUnlockAt;
+        if (msgMode.whisper) body.whisper = true;
+        if (msgMode.bioSigned) {
+            // 生物签名：发送前强制 UV
+            try {
+                const sig = await bioSignMessage(text);
+                body.bioSigned = true; body.bioSig = sig;
+            } catch (e) { showToast('生物验证未通过，取消发送'); return; }
+        }
         const data = await api('/groups/' + group.code + '/messages', { method: 'POST', body });
         replaceLocalMessage(localMsg.id, data.message);
         lastMsgCache[group.code] = data.message.ts;
+        // N3 情绪头像：记录活跃度
+        recordMoodEvent();
         if (replyToMsg) { replyToMsg = null; $('#replyBar').hidden = true; }
+        // 文字动效
+        const fx = detectTextEffect(text);
+        if (fx) playTextEffect(fx);
+        // 发送后重置单次模式（胶囊/阅后即焚只生效一条）
+        if (msgMode.ephemeralSec > 0 || msgMode.capsuleUnlockAt > 0) clearMsgMode();
     } catch (err) {
         // 不要真的删除：视觉上标记为"失败可重发"，更符合人类预期
         markLocalMessageFailed(localMsg.id, text);
@@ -3133,6 +3238,51 @@ function initEmojiPicker() {
     });
 }
 
+// 打开表情面板：挂到 body 并 fixed 定位到输入框正上方（修复嵌套 backdrop-filter 合成不显示）
+function openEmojiPanel() {
+    const panel = $('#emojiPanel');
+    if (!panel) return;
+    if (panel.parentElement !== document.body) document.body.appendChild(panel);
+    positionEmojiPanel();
+    renderCustomStickers();
+}
+function positionEmojiPanel() {
+    const panel = $('#emojiPanel');
+    const comp = document.querySelector('.composer');
+    if (!panel || !comp) return;
+    const r = comp.getBoundingClientRect();
+    const w = Math.max(220, Math.min(320, r.width));
+    panel.style.position = 'fixed';
+    panel.style.left = Math.round(r.left) + 'px';
+    panel.style.bottom = Math.round(window.innerHeight - r.top + 8) + 'px';
+    panel.style.width = Math.round(w) + 'px';
+    panel.style.right = 'auto';
+    panel.style.top = 'auto';
+}
+
+// 通用浮层：把弹层 reparent 到 <body> 并 fixed 浮于锚点正上方。
+// 用于修复嵌套在 composer-wrap/chat-main 多层 backdrop-filter 内导致的合成层不显示。
+function floatPopover(menuEl, anchorEl, opts) {
+    if (!menuEl || !anchorEl) return;
+    if (menuEl.parentElement !== document.body) document.body.appendChild(menuEl);
+    positionFloating(menuEl, anchorEl, opts);
+}
+function positionFloating(menuEl, anchorEl, opts) {
+    opts = opts || {};
+    const a = anchorEl.getBoundingClientRect();
+    menuEl.style.position = 'fixed';
+    menuEl.style.top = 'auto';
+    menuEl.style.bottom = 'auto';
+    menuEl.style.right = 'auto';
+    const w = menuEl.offsetWidth || 240;
+    let left = opts.alignRight ? a.right - w : a.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+    const gap = opts.gap != null ? opts.gap : 8;
+    const bottom = window.innerHeight - a.top + gap;
+    menuEl.style.left = Math.round(left) + 'px';
+    menuEl.style.bottom = Math.round(bottom) + 'px';
+}
+
 // ============ OTP 输入 ============
 function initOtpInputs() {
     const inputs = $$('#otpInputs .otp-box');
@@ -3247,6 +3397,8 @@ function init() {
         const val = $('#composerInput').textContent;
         const trimmed = (val || '').trim();
         $('#sendBtn').disabled = !trimmed;
+        // Q9 语气提醒
+        checkToneWarning(trimmed);
         // rAF 节流：避免每个字都触发布局
         scheduleResizeComposer();
     });
@@ -3262,6 +3414,12 @@ function init() {
     // window resize 节流（避免移动端缩放/PC 拉窗口触发大量重布局）
     window.addEventListener('resize', throttle(() => {
         scheduleResizeComposer();
+        const __ep = $('#emojiPanel');
+        if (__ep && !__ep.hidden) positionEmojiPanel();
+        const __mm = $('#multiMenu');
+        if (__mm && !__mm.hidden) positionFloating(__mm, $('#multiPlusBtn'), { alignRight: true });
+        const __lm = $('#locMenu');
+        if (__lm && !__lm.hidden) positionFloating(__lm, $('#sendBtn'), { alignRight: true });
     }, 120), { passive: true });
 
     // API 内存缓存定期清理（防止长开内存泄漏）
@@ -3271,10 +3429,14 @@ function init() {
         }
     }, 1000 * 60 * 5); // 每 5 分钟清一次
 
-    // Emoji
+    // Emoji（面板打开时 reparent 到 <body>：它原本嵌套在 composer-wrap / chat-main
+    // 多层 backdrop-filter 内，会触发 Chromium 合成层不栅格化——表现为“面板打开了却看不见”。
+    // 挂到 body 后合成正常，且 iOS 原生表情键盘本就是近不透明的独立面板）
     $('#emojiBtn').onclick = e => {
         e.stopPropagation();
-        $('#emojiPanel').hidden = !$('#emojiPanel').hidden;
+        const panel = $('#emojiPanel');
+        panel.hidden = !panel.hidden;
+        if (!panel.hidden) openEmojiPanel();
     };
     document.addEventListener('click', e => {
         if (!e.target.closest('.emoji-panel') && !e.target.closest('#emojiBtn')) {
@@ -3352,6 +3514,41 @@ function init() {
     if ($('#mmVoiceCall')) $('#mmVoiceCall').onclick = () => { closeMultiMenu(); startCall('voice'); };
     if ($('#mmVideoCall')) $('#mmVideoCall').onclick = () => { closeMultiMenu(); startCall('video'); };
     if ($('#fileInput')) $('#fileInput').onchange = e => handleFileSend(e.target.files[0]);
+
+    // 阅后即焚 + 定时胶囊
+    if ($('#mmEphemeral')) $('#mmEphemeral').onclick = () => { closeMultiMenu(); openEphemeralPicker(); };
+    if ($('#mmCapsule')) $('#mmCapsule').onclick = () => { closeMultiMenu(); openCapsulePicker(); };
+    if ($('#mmWhisper')) $('#mmWhisper').onclick = () => { closeMultiMenu(); toggleWhisperMode(); };
+    if ($('#mmBioSign')) $('#mmBioSign').onclick = () => { closeMultiMenu(); toggleBioSignMode(); };
+    // 批次4 入口
+    if ($('#heatmapBtn')) $('#heatmapBtn').onclick = openHeatmap;
+    if ($('#yearReportBtn')) $('#yearReportBtn').onclick = openYearReport;
+    if ($('#bioRoomBtn')) $('#bioRoomBtn').onclick = openBioRoom;
+    if ($('#heatmapClose')) $('#heatmapClose').onclick = () => $('#heatmapModal').hidden = true;
+    if ($('#yearReportClose')) $('#yearReportClose').onclick = () => $('#yearReportModal').hidden = true;
+    if ($('#bioRoomClose')) $('#bioRoomClose').onclick = () => { clearTimeout(_bioRoomPoll); bioRoomCode = null; $('#bioRoomModal').hidden = true; };
+    if ($('#cmbCancel')) $('#cmbCancel').onclick = clearMsgMode;
+    if ($('#ephemeralPicker')) {
+        $('#ephemeralPicker').querySelectorAll('.ep-options button').forEach(b => {
+            b.onclick = () => setEphemeral(parseInt(b.dataset.sec));
+        });
+    }
+    if ($('#capsuleConfirm')) $('#capsuleConfirm').onclick = confirmCapsule;
+    if ($('#capsulePicker')) {
+        $('#capsulePicker').querySelectorAll('.cp-quick button').forEach(b => {
+            b.onclick = () => {
+                const t = new Date(Date.now() + parseInt(b.dataset.min) * 60000);
+                const local = new Date(t.getTime() - t.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                $('#capsuleTime').value = local;
+            };
+        });
+    }
+
+    // 多选
+    if ($('#msbCancel')) $('#msbCancel').onclick = exitMultiSelect;
+    if ($('#msbDelete')) $('#msbDelete').onclick = msbDelete;
+    if ($('#msbForward')) $('#msbForward').onclick = msbForward;
+    if ($('#msbSave')) $('#msbSave').onclick = msbSave;
 
     // 长按发送键=位置菜单
     if ($('#sendBtn')) setupSendLongPress();
@@ -3556,6 +3753,7 @@ function toggleMultiMenu() {
     if (!isOpen) {
         menu.hidden = false;
         btn.classList.add('open');
+        floatPopover(menu, btn, { alignRight: true });
     }
 }
 function closeMultiMenu() {
@@ -3566,7 +3764,544 @@ function closeLocMenu() { const m = $('#locMenu'); if (m) m.hidden = true; }
 document.addEventListener('click', e => {
     if (!e.target.closest('.multi-btn-wrap') && !e.target.closest('#multiMenu')) closeMultiMenu();
     if (!e.target.closest('.send-btn') && !e.target.closest('#locMenu')) closeLocMenu();
+    if (!e.target.closest('#ephemeralPicker') && !e.target.closest('#mmEphemeral')) { const p = $('#ephemeralPicker'); if (p) p.hidden = true; }
+    if (!e.target.closest('#capsulePicker') && !e.target.closest('#mmCapsule')) { const p = $('#capsulePicker'); if (p) p.hidden = true; }
 });
+
+// ============ 消息模式：阅后即焚 / 定时胶囊 / 悄悄话 / 生物签名 ============
+let msgMode = { ephemeralSec: 0, capsuleUnlockAt: 0, whisper: false, bioSigned: false };
+
+function showMsgModeBar() {
+    const bar = $('#composerModeBar'); if (!bar) return;
+    const icon = $('#cmbIcon'), text = $('#cmbText');
+    if (msgMode.ephemeralSec > 0) {
+        icon.textContent = '🔥'; text.textContent = '阅后即焚 · ' + msgMode.ephemeralSec + '秒';
+        bar.hidden = false;
+    } else if (msgMode.capsuleUnlockAt > 0) {
+        const d = new Date(msgMode.capsuleUnlockAt);
+        icon.textContent = '⏳'; text.textContent = '定时胶囊 · ' + d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        bar.hidden = false;
+    } else if (msgMode.whisper) {
+        icon.textContent = '🔒'; text.textContent = '悄悄话 · 生物验证后查看即焚';
+        bar.hidden = false;
+    } else if (msgMode.bioSigned) {
+        icon.textContent = '👆'; text.textContent = '生物签名 · 发送时需指纹/面容确认';
+        bar.hidden = false;
+    } else {
+        bar.hidden = true;
+    }
+}
+function clearMsgMode() { msgMode = { ephemeralSec: 0, capsuleUnlockAt: 0, whisper: false, bioSigned: false }; showMsgModeBar(); }
+function toggleWhisperMode() {
+    msgMode = { ...msgMode, whisper: !msgMode.whisper, bioSigned: false };
+    showMsgModeBar();
+    showToast(msgMode.whisper ? '已开启悄悄话' : '已关闭悄悄话');
+}
+async function toggleBioSignMode() {
+    if (!msgMode.bioSigned) {
+        // 先检查是否有可用 passkey
+        const avail = await waAvailable();
+        if (!avail) { showToast('当前设备无生物认证器'); return; }
+    }
+    msgMode = { ...msgMode, bioSigned: !msgMode.bioSigned, whisper: false };
+    showMsgModeBar();
+    showToast(msgMode.bioSigned ? '已开启生物签名' : '已关闭生物签名');
+}
+function openEphemeralPicker() {
+    const p = $('#ephemeralPicker');
+    if (!p) return;
+    p.hidden = !p.hidden;
+    if (!p.hidden) floatPopover(p, document.querySelector('.composer'), { gap: 8 });
+}
+function setEphemeral(sec) {
+    msgMode = { ephemeralSec: sec, capsuleUnlockAt: 0 };
+    const p = $('#ephemeralPicker'); if (p) p.hidden = true;
+    showMsgModeBar(); showToast('已开启阅后即焚 ' + sec + '秒');
+}
+function openCapsulePicker() {
+    const p = $('#capsulePicker'); if (p) p.hidden = !p.hidden;
+    if (p && p.hidden === false) {
+        floatPopover(p, document.querySelector('.composer'), { gap: 8 });
+        // datetime-local 需要本地时间字符串，不能直接用 toISOString()（UTC）
+        const t = new Date(Date.now() + 60000);
+        const local = new Date(t.getTime() - t.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        $('#capsuleTime').value = local;
+    }
+}
+function confirmCapsule() {
+    const v = $('#capsuleTime').value;
+    if (!v) { showToast('请选择解锁时间'); return; }
+    const ts = new Date(v).getTime();
+    if (ts <= Date.now()) { showToast('解锁时间需晚于当前'); return; }
+    msgMode = { ephemeralSec: 0, capsuleUnlockAt: ts };
+    const p = $('#capsulePicker'); if (p) p.hidden = true;
+    showMsgModeBar(); showToast('已设为定时胶囊');
+}
+
+// ============ 多选模式 ============
+let multiSelectMode = false;
+let selectedMsgIds = new Set();
+
+function enterMultiSelect(firstId) {
+    multiSelectMode = true; selectedMsgIds.clear();
+    if (firstId) selectedMsgIds.add(firstId);
+    $('#multiSelectBar').hidden = false;
+    $('#messages').classList.add('multi-select-active');
+    updateMsbCount();
+}
+function exitMultiSelect() {
+    multiSelectMode = false; selectedMsgIds.clear();
+    $('#multiSelectBar').hidden = true;
+    $('#messages').classList.remove('multi-select-active');
+    $$('.msg-row.selected').forEach(r => r.classList.remove('selected'));
+}
+function toggleMsgSelect(msgId) {
+    if (!multiSelectMode) return;
+    if (selectedMsgIds.has(msgId)) selectedMsgIds.delete(msgId);
+    else selectedMsgIds.add(msgId);
+    const row = document.querySelector('.msg-row[data-msg-id="' + msgId + '"]');
+    if (row) row.classList.toggle('selected', selectedMsgIds.has(msgId));
+    updateMsbCount();
+}
+function updateMsbCount() {
+    const el = $('#msbCount'); if (el) el.textContent = '已选 ' + selectedMsgIds.size + ' 条';
+}
+async function msbDelete() {
+    if (selectedMsgIds.size === 0) return;
+    if (!confirm('确定删除选中的 ' + selectedMsgIds.size + ' 条消息？')) return;
+    for (const id of selectedMsgIds) {
+        try { await api('/groups/' + group.code + '/messages/' + id + '/recall', { method: 'POST' }); } catch(e) {}
+    }
+    exitMultiSelect(); forceFullReload = true; refreshGroupData();
+}
+function msbForward() {
+    if (selectedMsgIds.size === 0) return;
+    showToast('转发功能开发中');
+}
+function msbSave() {
+    if (selectedMsgIds.size === 0) return;
+    showToast('已收藏 ' + selectedMsgIds.size + ' 条');
+    exitMultiSelect();
+}
+
+// ============ 融化动画 N2（撤回/阅后即焚消散） ============
+function meltAndRemove(rowEl) {
+    if (!rowEl) return;
+    rowEl.classList.add('melting');
+    setTimeout(() => {
+        knownMsgIds.delete(rowEl.dataset.msgId);
+        rowEl.remove();
+    }, 650);
+}
+
+// ============ 文字动效 Q6 ============
+const TEXT_EFFECTS = {
+    '生日快乐|happy birthday|生日': { type: 'confetti', emoji: '🎂🎉🎈' },
+    '晚安|good night': { type: 'moon', emoji: '🌙⭐' },
+    '干杯|cheers|喝一个': { type: 'cheers', emoji: '🍻🥂' },
+    '恭喜|congrats|congratulations': { type: 'confetti', emoji: '🎉✨' },
+    '新年|happy new year': { type: 'confetti', emoji: '🎆🎇' },
+    '爱你|love you|我爱你': { type: 'heart', emoji: '❤️💕' }
+};
+function detectTextEffect(text) {
+    const t = text.toLowerCase();
+    for (const pat in TEXT_EFFECTS) {
+        if (new RegExp(pat, 'i').test(t)) return TEXT_EFFECTS[pat];
+    }
+    return null;
+}
+function playTextEffect(effect) {
+    const layer = $('#textEffectLayer'); if (!layer) return;
+    layer.innerHTML = ''; layer.hidden = false;
+    const emojis = effect.emoji.split('');
+    const count = 40;
+    for (let i = 0; i < count; i++) {
+        const s = document.createElement('span');
+        s.className = 'te-particle';
+        s.textContent = emojis[i % emojis.length];
+        s.style.left = Math.random() * 100 + '%';
+        s.style.animationDelay = (Math.random() * 0.8) + 's';
+        s.style.fontSize = (24 + Math.random() * 32) + 'px';
+        layer.appendChild(s);
+    }
+    setTimeout(() => { layer.hidden = true; layer.innerHTML = ''; }, 3500);
+}
+
+// ============ 批次2：生物识别延伸 ============
+// 生物签名 N5：发送前强制 UV，返回凭证 ID 作为签名证明
+async function bioSignMessage(text) {
+    if (!waAvailable()) throw new Error('no-webauthn');
+    const challenge = new Uint8Array(32);
+    crypto.getRandomValues(challenge);
+    const cred = await navigator.credentials.get({ publicKey: {
+        challenge, rpId: location.hostname,
+        userVerification: 'required', timeout: 60000
+    }});
+    return cred.id + ':' + Date.now();
+}
+
+// 悄悄话 N4：接收方 UV 后查看即焚
+async function viewWhisper(msgId, bubbleEl) {
+    if (!waAvailable()) { showToast('当前设备不支持生物验证'); return; }
+    try {
+        const challenge = new Uint8Array(32); crypto.getRandomValues(challenge);
+        await navigator.credentials.get({ publicKey: { challenge, rpId: location.hostname, userVerification: 'required', timeout: 60000 } });
+    } catch (e) { showToast('生物验证未通过'); return; }
+    try {
+        const r = await api('/groups/' + group.code + '/messages/' + msgId + '/whisper-view', { method: 'POST' });
+        if (bubbleEl) {
+            bubbleEl.classList.remove('whisper-locked');
+            bubbleEl.classList.add('whisper-revealed');
+            bubbleEl.innerHTML = '<div class="whisper-content">' + escapeHtml(r.content) + '</div><div class="whisper-hint">已查看，消息将消失</div>';
+            setTimeout(() => meltAndRemove(bubbleEl.closest('.msg-row')), 2500);
+        }
+    } catch (e) { showToast(e.message || '查看失败'); }
+}
+
+// 聊天锁 Q2：本地存储锁定的群
+function getLockedChats() {
+    try { return JSON.parse(localStorage.getItem('chat_locks_' + (me?.phone || '')) || '[]'); } catch { return []; }
+}
+function setChatLocked(code, locked) {
+    if (!me) return;
+    let list = getLockedChats();
+    if (locked) { if (!list.includes(code)) list.push(code); }
+    else list = list.filter(c => c !== code);
+    localStorage.setItem('chat_locks_' + me.phone, JSON.stringify(list));
+}
+function isChatLocked(code) { return getLockedChats().includes(code); }
+
+// 伪登录警告 Q1：检查新会话
+async function checkNewLogins() {
+    if (!me) return;
+    try {
+        const r = await api('/me/sessions');
+        const known = JSON.parse(localStorage.getItem('known_sessions_' + me.phone) || '[]');
+        const knownSet = new Set(known);
+        const current = (r.sessions || []).map(s => s.token);
+        const newOnes = (r.sessions || []).filter(s => !knownSet.has(s.token) && s.token !== token);
+        if (newOnes.length > 0 && known.length > 0) {
+            const s = newOnes[0];
+            showLoginWarning(s);
+        }
+        localStorage.setItem('known_sessions_' + me.phone, JSON.stringify(current));
+    } catch (e) {}
+}
+function showLoginWarning(session) {
+    const ua = session.ua || '未知设备';
+    const time = new Date(session.ts).toLocaleString('zh-CN');
+    showToast('⚠️ 检测到新设备登录：' + ua + ' (' + time + ')', 6000);
+}
+
+// ============ 批次3：Q9 语气提醒 ============
+const HARSH_PATTERNS = [
+    /你怎么又/, /凭什么/, /你总是/, /你从来/, /能不能别/, /烦不烦/, /闭嘴/, /滚/,
+    /蠢货/, /白痴/, /笨蛋/, /你有病/, /脑子有病/, /废物/, /垃圾/, /你算什么/,
+    /^凭什么/, /你是不是傻/, /够了/, /别烦我/, /懒得理你/
+];
+let _toneWarned = false;
+function checkToneWarning(text) {
+    if (!text) { $('#composerInput').classList.remove('tone-warn'); _toneWarned = false; return; }
+    const harsh = HARSH_PATTERNS.some(p => p.test(text));
+    const composer = $('#composerInput');
+    if (harsh) {
+        composer.classList.add('tone-warn');
+        if (!_toneWarned) { _toneWarned = true; showToast('💡 这句话可能让对方不舒服，确定要发吗？', 3000); }
+    } else {
+        composer.classList.remove('tone-warn');
+        _toneWarned = false;
+    }
+}
+
+// ============ 批次3：P3 一键翻译 ============
+async function translateMessage(msg) {
+    const text = msg.content || msg.text || '';
+    if (!text) return;
+    const wrap = document.querySelector('.msg-row[data-msg-id="' + msg.id + '"]');
+    const bubble = wrap?.querySelector('.msg-bubble');
+    if (!bubble) return;
+    // 已有译文则移除
+    const existing = bubble.querySelector('.msg-translation');
+    if (existing) { existing.remove(); return; }
+    try {
+        const langpair = /[\u4e00-\u9fa5]/.test(text) ? 'zh-CN|en' : 'en|zh-CN';
+        const r = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) + '&langpair=' + langpair);
+        const d = await r.json();
+        const translated = d.responseData?.translatedText || '';
+        if (!translated) throw new Error('无译文');
+        const t = document.createElement('div');
+        t.className = 'msg-translation';
+        t.innerHTML = '<span class="mt-label">译</span> ' + escapeHtml(translated);
+        bubble.appendChild(t);
+    } catch (e) { showToast('翻译失败：' + (e.message || '')); }
+}
+
+// ============ 批次3：Q4 液态玻璃表情包 ============
+function getCustomStickers() {
+    try { return JSON.parse(localStorage.getItem('custom_stickers') || '[]'); } catch { return []; }
+}
+function saveCustomSticker(dataUrl) {
+    const list = getCustomStickers();
+    list.push({ id: 'stk_' + Date.now(), data: dataUrl, ts: Date.now() });
+    if (list.length > 30) list.shift();
+    localStorage.setItem('custom_stickers', JSON.stringify(list));
+}
+function openStickerMaker() {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*';
+    input.onchange = () => {
+        const file = input.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            // 套液态玻璃边框
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const size = 200; canvas.width = size; canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(12, 12, size - 24, size - 24, 28);
+                ctx.clip();
+                const scale = Math.max(size / img.width, size / img.height);
+                const w = img.width * scale, h = img.height * scale;
+                ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+                ctx.restore();
+                // 玻璃边框
+                ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.roundRect(12, 12, size - 24, size - 24, 28); ctx.stroke();
+                ctx.strokeStyle = 'rgba(120,150,255,.4)'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.roundRect(14, 14, size - 28, size - 28, 26); ctx.stroke();
+                const dataUrl = canvas.toDataURL('image/png');
+                saveCustomSticker(dataUrl);
+                showToast('表情包已保存');
+                renderCustomStickers();
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+}
+function renderCustomStickers() {
+    const panel = $('#emojiGrid'); if (!panel) return;
+    const stickers = getCustomStickers();
+    if (stickers.length === 0) return;
+    let section = panel.querySelector('.custom-stickers');
+    if (!section) {
+        section = document.createElement('div');
+        section.className = 'custom-stickers';
+        panel.insertBefore(section, panel.firstChild);
+    }
+    section.innerHTML = '<div class="cs-title">我的表情包</div>';
+    stickers.forEach(s => {
+        const img = document.createElement('img');
+        img.src = s.data; img.className = 'cs-item';
+        img.onclick = () => { sendSticker(s.data); $('#emojiPanel').hidden = true; };
+        section.appendChild(img);
+    });
+    const addBtn = document.createElement('button');
+    addBtn.className = 'cs-add'; addBtn.textContent = '+';
+    addBtn.onclick = () => { $('#emojiPanel').hidden = true; openStickerMaker(); };
+    section.appendChild(addBtn);
+}
+function sendSticker(dataUrl) {
+    if (!group) return;
+    api('/groups/' + group.code + '/messages', { method: 'POST', body: { type: 'image', imageData: dataUrl } })
+        .then(() => { forceFullReload = true; refreshGroupData(); })
+        .catch(() => showToast('发送失败'));
+}
+
+// ============ 批次4：热力图 / 年度报告 / 情绪头像 / 截屏通知 / 双人生物房间 ============
+// Q10 聊天热力图
+async function openHeatmap() {
+    const modal = $('#heatmapModal'); if (!modal) return;
+    modal.hidden = false;
+    try {
+        const r = await api('/me/chat-stats?days=365');
+        const grid = $('#heatmapGrid'); grid.innerHTML = '';
+        const stats = r.stats || {};
+        const max = Math.max(1, ...Object.values(stats));
+        const today = new Date();
+        const start = new Date(today); start.setDate(start.getDate() - 364);
+        // 按周列渲染
+        const cols = Math.ceil(365 / 7);
+        for (let w = 0; w < cols; w++) {
+            const col = document.createElement('div'); col.className = 'hm-col';
+            for (let d = 0; d < 7; d++) {
+                const day = new Date(start); day.setDate(start.getDate() + w * 7 + d);
+                if (day > today) { col.appendChild(document.createElement('div')); continue; }
+                const key = day.toISOString().slice(0, 10);
+                const count = stats[key] || 0;
+                const cell = document.createElement('div');
+                cell.className = 'hm-cell hl-' + Math.min(4, count === 0 ? 0 : Math.ceil(count / max * 4));
+                cell.title = key + ': ' + count + ' 条';
+                col.appendChild(cell);
+            }
+            grid.appendChild(col);
+        }
+        $('#heatmapStats').innerHTML = '共发送 <b>' + r.totalMsgs + '</b> 条消息 · 活跃天数 <b>' + Object.keys(stats).length + '</b> 天';
+    } catch (e) { showToast('加载失败'); }
+}
+
+// Q11 年度报告
+async function openYearReport() {
+    const modal = $('#yearReportModal'); if (!modal) return;
+    modal.hidden = false;
+    try {
+        const r = await api('/me/chat-stats?days=365');
+        const stats = r.stats || {};
+        const hourStats = r.hourStats || [];
+        const total = r.totalMsgs || 0;
+        const activeDays = Object.keys(stats).length;
+        const topHour = hourStats.indexOf(Math.max(...hourStats));
+        const sorted = Object.entries(stats).sort((a, b) => b[1] - a[1]);
+        const topDay = sorted[0];
+        $('#yrContent').innerHTML =
+            '<div class="yr-card"><div class="yr-num">' + total + '</div><div class="yr-label">条消息</div></div>' +
+            '<div class="yr-card"><div class="yr-num">' + activeDays + '</div><div class="yr-label">活跃天数</div></div>' +
+            '<div class="yr-card"><div class="yr-num">' + (topHour >= 0 ? topHour + ':00' : '--') + '</div><div class="yr-label">最爱聊天时段</div></div>' +
+            (topDay ? '<div class="yr-card"><div class="yr-num">' + topDay[1] + '</div><div class="yr-label">单日最高（' + topDay[0] + '）</div></div>' : '') +
+            '<div class="yr-card yr-highlight">💬 累计聊天 ' + total + ' 条，相当于 ' + Math.round(total / 30) + ' 本书的字数</div>';
+    } catch (e) { showToast('加载失败'); }
+}
+
+// N3 情绪光谱头像：基于最近消息频率计算色调
+function getMoodHue() {
+    try {
+        const mood = JSON.parse(localStorage.getItem('mood_' + (me?.phone || '')) || '{}');
+        const now = Date.now();
+        const recent = (mood.events || []).filter(e => now - e.ts < 3600000);
+        const count = recent.length;
+        if (count === 0) return null;
+        if (count > 20) return 25; // 暖橙
+        if (count > 10) return 45; // 暖黄
+        return 210; // 冷蓝
+    } catch { return null; }
+}
+function recordMoodEvent() {
+    if (!me) return;
+    try {
+        const mood = JSON.parse(localStorage.getItem('mood_' + me.phone) || '{}');
+        mood.events = mood.events || [];
+        mood.events.push({ ts: Date.now() });
+        if (mood.events.length > 100) mood.events = mood.events.slice(-100);
+        localStorage.setItem('mood_' + me.phone, JSON.stringify(mood));
+    } catch {}
+}
+function applyMoodGlow(avatarEl) {
+    if (!avatarEl) return;
+    const hue = getMoodHue();
+    if (hue === null) { avatarEl.style.boxShadow = ''; return; }
+    avatarEl.style.boxShadow = '0 0 12px hsla(' + hue + ',80%,60%,.6), 0 0 4px hsla(' + hue + ',80%,60%,.8)';
+    avatarEl.style.transition = 'box-shadow 1s ease';
+}
+
+// Q3 截屏通知（visibility 变化间接检测——Web 无直接截屏 API）
+let _lastVisibility = true;
+let _hiddenTime = 0;
+document.addEventListener('visibilitychange', () => {
+    const visible = !document.hidden;
+    if (!visible) { _lastVisibility = false; _hiddenTime = Date.now(); return; }
+    if (visible && !_lastVisibility) {
+        _lastVisibility = true;
+        // 从隐藏快速恢复可能是截屏/分屏
+        if (Date.now() - _hiddenTime < 3000 && group && me) {
+            showToast('📸 检测到截屏/切换行为', 2500);
+            // 发送截屏通知消息给群成员
+            try {
+                api('/groups/' + group.code + '/messages', { method: 'POST', body: { text: '📸 我刚刚截屏了聊天', type: 'system' } }).catch(() => {});
+            } catch {}
+        }
+    }
+});
+
+// N6 双人生物房间
+let bioRoomCode = null;
+async function openBioRoom() {
+    $('#bioRoomModal').hidden = false;
+    const body = $('#bioRoomBody');
+    body.innerHTML = '<div class="br-actions">' +
+        '<button class="btn-primary lg-block-btn" id="brCreate">创建房间</button>' +
+        '<div class="br-join-row"><input type="text" id="brJoinCode" placeholder="输入房间码" maxlength="10">' +
+        '<button class="btn-ghost" id="brJoinBtn">加入</button></div></div>';
+    $('#brCreate').onclick = createBioRoom;
+    $('#brJoinBtn').onclick = joinBioRoom;
+}
+async function createBioRoom() {
+    // 强制 UV
+    if (!(await bioVerify())) return;
+    try {
+        const r = await api('/bioroom', { method: 'POST' });
+        bioRoomCode = r.code;
+        showBioRoomWaiting();
+    } catch (e) { showToast(e.message); }
+}
+async function joinBioRoom() {
+    const code = $('#brJoinCode').value.trim().toUpperCase();
+    if (!code) return;
+    if (!(await bioVerify())) return;
+    try {
+        const r = await api('/bioroom/join', { method: 'POST', body: { code } });
+        bioRoomCode = code;
+        if (r.room.status === 'active') showBioRoomChat();
+        else showBioRoomWaiting();
+    } catch (e) { showToast(e.message); }
+}
+function showBioRoomWaiting() {
+    $('#bioRoomBody').innerHTML = '<div class="br-code">房间码：<b>' + bioRoomCode + '</b></div>' +
+        '<p class="sec-sub">等待对方加入并完成生物验证…</p>' +
+        '<button class="btn-ghost lg-block-btn" id="brRefresh">刷新状态</button>';
+    $('#brRefresh').onclick = async () => {
+        try {
+            const r = await api('/bioroom/' + bioRoomCode);
+            if (r.room.status === 'active') showBioRoomChat();
+        } catch (e) { showToast(e.message); }
+    };
+}
+function showBioRoomChat() {
+    $('#bioRoomBody').innerHTML = '<div class="br-chat" id="brChat"></div>' +
+        '<div class="br-input-row"><input type="text" id="brInput" placeholder="房间内消息将随房间关闭而删除">' +
+        '<button class="btn-primary" id="brSend">发送</button></div>' +
+        '<button class="btn-ghost lg-block-btn" id="brClose" style="margin-top:10px;color:#ff3b30;">关闭并销毁房间</button>';
+    $('#brSend').onclick = sendBioRoomMsg;
+    $('#brClose').onclick = closeBioRoom;
+    pollBioRoomMsgs();
+}
+async function sendBioRoomMsg() {
+    const input = $('#brInput'); const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    try { await api('/bioroom/messages', { method: 'POST', body: { code: bioRoomCode, text } }); } catch (e) { showToast(e.message); }
+}
+let _bioRoomPoll = null;
+async function pollBioRoomMsgs() {
+    if (!bioRoomCode) return;
+    try {
+        const r = await api('/bioroom/messages?code=' + bioRoomCode);
+        const chat = $('#brChat');
+        if (chat) chat.innerHTML = (r.messages || []).map(m =>
+            '<div class="br-msg ' + (m.senderPhone === me.phone ? 'me' : 'other') + '">' + escapeHtml(m.text) + '</div>'
+        ).join('');
+    } catch {}
+    _bioRoomPoll = setTimeout(pollBioRoomMsgs, 1500);
+}
+async function closeBioRoom() {
+    if (!bioRoomCode) return;
+    if (!confirm('关闭后房间内所有消息将被物理删除，确定吗？')) return;
+    clearTimeout(_bioRoomPoll);
+    try { await api('/bioroom/close', { method: 'POST', body: { code: bioRoomCode } }); showToast('房间已销毁'); } catch (e) {}
+    bioRoomCode = null;
+    $('#bioRoomModal').hidden = true;
+}
+async function bioVerify() {
+    if (!waAvailable()) { showToast('当前设备不支持生物验证'); return false; }
+    try {
+        const challenge = new Uint8Array(32); crypto.getRandomValues(challenge);
+        await navigator.credentials.get({ publicKey: { challenge, rpId: location.hostname, userVerification: 'required', timeout: 60000 } });
+        return true;
+    } catch (e) { showToast('生物验证未通过'); return false; }
+}
 
 // ============ 长按发送键=位置菜单 ============
 let sendPressTimer = null;
@@ -3580,6 +4315,7 @@ function setupSendLongPress() {
             sendLongPressed = true;
             const menu = $('#locMenu');
             menu.hidden = false;
+            floatPopover(menu, $('#sendBtn'), { alignRight: true });
             if (navigator.vibrate) navigator.vibrate(50);
         }, 500);
     };
@@ -4176,6 +4912,8 @@ $('#msgContextMenu')?.addEventListener('click', (e) => {
     else if (action === 'react') showReactionPicker(msg);
     else if (action === 'forward') showForwardDialog(msg);
     else if (action === 'save') saveMessage(msg);
+    else if (action === 'select') enterMultiSelect(msg.id);
+    else if (action === 'translate') translateMessage(msg);
     else if (action === 'pin') pinMessage(msg.id);
     else if (action === 'edit') editMessage(msg);
     else if (action === 'recall') recallMessage(msg.id);
@@ -4442,6 +5180,27 @@ $('#gmMute')?.addEventListener('click', async () => {
         await api('/groups/' + group.code + '/settings', { method: 'POST', body: { muted: newMuted } });
         showToast(newMuted ? '已免打扰' : '取消免打扰');
     } catch(e) { showToast('操作失败'); }
+});
+
+// 聊天锁 Q2
+$('#gmLockChat')?.addEventListener('click', async () => {
+    $('#groupMenu').hidden = true;
+    if (!group) return;
+    const currentlyLocked = isChatLocked(group.code);
+    if (!currentlyLocked) {
+        // 开启锁：先 UV 验证
+        if (waAvailable()) {
+            try {
+                const challenge = new Uint8Array(32); crypto.getRandomValues(challenge);
+                await navigator.credentials.get({ publicKey: { challenge, rpId: location.hostname, userVerification: 'required', timeout: 60000 } });
+            } catch (e) { showToast('生物验证未通过'); return; }
+        }
+        setChatLocked(group.code, true);
+        showToast('已开启聊天锁，下次进入需生物验证');
+    } else {
+        setChatLocked(group.code, false);
+        showToast('已关闭聊天锁');
+    }
 });
 
 // ============ 会话管理 ============
@@ -6183,6 +6942,50 @@ function openSmsModal() {
     smsStep('phone');
     setTimeout(() => $('#smsPhone').focus(), 80);
 }
+
+// ============ SIM 卡运营商一键取号登录 ============
+async function openSimLogin() {
+    showToast('正在通过运营商静默取号…', 2000);
+    try {
+        const start = await api('/sim/start', { method: 'POST' });
+        let phoneToken;
+        if (start.mock) {
+            // dev 模式：直接用返回的测试号
+            phoneToken = start.phone;
+            showToast('（开发模式）取号：' + phoneToken);
+        } else {
+            // 生产：调运营商 SDK 静默取号
+            // 阿里云号码认证 SDK：window.AliyunPush.getPhoneNumber(appid, token => {...})
+            // 腾讯云号码认证 SDK：window.TencentCaptcha(appid, res => {...})
+            phoneToken = await callOperatorSDK(start);
+        }
+        const r = await api('/sim/login', { method: 'POST', body: { phoneToken } });
+        if (r.needRegister) {
+            // 未注册：走短信注册流程（填昵称头像）
+            smsCtx = { phone: r.phone, ticket: r.smsTicket, otp: null, avatar: LG_AVATARS[0], busy: false };
+            $('#smsModal').hidden = false;
+            $('#smsPhoneShown').textContent = r.phone;
+            $('#smsNick').value = '';
+            $('#smsRegErr').textContent = '';
+            smsStep('profile');
+        } else if (r.ok) {
+            lgLoginSuccess(r.token, r.user);
+        } else {
+            showToast(r.error || '登录失败');
+        }
+    } catch (e) {
+        showToast(e.message || '取号失败，请改用短信登录');
+    }
+}
+function callOperatorSDK(start) {
+    // 生产对接：动态加载运营商 SDK 并取号
+    return new Promise((resolve, reject) => {
+        // 阿里云示例（需在 index.html 引入 SDK）：
+        // const s = document.createElement('script'); s.src = 'https://gw.alipayobjects.com/os/lib/aliyun/...';
+        // s.onload = () => window.AliyunNumberAuth.getPhone({ appId: start.appid }, res => resolve(res.token), reject);
+        reject(new Error('运营商 SDK 未加载'));
+    });
+}
 async function smsSendCode(scene, phone, errEl, hintEl) {
     try {
         const r = await api('/sms/send', { method: 'POST', body: { phone, scene } });
@@ -6493,6 +7296,7 @@ function initSecurityUI() {
     $('#signKeyFile').addEventListener('change', signKeyImport);
     // ---- 本机号码 / 微信 / 生物引导 ----
     $('#smsLoginBtn').onclick = openSmsModal;
+    $('#simLoginBtn').onclick = openSimLogin;
     $('#smsCloseBtn').onclick = () => { $('#smsModal').hidden = true; stopWebOtpAutofill(); };
     $('#smsSendBtn').onclick = smsDoSend;
     $('#smsVerifyBtn').onclick = () => smsDoVerify();
