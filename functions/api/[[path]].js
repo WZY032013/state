@@ -2871,7 +2871,7 @@ async function handleRecoverConfirm(env, body) {
 async function ensureEnhTables(env) {
   if (env._enhT) return;
   const stmts = [
-    'CREATE TABLE IF NOT EXISTS group_meta (groupId TEXT PRIMARY KEY, meta TEXT DEFAULT \'{}\')',
+    'CREATE TABLE IF NOT EXISTS group_meta (groupId TEXT PRIMARY KEY, meta TEXT DEFAULT \'{}\', ts INTEGER DEFAULT 0)',
     'CREATE TABLE IF NOT EXISTS join_requests (groupId TEXT NOT NULL, phone TEXT NOT NULL, nickname TEXT DEFAULT \'\', ts INTEGER DEFAULT 0, status TEXT DEFAULT \'pending\', PRIMARY KEY(groupId, phone))',
     'CREATE TABLE IF NOT EXISTS group_bans (groupId TEXT NOT NULL, phone TEXT NOT NULL, until INTEGER DEFAULT 0, byPhone TEXT DEFAULT \'\', ts INTEGER DEFAULT 0, PRIMARY KEY(groupId, phone))',
     'CREATE TABLE IF NOT EXISTS group_roles (groupId TEXT NOT NULL, phone TEXT NOT NULL, role TEXT DEFAULT \'member\', ts INTEGER DEFAULT 0, PRIMARY KEY(groupId, phone))',
@@ -2881,6 +2881,8 @@ async function ensureEnhTables(env) {
   for (const st of stmts) {
     try { await env.DB.prepare(st).run(); } catch (e) { return; }
   }
+  // 兼容旧结构：group_meta 可能缺 ts 列
+  try { await env.DB.prepare('ALTER TABLE group_meta ADD COLUMN ts INTEGER DEFAULT 0').run(); } catch (e) {}
   env._enhT = true;
 }
 
