@@ -8796,13 +8796,18 @@ function renderEnhHome() {
         '</div>';
 }
 (function wireEnhHome() {
+    let enhDone = false;
     new MutationObserver(() => {
         const prof = document.getElementById('profileView');
-        if (prof && prof.classList.contains('active') && !document.getElementById('enhHomeHost')) renderEnhHome();
-        if (prof && prof.classList.contains('active')) renderDailyCard();
+        if (prof && prof.classList.contains('active') && !enhDone) {
+            enhDone = true;
+            renderEnhHome();
+            renderDailyCard();
+        }
     }).observe(document.body, { childList: true, subtree: true });
     // 首次加载
     renderEnhHome();
+    renderDailyCard();
 })();
 
 // ---------- 私密会话解密安全网（渲染后的气泡文本） ----------
