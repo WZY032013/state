@@ -5922,3 +5922,122 @@ body.dark .field-icon { opacity: .7; }
 /* 性能：批量首屏/加载更多渲染时关闭逐条消息动画 */
 .messages.bulk .msg-row { animation: none !important; }
 .messages.bulk .msg-row .bubble { animation: none !important; }
+
+/* ============================================================
+   iOS 26 Liquid Glass · 全局覆盖层（覆盖层 3）
+   标准玻璃：半透明基底 + 背景模糊增强 + 1px 亮边 + 内高光 + 大圆角
+   克制收敛：非重阴影堆叠，非纯色极简
+   ============================================================ */
+.auth-screen {
+    background:
+        radial-gradient(95% 75% at 12% 0%, rgba(90,170,255,.34), transparent 55%),
+        radial-gradient(85% 75% at 90% 100%, rgba(200,110,255,.22), transparent 60%),
+        linear-gradient(180deg, #f5f6fa, #eef1f7) !important;
+}
+body.dark .auth-screen {
+    background:
+        radial-gradient(95% 75% at 12% 0%, rgba(45,115,255,.32), transparent 55%),
+        radial-gradient(85% 75% at 90% 100%, rgba(150,70,255,.24), transparent 60%),
+        linear-gradient(180deg, #12121c, #0c0c14) !important;
+}
+.auth-card {
+    background: rgba(255,255,255,.52) !important;
+    -webkit-backdrop-filter: blur(38px) saturate(190%) !important;
+    backdrop-filter: blur(38px) saturate(190%) !important;
+    border: 1px solid rgba(255,255,255,.65) !important;
+    border-radius: 30px !important;
+    box-shadow:
+        0 1px 0 rgba(255,255,255,.95) inset,
+        0 -1px 0 rgba(25,40,75,.05) inset,
+        0 28px 70px rgba(25,45,90,.16),
+        0 2px 8px rgba(25,45,90,.06) !important;
+}
+body.dark .auth-card {
+    background: rgba(45,48,64,.58) !important;
+    border-color: rgba(255,255,255,.16) !important;
+    box-shadow:
+        0 1px 0 rgba(255,255,255,.14) inset,
+        0 -1px 0 rgba(0,0,0,.25) inset,
+        0 28px 70px rgba(0,0,0,.45),
+        0 2px 8px rgba(0,0,0,.25) !important;
+}
+.auth-tab {
+    background: rgba(255,255,255,.45) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    border: 1px solid rgba(255,255,255,.55) !important;
+    border-radius: 13px !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.8) inset, 0 4px 14px rgba(25,45,90,.08) !important;
+}
+body.dark .auth-tab {
+    background: rgba(255,255,255,.08) !important;
+    border-color: rgba(255,255,255,.14) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.1) inset, 0 4px 14px rgba(0,0,0,.25) !important;
+}
+.auth-tab.active {
+    background: rgba(255,255,255,.85) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.95) inset, 0 3px 10px rgba(25,45,90,.12) !important;
+}
+body.dark .auth-tab.active { background: rgba(70,74,92,.92) !important; }
+.field {
+    background: rgba(255,255,255,.5) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(170%) !important;
+    backdrop-filter: blur(20px) saturate(170%) !important;
+    border: 1px solid rgba(255,255,255,.6) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.8) inset, 0 1px 4px rgba(25,45,90,.05) !important;
+}
+body.dark .field {
+    background: rgba(255,255,255,.09) !important;
+    border-color: rgba(255,255,255,.14) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.08) inset, 0 1px 4px rgba(0,0,0,.2) !important;
+}
+.logo-badge {
+    box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 18px 40px rgba(10,132,255,.28) !important;
+    border: 1px solid rgba(255,255,255,.5) !important;
+}
+body.dark .logo-badge { box-shadow: 0 1px 0 rgba(255,255,255,.35) inset, 0 18px 40px rgba(0,0,0,.5) !important; }
+.auth-more-btn {
+    background: rgba(255,255,255,.4) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
+    backdrop-filter: blur(18px) saturate(160%) !important;
+    border: 1px solid rgba(255,255,255,.55) !important;
+    border-radius: 999px !important;
+    padding: 6px 14px !important;
+    color: #0a6cff !important;
+    font-weight: 600 !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 3px 10px rgba(25,45,90,.07) !important;
+}
+body.dark .auth-more-btn {
+    background: rgba(255,255,255,.1) !important;
+    border-color: rgba(255,255,255,.16) !important;
+    color: #64b0ff !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.1) inset, 0 3px 10px rgba(0,0,0,.25) !important;
+}
+.oauth-btn {
+    background: rgba(255,255,255,.45) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(170%) !important;
+    backdrop-filter: blur(22px) saturate(170%) !important;
+    border: 1px solid rgba(255,255,255,.55) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.75) inset, 0 6px 18px rgba(25,45,90,.08) !important;
+}
+body.dark .oauth-btn {
+    background: rgba(255,255,255,.09) !important;
+    border-color: rgba(255,255,255,.14) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.08) inset, 0 6px 18px rgba(0,0,0,.25) !important;
+}
+.enh-pop {
+    background: rgba(255,255,255,.62) !important;
+    -webkit-backdrop-filter: blur(40px) saturate(190%) !important;
+    backdrop-filter: blur(40px) saturate(190%) !important;
+    border: 1px solid rgba(255,255,255,.7) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 24px 64px rgba(20,35,70,.18) !important;
+}
+body.dark .enh-pop {
+    background: rgba(44,47,62,.66) !important;
+    border-color: rgba(255,255,255,.16) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.13) inset, 0 24px 64px rgba(0,0,0,.5) !important;
+}
+.topbar {
+    -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+    backdrop-filter: blur(30px) saturate(180%) !important;
+}

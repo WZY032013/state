@@ -1653,19 +1653,18 @@ function handleScannedText(text) {
         try { sessionStorage.setItem(QR_SS_KEY, qrId); } catch {}
         if (token && me) { beginQrConfirm(qrId); return; }
         /* 理论上扫一扫入口仅登录后可见，兜底：引导登录 */
-        showConfirm('qr', '扫码登录', '登录 Stating 后即可授权网页端登录', () => {
-            logout();
-            const lt = document.querySelector('.auth-tab[data-tab="login"]');
-            if (lt) lt.click();
-        });
+        alert('登录 Stating 后即可授权网页端登录');
+        logout();
+        const lt = document.querySelector('.auth-tab[data-tab="login"]');
+        if (lt) lt.click();
         return;
     }
     let isUrl = false;
     try { const u = new URL(text); isUrl = /^https?:$/.test(u.protocol); } catch {}
     if (isUrl) {
-        showConfirm('qr', '发现链接', text.length > 80 ? text.slice(0, 80) + '…' : text, () => window.open(text, '_blank', 'noopener'));
+        if (confirm('打开链接？\n' + (text.length > 80 ? text.slice(0, 80) + '…' : text))) window.open(text, '_blank', 'noopener');
     } else {
-        showConfirm('qr', '扫描结果', text || '未识别到内容', () => {});
+        alert(text || '未识别到内容');
     }
 }
 
@@ -3028,7 +3027,8 @@ function initGroupMenu() {
 
     $('#gmLeaveGroup').onclick = () => {
         menu.hidden = true;
-        showConfirm('leave', '退出群聊', '确定要退出「' + group.name + '」吗？', async () => {
+        if (!confirm('确定要退出「' + group.name + '」吗？')) return;
+        (async () => {
             try {
                 await api('/groups/' + group.code + '/leave', { method: 'POST' });
                 apiInvalidate(['/my-groups', '/me']);
@@ -3036,12 +3036,13 @@ function initGroupMenu() {
                 me = (await api('/me')).user;
                 exitGroup();
             } catch (err) { showToast(err.message); }
-        });
+        })();
     };
 
     $('#gmDismissGroup').onclick = () => {
         menu.hidden = true;
-        showConfirm('dismiss', '注销群聊', '确定要注销「' + group.name + '」吗？所有消息和成员关联将被清除，此操作不可恢复。', async () => {
+        if (!confirm('确定要注销「' + group.name + '」吗？所有消息和成员关联将被清除，此操作不可恢复。')) return;
+        (async () => {
             try {
                 await api('/groups/' + group.code + '/delete', { method: 'DELETE' });
                 apiInvalidate(['/my-groups', '/me']);
@@ -3049,7 +3050,7 @@ function initGroupMenu() {
                 me = (await api('/me')).user;
                 exitGroup();
             } catch (err) { showToast(err.message); }
-        });
+        })();
     };
 }
 
@@ -3089,21 +3090,23 @@ async function openAdminPanel(u) {
                     '</div>';
                 item.querySelector('.ap-btn-view').onclick = () => openMsgViewer(g);
                 item.querySelector('.ap-btn-clear').onclick = () => {
-                    showConfirm('🗑️', '清空消息', '确定要清空「' + g.name + '」的所有聊天记录吗？', async () => {
+                    if (!confirm('确定要清空「' + g.name + '」的所有聊天记录吗？')) return;
+                    (async () => {
                         await api('/groups/' + g.code + '/messages', { method: 'DELETE' });
                         forceFullReload = true;
                         msgCache = [];
                         showToast('消息已清空');
                         openAdminPanel(u);
-                    });
+                    })();
                 };
                 item.querySelector('.ap-btn-delete').onclick = () => {
-                    showConfirm('dismiss', '删除群聊', '确定要删除群聊「' + g.name + '」吗？所有消息和成员关联将被清除。', async () => {
+                    if (!confirm('确定要删除群聊「' + g.name + '」吗？所有消息和成员关联将被清除。')) return;
+                    (async () => {
                         await api('/groups/' + g.code + '/delete', { method: 'DELETE' });
                         apiInvalidate(['/my-groups', '/me', '/users']);
                         showToast('群聊已删除');
                         openAdminPanel(u);
-                    });
+                    })();
                 };
                 list.appendChild(item);
             });
@@ -3209,7 +3212,8 @@ function initConfirmDialog() {
 
 // ============ 注销账号 ============
 function deleteAccount() {
-    showConfirm('trash', '注销账号', '确定要注销账号吗？你的所有数据将被永久删除，此操作不可恢复。', async () => {
+    if (!confirm('确定要注销账号吗？你的所有数据将被永久删除，此操作不可恢复。')) return;
+    (async () => {
         try {
             await api('/delete-account', { method: 'POST' });
             token = '';
@@ -3219,7 +3223,7 @@ function deleteAccount() {
         } catch (err) {
             showToast(err.message);
         }
-    });
+    })();
 }
 
 // ============ 图片查看器 ============
@@ -8515,6 +8519,7 @@ function openBlockManage() {
     document.getElementById('blOk').onclick = () => { el.hidden = true; };
     el.querySelectorAll('[data-p]').forEach(b => {
         b.onclick = () => {
+            if (!confirm('解除对 ' + phoneMask(b.dataset.p) + ' 的拉黑？')) return;
             const list2 = _getBlocklist().filter(p => p !== b.dataset.p);
             localStorage.setItem(_blKey, JSON.stringify(list2));
             showToast('已解除拉黑');
@@ -8551,6 +8556,8 @@ function openSensitiveManage() {
     document.getElementById('swOk').onclick = () => { el.hidden = true; };
     el.querySelectorAll('[data-i]').forEach(b => {
         b.onclick = () => {
+            const w = _getSensitive()[parseInt(b.dataset.i, 10)];
+            if (!confirm('删除敏感词「' + (w || '') + '」？')) return;
             const list = _getSensitive();
             list.splice(parseInt(b.dataset.i, 10), 1);
             localStorage.setItem(_swKey, JSON.stringify(list));
@@ -8687,6 +8694,8 @@ function openAnnivManage() {
         b.onclick = () => {
             let l = [];
             try { l = JSON.parse(localStorage.getItem(_annivKey) || '[]'); } catch (e2) {}
+            const nm = l[parseInt(b.dataset.i, 10)] ? l[parseInt(b.dataset.i, 10)].name : '';
+            if (!confirm('删除纪念日「' + nm + '」？')) return;
             l.splice(parseInt(b.dataset.i, 10), 1);
             localStorage.setItem(_annivKey, JSON.stringify(l));
             openAnnivManage();
