@@ -535,11 +535,14 @@ body.dark .lg-hover > .lg-glint { opacity: .8; }
     min-height: 100vh;
     display: flex; align-items: center; justify-content: center;
     padding: 20px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 .auth-card {
     width: 100%; max-width: 420px;
     padding: 40px 32px 32px;
     text-align: center;
+    margin: auto;
     box-shadow: var(--glass-shadow-deep);
 }
 /* 首屏依次浮现：logo → 标签页 → 其它登录 → 表单（60ms 阶梯，全部 GPU 合成属性）
@@ -5772,3 +5775,36 @@ body.dark .mood-card { background: rgba(255,255,255,.06); }
 }
 .msg-row:hover .msg-act-btn { opacity: 1; }
 .ma-btn { margin-top: 8px; }
+
+/* ============================================================
+   iOS 原生感 · 登录页紧凑化（覆盖层：不移除任何功能，仅压缩垂直空间
+   使 390x844 首屏完整容纳登录/注册 + 快捷登录，消除底部溢出）
+   ============================================================ */
+.auth-card { padding: 34px 30px 22px; }
+.auth-logo { margin-bottom: 18px; }
+.logo-badge { width: 60px; height: 60px; margin: 0 auto 12px; border-radius: 17px; font-size: 26px; }
+.auth-tabs { margin-bottom: 14px; padding: 4px; }
+.auth-tab { padding: 9px; font-size: 14px; }
+.auth-more { margin: 2px 0 12px; }
+.auth-more-btn { min-height: 40px; padding: 7px 14px; }
+.oauth-btn { padding: 8px 12px; border-radius: 17px; }
+.oauth-ic { flex: 0 0 36px; width: 36px; height: 36px; border-radius: 11px; }
+.oauth-ic span[data-icon] { width: 18px; height: 18px; }
+.oauth-tx b { font-size: 14px; }
+.oauth-tx span { font-size: 11.5px; }
+
+/* iOS 登录页紧凑化·第二档：进一步压缩，让 390x844 首屏完整容纳全部登录入口 */
+.auth-card { padding: 24px 28px 16px; }
+.logo-badge { width: 52px; height: 52px; margin: 0 auto 9px; border-radius: 15px; font-size: 23px; }
+.auth-logo { margin-bottom: 12px; }
+.auth-logo h1 { font-size: 24px; letter-spacing: -.6px; }
+.auth-tabs { margin-bottom: 10px; padding: 3px; }
+.auth-tab { padding: 8px; font-size: 13.5px; }
+.auth-more { margin: 2px 0 8px; }
+.auth-more-btn { min-height: 36px; padding: 6px 9px; font-size: 11.5px; white-space: nowrap; flex-shrink: 0; }
+.oauth-btn { padding: 7px 12px; }
+.oauth-ic { flex: 0 0 32px; width: 32px; height: 32px; border-radius: 10px; }
+.oauth-ic span[data-icon] { width: 16px; height: 16px; }
+.oauth-tx b { font-size: 13px; }
+.oauth-tx span { font-size: 11px; line-height: 1.35; }
+.auth-oauth-note { margin-top: 8px; font-size: 10px; line-height: 1.4; }
