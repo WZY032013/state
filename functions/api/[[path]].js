@@ -652,7 +652,7 @@ async function handleSendMessage(env, user, code, body) {
   const group = await getGroup(env, code);
   if (!group) return fail('群聊不存在', 404);
   if (!group.members.includes(user.phone)) return fail('你不是群成员', 403);
-  const { type, text, content, imageData, voiceData, voiceDuration, fileData, fileName, fileType, fileSize, mediaUrl, location, lat, lng, replyToId, ephemeral, ephemeralSec, unlockAt, whisper, bioSigned, bioSig } = body;
+  let { type, text, content, imageData, voiceData, voiceDuration, fileData, fileName, fileType, fileSize, mediaUrl, location, lat, lng, replyToId, ephemeral, ephemeralSec, unlockAt, whisper, bioSigned, bioSig } = body;
   // 禁言检查
   const banRow = await env.DB.prepare('SELECT * FROM group_bans WHERE groupId = ? AND phone = ? AND until > ?').bind(code, user.phone, Date.now()).first().catch(() => null);
   if (banRow) return fail('你已被禁言，无法发送消息');
@@ -663,8 +663,8 @@ async function handleSendMessage(env, user, code, body) {
     let cleanText = rawText;
     for (const w of dirty) { if (w) cleanText = cleanText.split(w).join('*'.repeat(w.length)); }
     if (cleanText !== rawText) {
-      if (typeof text === 'string') body.text = cleanText;
-      if (typeof content === 'string') body.content = cleanText;
+      if (typeof text === 'string') { body.text = cleanText; text = cleanText; }
+      if (typeof content === 'string') { body.content = cleanText; content = cleanText; }
     }
   }
 
