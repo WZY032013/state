@@ -1764,6 +1764,7 @@ export async function onRequest(context) {
     const method = request.method;
 
     if (!env.DB) return fail('数据库未绑定', 500);
+    await ensureEnhTables(env);
 
     // 公开路由：媒体访问（无需登录，通过不可猜测的key保护）
     if (parts[0] === 'media' && parts.length === 2 && method === 'GET') {
@@ -2866,6 +2867,22 @@ async function handleRecoverConfirm(env, body) {
   return ok();
 }
 
+
+async function ensureEnhTables(env) {
+  if (env._enhT) return;
+  const stmts = [
+    'CREATE TABLE IF NOT EXISTS group_meta (groupId TEXT PRIMARY KEY, meta TEXT DEFAULT \'{}\')',
+    'CREATE TABLE IF NOT EXISTS join_requests (groupId TEXT NOT NULL, phone TEXT NOT NULL, nickname TEXT DEFAULT \'\', ts INTEGER DEFAULT 0, status TEXT DEFAULT \'pending\', PRIMARY KEY(groupId, phone))',
+    'CREATE TABLE IF NOT EXISTS group_bans (groupId TEXT NOT NULL, phone TEXT NOT NULL, until INTEGER DEFAULT 0, byPhone TEXT DEFAULT \'\', ts INTEGER DEFAULT 0, PRIMARY KEY(groupId, phone))',
+    'CREATE TABLE IF NOT EXISTS group_roles (groupId TEXT NOT NULL, phone TEXT NOT NULL, role TEXT DEFAULT \'member\', ts INTEGER DEFAULT 0, PRIMARY KEY(groupId, phone))',
+    'CREATE TABLE IF NOT EXISTS group_cards (groupId TEXT NOT NULL, phone TEXT NOT NULL, nickname TEXT DEFAULT \'\', ts INTEGER DEFAULT 0, PRIMARY KEY(groupId, phone))',
+    'CREATE TABLE IF NOT EXISTS blocklist (phone TEXT NOT NULL, blockedPhone TEXT NOT NULL, ts INTEGER DEFAULT 0, PRIMARY KEY(phone, blockedPhone))'
+  ];
+  for (const st of stmts) {
+    try { await env.DB.prepare(st).run(); } catch (e) { return; }
+  }
+  env._enhT = true;
+}
 
 // ============ 批次B–F 后端：群管理 / 审核 / 禁言 / 角色 / 名片 / 黑名单 ============
 async function getGroupMetaMap(env, groupId) {

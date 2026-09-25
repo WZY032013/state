@@ -222,21 +222,7 @@ CREATE TABLE IF NOT EXISTS push_subs (
   subJson TEXT DEFAULT '',
   ts INTEGER DEFAULT 0
 );
-CREATE TABLE IF NOT EXISTS upload_chunks (
-  uploadId TEXT PRIMARY KEY,
-  name TEXT DEFAULT '',
-  mime TEXT DEFAULT '',
-  size INTEGER DEFAULT 0,
-  totalChunks INTEGER DEFAULT 0,
-  chunks TEXT DEFAULT '[]',
-  phone TEXT DEFAULT '',
-  ts INTEGER DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS push_subs (
-  phone TEXT PRIMARY KEY,
-  subJson TEXT DEFAULT '',
-  ts INTEGER DEFAULT 0
-);
+
 CREATE TABLE IF NOT EXISTS group_meta (
   groupId TEXT PRIMARY KEY,
   meta TEXT DEFAULT '{}',
