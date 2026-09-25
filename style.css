@@ -5808,3 +5808,117 @@ body.dark .mood-card { background: rgba(255,255,255,.06); }
 .oauth-tx b { font-size: 13px; }
 .oauth-tx span { font-size: 11px; line-height: 1.35; }
 .auth-oauth-note { margin-top: 8px; font-size: 10px; line-height: 1.4; }
+
+/* ============================================================
+   iOS 原生 · 极简登录页（覆盖层 2）
+   以系统级克制设计替换重玻璃拟态：纯色卡片、系统灰输入框、
+   实心主按钮、文字化辅助入口、列表式快捷登录；
+   移除登录页装饰动画（logoSpin 无限旋转 / 阶梯 fadeUp / 扫光），
+   降低 GPU 负载、提升首屏顺滑度。不改动任何功能与 DOM。
+   ============================================================ */
+.auth-screen { background: transparent; }
+.auth-card {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+/* 品牌区：纯色圆角图标，去掉旋转高光与扫描动画 */
+.logo-badge {
+    background: linear-gradient(145deg, #0A84FF, #0060DF) !important;
+    box-shadow: 0 6px 20px rgba(10,132,255,.22) !important;
+}
+.logo-badge::before, .logo-badge::after { display: none !important; animation: none !important; }
+.auth-logo h1 {
+    background: none !important;
+    -webkit-text-fill-color: currentColor !important;
+    background-clip: unset !important;
+}
+/* 登录/注册：iOS 系统分段控件 */
+.auth-tabs {
+    background: rgba(120,120,128,.16) !important;
+    border-radius: 9px !important;
+    padding: 2px !important;
+    margin-bottom: 18px !important;
+    box-shadow: none !important;
+}
+.auth-tab { border-radius: 7px !important; padding: 8px !important; font-size: 14px !important; }
+.auth-tab.active {
+    background: rgba(255,255,255,.94) !important;
+    color: #000 !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08) !important;
+}
+body.dark .auth-tab.active { background: rgba(255,255,255,.16) !important; color: #fff !important; box-shadow: none !important; }
+.auth-tab.active::before { display: none !important; }
+/* 输入框：系统灰底圆角 */
+.field.glass-field {
+    background: rgba(120,120,128,.12) !important;
+    border: none !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+.field.glass-field:focus-within { background: rgba(120,120,128,.18) !important; }
+/* 主按钮：实心品牌色，去掉渐变玻璃与扫光 */
+.auth-form .btn-primary {
+    background: #0A84FF !important;
+    border: none !important;
+    box-shadow: 0 4px 14px rgba(10,132,255,.28) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+.auth-form .btn-primary::before, .auth-form .btn-primary::after { display: none !important; }
+.auth-form .btn-primary:active { transform: scale(.97) !important; box-shadow: 0 2px 6px rgba(10,132,255,.25) !important; }
+/* 辅助入口：文字链接化，弱化层级 */
+.auth-more {
+    background: transparent !important;
+    margin: 2px 0 10px !important;
+}
+.auth-more-btn {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    color: #0A84FF !important;
+    font-size: 13px !important;
+    min-height: 30px !important;
+    padding: 4px 10px !important;
+    border-radius: 999px !important;
+}
+.auth-more-btn span[data-icon] { width: 13px !important; height: 13px !important; opacity: .85; }
+.auth-more-btn span[data-icon] svg { stroke: currentColor; }
+/* 快捷登录：列表式简洁行 */
+.oauth-btn {
+    background: rgba(120,120,128,.12) !important;
+    border: none !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+.oauth-btn::before { display: none !important; }
+.oauth-btn:hover { transform: none !important; box-shadow: none !important; border: none !important; }
+.oauth-ic { width: 34px !important; height: 34px !important; border-radius: 10px !important; box-shadow: none !important; }
+.oauth-ic span[data-icon] { width: 17px !important; height: 17px !important; }
+/* 免密提示与底注：次级灰 */
+.auth-hint, .auth-oauth-note { opacity: .72; }
+/* 登录页装饰动画全部移除（性能：省 GPU 合成层） */
+.auth-card > * { animation: none !important; }
+
+/* iOS 极简登录页 · 深色模式对比度修正（覆盖层 2b） */
+body.dark .field.glass-field { background: rgba(255,255,255,.09) !important; }
+body.dark .field.glass-field:focus-within { background: rgba(255,255,255,.14) !important; }
+body.dark .oauth-btn { background: rgba(255,255,255,.09) !important; }
+body.dark .auth-tabs { background: rgba(255,255,255,.10) !important; }
+body.dark .auth-more-btn { color: #64B5FF !important; }
+body.dark .field-icon { opacity: .7; }
+/* 浅色模式微调：输入框与快捷登录更清晰 */
+.field.glass-field { background: rgba(120,120,128,.10) !important; }
+.oauth-btn { background: rgba(120,120,128,.10) !important; }
+
+/* 性能：批量首屏/加载更多渲染时关闭逐条消息动画 */
+.messages.bulk .msg-row { animation: none !important; }
+.messages.bulk .msg-row .bubble { animation: none !important; }

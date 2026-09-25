@@ -2083,6 +2083,8 @@ function renderMessages(msgs, forceFull = false) {
         _msgWindow.total = msgs.length;
         msgs = msgs.slice(_msgWindow.start);
     }
+    // 性能：批量首屏渲染(>50条)关闭逐条入场动画，避免大量合成动画卡顿
+    if (_firstRender && msgs.length > 50) container.classList.add('bulk');
     if (_firstRender && _msgWindow.start > 0) {
         const lm = document.createElement('div');
         lm.className = 'load-more-bar';
@@ -8837,14 +8839,20 @@ async function decryptRenderedBubbles() {
 (function initEnh() {
     const container = document.getElementById('messages');
     if (!container) return;
+    let _moTimer = null;
     const runAll = () => {
-        requestAnimationFrame(() => {
-            wireVoiceEnhance();
-            wireMsgActionBtns();
-            wireBlocklistFilter();
-            applyWallpaper();
-            decryptRenderedBubbles();
-        });
+        // 性能：消息区 DOM 频繁变动（批量渲染/图片加载），把多次触发合并为一次全量扫描
+        if (_moTimer) return;
+        _moTimer = setTimeout(() => {
+            _moTimer = null;
+            requestAnimationFrame(() => {
+                wireVoiceEnhance();
+                wireMsgActionBtns();
+                wireBlocklistFilter();
+                applyWallpaper();
+                decryptRenderedBubbles();
+            });
+        }, 120);
     };
     new MutationObserver(runAll).observe(container, { childList: true, subtree: true });
     wireToneSuggest();
