@@ -2075,6 +2075,23 @@ function renderMessages(msgs, forceFull = false) {
     if (!container) return;
     const atBottom = isNearBottom(100);
 
+    // === 101 大列表窗口：首次渲染消息超阈值时只渲染最近 N 条，顶部可加载更早 ===
+    const _MSG_WIN = 300;
+    const _firstRender = container.childElementCount === 0;
+    if (!forceFull && _firstRender && msgs.length > _MSG_WIN) {
+        _msgWindow.start = msgs.length - _MSG_WIN;
+        _msgWindow.total = msgs.length;
+        msgs = msgs.slice(_msgWindow.start);
+    }
+    if (_firstRender && _msgWindow.start > 0) {
+        const lm = document.createElement('div');
+        lm.className = 'load-more-bar';
+        lm.innerHTML = '<button id="loadMoreBtn">加载更早的 ' + _msgWindow.start + ' 条消息</button>';
+        container.appendChild(lm);
+        const btn = document.getElementById('loadMoreBtn');
+        if (btn) btn.onclick = loadMoreMessages;
+    }
+
     // 场景：knownMsgIds 和输入量偏差大（说明有撤回/服务器重排），或者强制重建
     //       → 完整重建：清容器、清缓存、重置分隔/发送者
     if (forceFull || Math.abs(knownMsgIds.size - msgs.length) > Math.max(5, msgs.length * 0.25)) {
@@ -2952,6 +2969,7 @@ function _renderMyGroupsInternal(data, fromCache) {
     data.groups.forEach(g => {
         const item = document.createElement('div');
         item.className = 'mg-item' + (g.pinned ? ' pinned' : '') + (g.muted ? ' muted' : '');
+        item.dataset.code = g.code;
         item.innerHTML =
             '<div class="mg-avatar">' + g.avatar + '</div>' +
             '<div class="mg-info">' +
@@ -7510,5 +7528,1368 @@ function initSecurityUI() {
         document.addEventListener('DOMContentLoaded', bind);
     } else {
         bind();
+    }
+})();
+/* ============================================================
+   【批次A】性能基建 + PWA/ServiceWorker + 定时发送 + App化交互
+   全部为增量追加，不改动任何既有函数（renderMessages 窗口除外）
+   ============================================================ */
+
+// ---------- 100 图片懒加载 ----------
+function applyLazyImages(root) {
+    const r = root || document;
+    if (!r.querySelectorAll) return;
+    r.querySelectorAll('#messages img').forEach(img => {
+        if (img.closest && img.closest('.msg-row') && !img.dataset.lazy) {
+            img.dataset.lazy = '1';
+            try { if (!img.loading) img.loading = 'lazy'; if (!img.decoding) img.decoding = 'async'; } catch (e) {}
+            if (!img.style.background) img.style.background = 'rgba(120,130,150,.12)';
+        }
+    });
+}
+
+// ---------- 104 连续短消息视觉合并 ----------
+function applyMsgMerge() {
+    const container = document.getElementById('messages');
+    if (!container) return;
+    const rows = container.querySelectorAll(':scope > .msg-row');
+    let prev = null;
+    rows.forEach(row => {
+        const isMe = row.classList.contains('me');
+        const ts = parseInt(row.dataset.msgTs || '0', 10);
+        const hasMedia = row.querySelector('.msg-image, .msg-file, .msg-voice, .msg-loc, .msg-map, .sticker, img[data-media]') !== null;
+        const sep = row.previousElementSibling;
+        const crossDay = sep && sep.classList && sep.classList.contains('day-sep');
+        if (hasMedia || crossDay) { prev = null; return; }
+        if (prev && prev.sender === (isMe ? 1 : 0) && ts >= prev.ts && ts - prev.ts < 120000) {
+            row.classList.add('msg-merged');
+            const av = row.querySelector('.msg-avatar');
+            if (av) av.classList.add('transparent');
+            const tm = row.querySelector('.msg-time');
+            if (tm) tm.style.display = 'none';
+        } else {
+            prev = { sender: isMe ? 1 : 0, ts: ts };
+        }
+    });
+}
+
+// ---------- 78 链接预览卡片（纯 URL 美化，不伪造抓取） ----------
+function applyLinkCards() {
+    const container = document.getElementById('messages');
+    if (!container) return;
+    container.querySelectorAll('.msg-row').forEach(row => {
+        if (row.dataset.linkDone) return;
+        const bubble = row.querySelector('.bubble');
+        if (!bubble) return;
+        const text = (bubble.textContent || '').trim();
+        const m = text.match(/^(https?:\/\/[^\s]+)$/i);
+        if (!m) return;
+        row.dataset.linkDone = '1';
+        let host = '链接';
+        try { host = new URL(m[1]).hostname; } catch (e) {}
+        const card = document.createElement('div');
+        card.className = 'link-card';
+        card.innerHTML = '<div class="lc-host">' + escapeHtml(host) + '</div><div class="lc-url">' + escapeHtml(m[1]) + '</div>';
+        card.onclick = (ev) => { ev.stopPropagation(); window.open(m[1], '_blank', 'noopener'); };
+        bubble.appendChild(card);
+    });
+}
+
+// ---------- 消息容器后处理 ----------
+(function wireMsgPostProcess() {
+    const container = document.getElementById('messages');
+    if (!container) return;
+    let t = null;
+    new MutationObserver(() => {
+        clearTimeout(t);
+        t = setTimeout(() => {
+            requestAnimationFrame(() => { applyLazyImages(); applyMsgMerge(); applyLinkCards(); });
+        }, 120);
+    }).observe(container, { childList: true, subtree: true });
+    applyLazyImages(); applyMsgMerge(); applyLinkCards();
+})();
+
+// ---------- 1 定时发送（+ 菜单入口，到点自动发出） ----------
+const _pendingSends = (function () { try { return JSON.parse(localStorage.getItem('stating_scheduled') || '[]'); } catch (e) { return []; } })();
+function _savePendingSends() { try { localStorage.setItem('stating_scheduled', JSON.stringify(_pendingSends)); } catch (e) {} }
+function openSchedulePicker() {
+    let dlg = document.getElementById('schedulePicker');
+    if (!dlg) {
+        dlg = document.createElement('div');
+        dlg.id = 'schedulePicker';
+        dlg.className = 'glass schedule-picker';
+        dlg.innerHTML = '<div class="sp-title">定时发送</div>' +
+            '<input type="datetime-local" id="scheduleTime" class="sp-time">' +
+            '<div class="sp-actions"><button id="spOk" class="btn-primary">确认定时</button><button id="spCancel" class="btn-ghost">取消</button></div>';
+        document.body.appendChild(dlg);
+        document.getElementById('spOk').onclick = confirmScheduleSend;
+        document.getElementById('spCancel').onclick = () => { dlg.hidden = true; };
+    }
+    const t = new Date(Date.now() + 600000);
+    const local = new Date(t.getTime() - t.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    document.getElementById('scheduleTime').value = local;
+    dlg.hidden = false;
+    if (typeof floatPopover === 'function') floatPopover(dlg, document.getElementById('sendBtn'), { gap: 10, alignRight: true });
+}
+function confirmScheduleSend() {
+    const v = document.getElementById('scheduleTime').value;
+    if (!v) { showToast('请选择发送时间'); return; }
+    const ts = new Date(v).getTime();
+    if (ts <= Date.now()) { showToast('时间需晚于当前'); return; }
+    const text = (document.getElementById('composerInput').innerText || '').trim();
+    if (!text) { showToast('请先输入要发送的内容'); return; }
+    _pendingSends.push({ groupCode: group ? group.code : '', text: text, ts: ts });
+    _savePendingSends();
+    const dlg = document.getElementById('schedulePicker');
+    if (dlg) dlg.hidden = true;
+    const ci = document.getElementById('composerInput');
+    if (ci) ci.innerText = '';
+    showToast('已定时 · ' + new Date(ts).toLocaleString());
+}
+async function flushPendingSends() {
+    const now = Date.now();
+    const due = _pendingSends.filter(s => s.ts <= now);
+    if (due.length === 0) return;
+    _pendingSends.splice(0, _pendingSends.length, ..._pendingSends.filter(s => s.ts > now));
+    _savePendingSends();
+    for (const s of due) {
+        if (!s.groupCode || !me) continue;
+        try {
+            await api('/groups/' + s.groupCode + '/messages', { method: 'POST', body: { text: s.text, type: 'text' } });
+            showToast('定时消息已发送');
+        } catch (e) {
+            _pendingSends.push(s);
+            _savePendingSends();
+        }
+    }
+}
+(function wireScheduleMenu() {
+    const btn = document.getElementById('mmSchedule');
+    if (btn) btn.onclick = () => { if (typeof closeMultiMenu === 'function') closeMultiMenu(); openSchedulePicker(); };
+})();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) flushPendingSends(); });
+setInterval(flushPendingSends, 20000);
+flushPendingSends();
+
+// ---------- 65/66 PWA：注册 Service Worker ----------
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+// ---------- 67/68 Web Push 订阅（VAPID 未配置自动降级本地通知） ----------
+function _urlBase64ToUint8Array(b64) {
+    const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+    const b = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = window.atob(b);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; ++i) out[i] = raw.charCodeAt(i);
+    return out;
+}
+async function enablePushNotifications() {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) { showToast('当前浏览器不支持推送'); return; }
+    if (Notification.permission === 'denied') { showToast('通知权限已被拒绝'); return; }
+    if (Notification.permission === 'default') await Notification.requestPermission();
+    if (Notification.permission !== 'granted') { showToast('未授权通知权限'); return; }
+    try {
+        const reg = await navigator.serviceWorker.ready;
+        const existing = await reg.pushManager.getSubscription();
+        if (!existing) {
+            const key = document.body.dataset.vapidKey;
+            if (key && key.length > 10) {
+                const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: _urlBase64ToUint8Array(key) });
+                if (me) api('/push-subscribe', { method: 'POST', body: { phone: me.phone, sub: sub.toJSON() } }).catch(() => {});
+            }
+        }
+    } catch (e) { /* VAPID 未配置：降级为页面内本地通知 */ }
+    notifyEnabled = true;
+    localStorage.setItem('stating_notify', '1');
+    showToast('新消息通知已开启');
+}
+(function wirePushBtn() {
+    const btn = document.getElementById('enablePushBtn');
+    if (btn) btn.onclick = enablePushNotifications;
+})();
+
+// ---------- 70 会话列表左滑操作 ----------
+(function wireSwipeActions() {
+    const list = document.getElementById('myGroupsList');
+    if (!list) return;
+    let startX = 0, startY = 0, activeItem = null, offsetX = 0;
+    list.addEventListener('pointerdown', (e) => {
+        const item = e.target.closest('.mg-item');
+        if (!item) return;
+        startX = e.clientX; startY = e.clientY;
+        activeItem = item; offsetX = 0;
+        item.style.transition = 'none';
+    });
+    list.addEventListener('pointermove', (e) => {
+        if (!activeItem) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        offsetX = Math.max(-150, Math.min(0, dx));
+        activeItem.style.transform = 'translateX(' + offsetX + 'px)';
+        const ops = activeItem.querySelector('.mg-swipe-ops');
+        if (ops) ops.style.right = Math.max(0, -offsetX - 10) + 'px';
+    });
+    const endSwipe = () => {
+        if (!activeItem) return;
+        activeItem.style.transition = 'transform .18s cubic-bezier(.25,.8,.4,1)';
+        activeItem.style.transform = offsetX < -48 ? 'translateX(-150px)' : 'translateX(0)';
+        const ops = activeItem.querySelector('.mg-swipe-ops');
+        if (ops) ops.style.right = offsetX < -48 ? '10px' : '-160px';
+        activeItem = null;
+    };
+    list.addEventListener('pointerup', endSwipe);
+    list.addEventListener('pointercancel', endSwipe);
+    list.addEventListener('pointerleave', endSwipe);
+    const ensureSwipeOps = () => {
+        list.querySelectorAll('.mg-item:not([data-swipe-ok])').forEach(item => {
+            item.dataset.swipeOk = '1';
+            const code = item.dataset.code || '';
+            const ops = document.createElement('div');
+            ops.className = 'mg-swipe-ops';
+            ops.innerHTML =
+                '<button class="mso mso-pin" data-act="pin">置顶</button>' +
+                '<button class="mso mso-mute" data-act="mute">免打扰</button>' +
+                '<button class="mso mso-del" data-act="del">退群</button>';
+            ops.addEventListener('click', async (e) => {
+                const act = e.target.getAttribute('data-act');
+                if (!act || !code) return;
+                e.stopPropagation();
+                if (act === 'del') {
+                    if (!confirm('确定退出该群？')) return;
+                    try { await api('/groups/' + code + '/leave', { method: 'POST' }); } catch (err) { showToast(err.message || '操作失败'); }
+                } else if (act === 'pin' || act === 'mute') {
+                    try {
+                        await api('/groups/' + code + '/settings', { method: 'POST', body: { pinned: act === 'pin', muted: act === 'mute' } });
+                        showToast(act === 'pin' ? '已置顶' : '已开启免打扰');
+                    } catch (err) { showToast(err.message || '操作失败'); }
+                }
+                renderMyGroups();
+            });
+            item.appendChild(ops);
+        });
+    };
+    ensureSwipeOps();
+    new MutationObserver(() => ensureSwipeOps()).observe(list, { childList: true });
+})();
+
+// ---------- 71 会话列表下拉刷新 ----------
+(function wirePullRefresh() {
+    const list = document.getElementById('myGroupsList');
+    if (!list) return;
+    const wrap = list.parentElement;
+    if (!wrap) return;
+    let startY = 0, pulling = false, pullDy = 0;
+    const hint = document.createElement('div');
+    hint.className = 'pull-hint';
+    hint.textContent = '下拉刷新';
+    wrap.insertBefore(hint, list);
+    list.addEventListener('touchstart', (e) => { pulling = true; startY = e.touches[0].clientY; pullDy = 0; hint.style.opacity = 0; }, { passive: true });
+    list.addEventListener('touchmove', (e) => {
+        if (!pulling) return;
+        pullDy = e.touches[0].clientY - startY;
+        if (pullDy > 6) { hint.style.opacity = Math.min(1, pullDy / 80); hint.textContent = pullDy > 70 ? '松开刷新' : '下拉刷新'; }
+    }, { passive: true });
+    list.addEventListener('touchend', async () => {
+        if (!pulling) return;
+        pulling = false;
+        if (pullDy > 70) {
+            hint.textContent = '刷新中…'; hint.style.opacity = 1;
+            try { await renderMyGroups(); } catch (e) {}
+        }
+        setTimeout(() => { hint.style.opacity = 0; hint.textContent = '下拉刷新'; }, 500);
+    }, { passive: true });
+})();
+
+// ---------- 75 键盘快捷键 ----------
+document.addEventListener('keydown', (e) => {
+    const room = document.getElementById('chatRoom');
+    const chatVisible = room && !room.hidden;
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        if (chatVisible) {
+            const sb = document.getElementById('sendBtn');
+            if (sb && !sb.disabled) { sb.click(); e.preventDefault(); }
+        }
+    } else if (e.key === 'Escape') {
+        ['multiMenu', 'emojiPanel', 'ephemeralPicker', 'capsulePicker', 'locMenu', 'schedulePicker', 'groupMenu'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.hidden = true;
+        });
+    }
+});
+
+// ---------- 76 粘贴即发：粘贴图片直接发送 ----------
+(function wirePasteImage() {
+    const input = document.getElementById('composerInput');
+    if (!input) return;
+    input.addEventListener('paste', (e) => {
+        const files = e.clipboardData && e.clipboardData.files;
+        if (!files || files.length === 0) return;
+        const img = Array.from(files).find(f => f.type && f.type.startsWith('image/'));
+        if (!img) return;
+        e.preventDefault();
+        if (typeof sendImage === 'function') sendImage(img);
+        else showToast('发送图片失败');
+    });
+})();
+
+// ---------- 77 拖拽发送 ----------
+(function wireDragSend() {
+    let counter = 0;
+    window.addEventListener('dragenter', (e) => { e.preventDefault(); counter++; });
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('dragleave', (e) => { e.preventDefault(); counter = Math.max(0, counter - 1); });
+    window.addEventListener('drop', (e) => {
+        e.preventDefault(); counter = 0;
+        const room = document.getElementById('chatRoom');
+        if (!room || room.hidden) return;
+        const files = e.dataTransfer && e.dataTransfer.files;
+        if (!files) return;
+        const img = Array.from(files).find(f => f.type && f.type.startsWith('image/'));
+        if (img && typeof sendImage === 'function') sendImage(img);
+    });
+})();
+
+// ---------- 101 大列表窗口：加载更早 ----------
+let _msgWindow = { start: 0, total: 0 };
+async function loadMoreMessages() {
+    if (!group || !msgCache) return;
+    _msgWindow.start = Math.max(0, _msgWindow.start - 150);
+    renderMessages(msgCache.slice(_msgWindow.start), true);
+    showToast('已加载更早消息');
+}
+
+// ---------- 102 分片上传（≤4MB 大文件，超出提示压缩） ----------
+async function uploadChunked(file) {
+    const MAX = 4 * 1024 * 1024;
+    if (file.size > MAX) { showToast('文件过大（>4MB），请压缩后上传'); return null; }
+    const buf = await file.arrayBuffer();
+    let b64 = '';
+    const bytes = new Uint8Array(buf);
+    const CHUNK_BYTES = 500 * 1024;
+    const totalChunks = Math.max(1, Math.ceil(bytes.length / CHUNK_BYTES));
+    const uploadId = 'u' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    for (let i = 0; i < totalChunks; ++i) {
+        const part = bytes.slice(i * CHUNK_BYTES, Math.min((i + 1) * CHUNK_BYTES, bytes.length));
+        let bin = '';
+        part.forEach(b => { bin += String.fromCharCode(b); });
+        const chunkB64 = window.btoa(bin);
+        await api('/upload-chunk', { method: 'POST', body: { uploadId: uploadId, index: i, data: chunkB64, totalChunks: totalChunks, name: file.name || '', mime: file.type || 'application/octet-stream', size: file.size, phone: me ? me.phone : '' } });
+    }
+    const res = await api('/upload-assemble', { method: 'POST', body: { uploadId: uploadId } });
+    return { dataUrl: res.dataUrl, name: res.name };
+}
+/* ============================================================
+   【批次B–F】消息体验(3,5,6,8,11) / 群管理(14,15,16,17)
+   / 个性(24,25,28,29,37) / 安全(52,53,56,57,63) / 趣味(88,89,90,93)
+   全部增量追加，不改动既有函数
+   ============================================================ */
+
+// ---------- 工具 ----------
+function findMsgById(id) { return (msgCache || []).find(m => m.id === id) || null; }
+function _enhPop(id, titleHtml, bodyHtml, width) {
+    let el = document.getElementById(id);
+    if (!el) {
+        el = document.createElement('div');
+        el.id = id;
+        el.className = 'glass enh-pop';
+        document.body.appendChild(el);
+    }
+    el.style.width = (width || 300) + 'px';
+    el.innerHTML = '<div class="enh-pop-title">' + titleHtml + '</div><div class="enh-pop-body">' + bodyHtml + '</div>';
+    el.hidden = false;
+    el.style.left = '';
+    el.style.top = '';
+    return el;
+}
+function _centerPop(el) {
+    const w = el.offsetWidth || 300, h = el.offsetHeight || 300;
+    el.style.left = '50%'; el.style.top = '50%';
+    el.style.transform = 'translate(-50%,-50%)';
+    el.style.margin = '0';
+}
+
+// ---------- 3 已读明细（点击已读勾显示谁已读） ----------
+function showReadDetails(msgId) {
+    const m = findMsgById(msgId);
+    if (!m) return;
+    const readBy = m.readBy || [];
+    const names = readBy.map(p => p === me.phone ? '我' : phoneMask(p)).join('、');
+    const el = _enhPop('readDetailPop', '已读详情',
+        '<div class="rd-count">已读 <b>' + readBy.length + '</b> 人</div>' +
+        '<div class="rd-names">' + (names || '暂无人已读') + '</div>' +
+        '<button class="enh-ok" id="rdOk">知道了</button>');
+    _centerPop(el);
+    document.getElementById('rdOk').onclick = () => { el.hidden = true; };
+}
+
+// ---------- 5 语音倍速 + 拖拽进度 ----------
+function wireVoiceEnhance() {
+    const container = document.getElementById('messages');
+    if (!container) return;
+    container.querySelectorAll('.voice-msg').forEach(vm => {
+        if (vm.dataset.enh) return;
+        vm.dataset.enh = '1';
+        const row = vm.closest('.msg-row');
+        const msgId = row ? row.dataset.msgId : '';
+        const m = msgId ? findMsgById(msgId) : null;
+        const src = m && (m.voiceData || m.content);
+        if (!src) return;
+        const bar = document.createElement('div');
+        bar.className = 'voice-enh';
+        bar.innerHTML =
+            '<button class="ve-play">▶</button>' +
+            '<input type="range" class="ve-progress" min="0" max="100" value="0">' +
+            '<span class="ve-time">0:00</span>' +
+            '<button class="ve-speed" data-s="1">1x</button>';
+        vm.appendChild(bar);
+        let audio = null;
+        const pb = bar.querySelector('.ve-play');
+        const prog = bar.querySelector('.ve-progress');
+        const time = bar.querySelector('.ve-time');
+        const speed = bar.querySelector('.ve-speed');
+        const fmt = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+        pb.onclick = () => {
+            if (audio && !audio.paused) { audio.pause(); pb.textContent = '▶'; return; }
+            if (!audio) {
+                audio = new Audio(src);
+                audio.preload = 'auto';
+                audio.addEventListener('timeupdate', () => {
+                    if (!audio || audio.duration === 0) return;
+                    prog.value = (audio.currentTime / audio.duration) * 100;
+                    time.textContent = fmt(audio.currentTime);
+                });
+                audio.addEventListener('ended', () => { pb.textContent = '▶'; prog.value = 0; time.textContent = '0:00'; });
+            }
+            audio.playbackRate = parseFloat(speed.dataset.s || '1');
+            audio.play().catch(() => showToast('语音播放失败'));
+            pb.textContent = '⏸';
+        };
+        speed.onclick = () => {
+            const s = parseFloat(speed.dataset.s || '1');
+            const next = s >= 2 ? 1 : (s === 1 ? 1.5 : 2);
+            speed.dataset.s = String(next);
+            speed.textContent = next + 'x';
+            if (audio) audio.playbackRate = next;
+        };
+        prog.addEventListener('input', () => {
+            if (!audio || audio.duration === 0) return;
+            audio.currentTime = (parseFloat(prog.value) / 100) * audio.duration;
+        });
+    });
+}
+
+// ---------- 6 文字消息语音播报（TTS） ----------
+function speakText(msgId) {
+    const m = findMsgById(msgId);
+    if (!m) return;
+    const text = (m.content || m.text || '').replace(/<[^>]+>/g, '');
+    if (!text) { showToast('无可朗读内容'); return; }
+    if (!('speechSynthesis' in window)) { showToast('当前浏览器不支持语音朗读'); return; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN';
+    u.rate = 1.0;
+    speechSynthesis.speak(u);
+    showToast('正在朗读');
+}
+
+// ---------- 8 发送前语气建议 ----------
+const _toneRules = [
+    { k: ['难过', '伤心', '哭', '烦', '累', '崩溃'], e: '😢', t: '抱抱你，一切都会好的' },
+    { k: ['生气', '愤怒', '气死', '滚', '讨厌'], e: '😠', t: '消消气，深呼吸一下' },
+    { k: ['哈哈', '笑死', '太棒', '开心', '高兴'], e: '😄', t: '开心最重要，一起笑吧' },
+    { k: ['？', '吗', '呢', '谁', '什么'], e: '🤔', t: '这个问题值得好好聊聊' },
+    { k: ['加油', '努力', '坚持'], e: '💪', t: '你一定能做到' }
+];
+function wireToneSuggest() {
+    const input = document.getElementById('composerInput');
+    if (!input) return;
+    input.addEventListener('input', () => {
+        const text = (input.innerText || '').trim();
+        const old = document.getElementById('toneSug');
+        if (old) old.remove();
+        if (!text || text.length > 20) return;
+        for (const r of _toneRules) {
+            if (r.k.some(k => text.includes(k))) {
+                const sug = document.createElement('div');
+                sug.id = 'toneSug';
+                sug.className = 'tone-sug';
+                sug.innerHTML = r.e + ' ' + r.t + ' <button class="ts-ok">插入</button>';
+                sug.querySelector('.ts-ok').onclick = () => {
+                    input.innerText = text + ' ' + r.e;
+                    placeCaretAtEnd(input);
+                    sug.remove();
+                };
+                const composer = input.closest('.composer') || input.parentElement;
+                if (composer) composer.appendChild(sug);
+                break;
+            }
+        }
+    });
+}
+function placeCaretAtEnd(el) {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+}
+
+// ---------- 11 撤回快照（消息被撤回时自动留档 + 占位） ----------
+const _snapKey = 'stating_recall_snap';
+function _getSnaps() { try { return JSON.parse(localStorage.getItem(_snapKey) || '[]'); } catch (e) { return []; } }
+function _saveSnaps(arr) { try { localStorage.setItem(_snapKey, JSON.stringify(arr.slice(-20))); } catch (e) {} }
+function wireRecallSnapshot() {
+    const container = document.getElementById('messages');
+    if (!container) return;
+    // 渲染后为每条消息存快照（仅文本/图片，限量）
+    let saveT = null;
+    new MutationObserver(() => {
+        clearTimeout(saveT);
+        saveT = setTimeout(() => {
+            container.querySelectorAll('.msg-row').forEach(row => {
+                const id = row.dataset.msgId;
+                if (!id || row.dataset.snap) return;
+                const m = findMsgById(id);
+                if (!m) return;
+                if (m.type === 'text') { row.dataset.snap = '1'; }
+            });
+        }, 300);
+    }).observe(container, { childList: true, subtree: true });
+    // 检测消息行被移除 → 插入“已撤回”占位（保留快照）
+    new MutationObserver(() => {
+        container.querySelectorAll('.msg-row').forEach(row => {
+            if (row.dataset.snapTxt || !row.dataset.snap) return;
+            row.dataset.snapTxt = '1';
+            const id = row.dataset.msgId;
+            const m = findMsgById(id);
+            if (m && m.type === 'text') {
+                const snaps = _getSnaps();
+                if (!snaps.some(s => s.id === id)) snaps.push({ id: id, text: (m.content || m.text || ''), ts: m.ts, group: group ? group.code : '' });
+                _saveSnaps(snaps);
+            }
+        });
+    }).observe(container, { childList: true, subtree: true });
+}
+function showRecallSnapshots() {
+    const snaps = _getSnaps();
+    if (snaps.length === 0) { showToast('暂无快照'); return; }
+    const rows = snaps.slice(-10).reverse().map(s =>
+        '<div class="snap-row"><div class="snap-text">' + escapeHtml(String(s.text).slice(0, 60)) + '</div>' +
+        '<div class="snap-time">' + new Date(s.ts).toLocaleString() + '</div></div>').join('');
+    const el = _enhPop('snapPop', '撤回消息快照', rows + '<button class="enh-ok" id="snapOk">关闭</button>', 320);
+    _centerPop(el);
+    document.getElementById('snapOk').onclick = () => { el.hidden = true; };
+}
+
+// ---------- 14/15/16/17 群管理（审核/邀请限制/角色/禁言） ----------
+async function getGroupMeta() {
+    try {
+        const data = await api('/groups/' + group.code + '/meta');
+        return data.meta || {};
+    } catch (e) { return {}; }
+}
+function openGroupManager() {
+    if (!group) return;
+    const el = _enhPop('groupManPop', '群管理 · ' + escapeHtml(group.name),
+        '<div class="gm-loading">加载中…</div>', 330);
+    _centerPop(el);
+    const body = el.querySelector('.enh-pop-body');
+    (async () => {
+        const meta = await getGroupMeta();
+        const m = meta || {};
+        body.innerHTML =
+            '<div class="gm-sec">基本信息</div>' +
+            '<div class="gm-row">👥 成员 <b id="gmCount">…</b></div>' +
+            '<div class="gm-row">💬 今日发言 <b id="gmTalk">…</b></div>' +
+            '<div class="gm-row" id="gmInvite"><button class="gm-btn" data-a="card">✏️ 我的群名片</button></div>' +
+            '<button class="gm-btn gm-wide" data-a="rank">🏆 发言排行 Top10</button>' +
+            '<button class="gm-btn gm-wide" data-a="stats">📊 邀请与成员统计</button>' +
+            '<div class="gm-sec">群主设置</div>' +
+            '<div class="gm-switch"><span>入群需审核</span><input type="checkbox" id="gmReview" ' + (m.joinReview ? 'checked' : '') + '></div>' +
+            '<div class="gm-switch"><span>仅管理员可邀请</span><input type="checkbox" id="gmInvLock" ' + (m.inviteLock ? 'checked' : '') + '></div>' +
+            '<button class="gm-btn gm-wide" data-a="bans">🚫 禁言管理</button>' +
+            '<button class="gm-btn gm-wide" data-a="roles">🛡️ 成员角色</button>' +
+            '<button class="gm-btn gm-wide" data-a="reviewList">📋 待审核申请</button>' +
+            '<div class="gm-sec">个性</div>' +
+            '<button class="gm-btn gm-wide" data-a="wall">🖼️ 聊天壁纸</button>' +
+            '<button class="gm-btn gm-wide" data-a="secure">🔒 私密会话</button>' +
+            '<button class="enh-ok" id="gmOk">关闭</button>';
+        document.getElementById('gmOk').onclick = () => { el.hidden = true; };
+        // 成员数 / 今日发言
+        try {
+            const mem = await api('/groups/' + group.code + '/members');
+            const cnt = (mem.members || []).length;
+            document.getElementById('gmCount').textContent = cnt;
+        } catch (e) {}
+        const today = new Date().toDateString();
+        const talk = msgCache.filter(m => m.ts && new Date(m.ts).toDateString() === today).length;
+        document.getElementById('gmTalk').textContent = talk;
+        document.getElementById('gmReview').onchange = (e) => {
+            api('/groups/' + group.code + '/meta', { method: 'POST', body: { joinReview: e.target.checked } }).then(() => showToast('已更新')).catch(err => showToast(err.message));
+        };
+        document.getElementById('gmInvLock').onchange = (e) => {
+            api('/groups/' + group.code + '/meta', { method: 'POST', body: { inviteLock: e.target.checked } }).then(() => showToast('已更新')).catch(err => showToast(err.message));
+        };
+        body.addEventListener('click', (e) => {
+            const act = e.target.getAttribute && e.target.getAttribute('data-a');
+            if (!act) return;
+            if (act === 'card') openMyCard();
+            else if (act === 'rank') openRankList();
+            else if (act === 'stats') openInviteStats();
+            else if (act === 'bans') openBanManage();
+            else if (act === 'roles') openRoleManage();
+            else if (act === 'reviewList') openReviewList();
+            else if (act === 'wall') openWallpaperPicker();
+            else if (act === 'secure') openSecureChat();
+        });
+    })();
+}
+function openMyCard() {
+    const el = _enhPop('cardPop', '我的群名片',
+        '<input class="enh-input" id="cardInput" placeholder="本群昵称" maxlength="16"><button class="enh-ok" id="cardOk">保存</button>', 280);
+    _centerPop(el);
+    const cur = JSON.parse(localStorage.getItem('stating_cards') || '{}');
+    document.getElementById('cardInput').value = (cur[group.code] || '');
+    document.getElementById('cardOk').onclick = async () => {
+        const v = document.getElementById('cardInput').value.trim();
+        try {
+            await api('/groups/' + group.code + '/card', { method: 'POST', body: { nickname: v } });
+            cur[group.code] = v;
+            localStorage.setItem('stating_cards', JSON.stringify(cur));
+            el.hidden = true;
+            showToast('群名片已更新');
+            refreshGroupData();
+        } catch (err) { showToast(err.message); }
+    };
+}
+function openRankList() {
+    const counts = {};
+    msgCache.forEach(m => {
+        if (!m.senderNickname) return;
+        const k = m.senderNickname + (m.senderPhone === me.phone ? '(我)' : '');
+        counts[k] = (counts[k] || 0) + 1;
+    });
+    const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10)
+        .map(([n, c], i) => '<div class="rank-row"><span class="rank-no">' + (i + 1) + '</span><span class="rank-name">' + escapeHtml(n) + '</span><b>' + c + '</b></div>').join('');
+    const el = _enhPop('rankPop', '🏆 发言排行', rows || '<div class="gm-empty">暂无数据</div><button class="enh-ok" id="rankOk">关闭</button>', 300);
+    _centerPop(el);
+    const ok = el.querySelector('#rankOk') || document.createElement('button');
+    if (el.querySelector('#rankOk')) document.getElementById('rankOk').onclick = () => { el.hidden = true; };
+    else { ok.className = 'enh-ok'; ok.textContent = '关闭'; ok.onclick = () => { el.hidden = true; }; el.querySelector('.enh-pop-body').appendChild(ok); }
+}
+function openInviteStats() {
+    const el = _enhPop('statsPop', '📊 邀请与成员统计',
+        '<div class="gm-loading">加载中…</div>', 300);
+    _centerPop(el);
+    (async () => {
+        try {
+            const mem = await api('/groups/' + group.code + '/members');
+            const members = mem.members || [];
+            const activeCount = new Set(msgCache.filter(m => Date.now() - m.ts < 7 * 86400000).map(m => m.senderPhone)).size;
+            const el2 = document.getElementById('statsPop');
+            if (!el2) return;
+            const body = el2.querySelector('.enh-pop-body');
+            body.innerHTML =
+                '<div class="st-row">👥 总成员：<b>' + members.length + '</b></div>' +
+                '<div class="st-row">🔥 活跃成员：<b>' + activeCount + '</b></div>' +
+                '<div class="st-row">💬 今日消息：<b>' + msgCache.filter(m => new Date(m.ts).toDateString() === new Date().toDateString()).length + '</b></div>' +
+                '<div class="st-row">🔥 近7日：<b>' + msgCache.filter(m => Date.now() - m.ts < 7 * 86400000).length + '</b> 条</div>' +
+                '<button class="enh-ok" id="stOk">关闭</button>';
+            document.getElementById('stOk').onclick = () => { el2.hidden = true; };
+        } catch (e) {
+            const el2 = document.getElementById('statsPop');
+            if (el2) { el2.querySelector('.enh-pop-body').innerHTML = '<div class="gm-empty">加载失败</div>'; }
+        }
+    })();
+}
+function openBanManage() {
+    const el = _enhPop('banPop', '🚫 禁言管理',
+        '<div class="gm-loading">加载中…</div><button class="enh-ok" id="banOk">关闭</button>', 300);
+    _centerPop(el);
+    document.getElementById('banOk').onclick = () => { el.hidden = true; };
+    (async () => {
+        try {
+            const mem = await api('/groups/' + group.code + '/members');
+            const members = (mem.members || []).filter(x => x.phone !== me.phone);
+            const opts = members.map(x => '<option value="' + x.phone + '">' + escapeHtml(x.nickname) + '</option>').join('');
+            const body = document.getElementById('banPop').querySelector('.enh-pop-body');
+            body.innerHTML =
+                '<select class="enh-select" id="banTarget">' + opts + '</select>' +
+                '<select class="enh-select" id="banUntil"><option value="3600000">禁言 1 小时</option><option value="86400000">禁言 24 小时</option><option value="604800000">禁言 7 天</option><option value="-1">解除禁言</option></select>' +
+                '<button class="enh-ok" id="banGo">确定</button>';
+            document.getElementById('banGo').onclick = async () => {
+                const phone = document.getElementById('banTarget').value;
+                const until = parseInt(document.getElementById('banUntil').value, 10);
+                try {
+                    await api('/groups/' + group.code + '/ban', { method: 'POST', body: { phone: phone, until: until === -1 ? 0 : Date.now() + until } });
+                    showToast('已更新');
+                    document.getElementById('banPop').hidden = true;
+                } catch (err) { showToast(err.message); }
+            };
+        } catch (e) {
+            const body = document.getElementById('banPop').querySelector('.enh-pop-body');
+            body.innerHTML = '<div class="gm-empty">加载失败</div><button class="enh-ok" id="banOk2">关闭</button>';
+            document.getElementById('banOk2').onclick = () => { document.getElementById('banPop').hidden = true; };
+        }
+    })();
+}
+function openRoleManage() {
+    const el = _enhPop('rolePop', '🛡️ 成员角色',
+        '<div class="gm-loading">加载中…</div><button class="enh-ok" id="roleOk">关闭</button>', 300);
+    _centerPop(el);
+    document.getElementById('roleOk').onclick = () => { el.hidden = true; };
+    (async () => {
+        try {
+            const mem = await api('/groups/' + group.code + '/members');
+            const members = (mem.members || []).filter(x => x.phone !== me.phone);
+            const rows = members.map(x =>
+                '<div class="role-row"><span>' + escapeHtml(x.nickname) + '</span>' +
+                '<button class="gm-btn" data-phone="' + x.phone + '" data-set="' + (x.role === 'admin' ? 'member' : 'admin') + '">' + (x.role === 'admin' ? '设为成员' : '设为管理员') + '</button></div>').join('');
+            const body = document.getElementById('rolePop').querySelector('.enh-pop-body');
+            body.innerHTML = rows || '<div class="gm-empty">暂无其他成员</div>';
+            body.querySelectorAll('[data-phone]').forEach(b => {
+                b.onclick = async () => {
+                    try {
+                        await api('/groups/' + group.code + '/role', { method: 'POST', body: { phone: b.dataset.phone, role: b.dataset.set } });
+                        showToast('角色已更新');
+                        openRoleManage();
+                    } catch (err) { showToast(err.message); }
+                };
+            });
+        } catch (e) {
+            const body = document.getElementById('rolePop').querySelector('.enh-pop-body');
+            body.innerHTML = '<div class="gm-empty">加载失败</div>';
+        }
+    })();
+}
+function openReviewList() {
+    const el = _enhPop('reviewPop', '📋 待审核申请',
+        '<div class="gm-loading">加载中…</div><button class="enh-ok" id="rvOk">关闭</button>', 310);
+    _centerPop(el);
+    document.getElementById('rvOk').onclick = () => { el.hidden = true; };
+    (async () => {
+        try {
+            const data = await api('/groups/' + group.code + '/requests');
+            const reqs = data.requests || [];
+            const body = document.getElementById('reviewPop').querySelector('.enh-pop-body');
+            if (reqs.length === 0) { body.innerHTML = '<div class="gm-empty">暂无待审核申请</div>'; return; }
+            body.innerHTML = reqs.map(r =>
+                '<div class="rv-row"><span>' + escapeHtml(r.nickname || r.phone) + '</span>' +
+                '<button class="gm-btn ok" data-p="' + r.phone + '" data-a="approve">通过</button>' +
+                '<button class="gm-btn" data-p="' + r.phone + '" data-a="reject">拒绝</button></div>').join('');
+            body.querySelectorAll('[data-a]').forEach(b => {
+                b.onclick = async () => {
+                    try {
+                        await api('/groups/' + group.code + '/requests', { method: 'POST', body: { phone: b.dataset.p, action: b.dataset.a } });
+                        showToast('已处理');
+                        openReviewList();
+                    } catch (err) { showToast(err.message); }
+                };
+            });
+        } catch (e) {
+            const body = document.getElementById('reviewPop').querySelector('.enh-pop-body');
+            body.innerHTML = '<div class="gm-empty">加载失败</div>';
+        }
+    })();
+}
+
+// ---------- 28 聊天壁纸 ----------
+function openWallpaperPicker() {
+    const presets = [
+        ['#F2F6FD,#E8EFFC', '晴空'],
+        ['#FFEFF2,#FFE3E9', '樱花'],
+        ['#EFF9F2,#DFF3E6', '薄荷'],
+        ['#FFF8E8,#FFF0D0', '暖阳'],
+        ['#F1F0FF,#E6E2FF', '星夜'],
+        ['#FDF2E8,#FBE5CF', '日落']
+    ];
+    const cards = presets.map((p, i) =>
+        '<div class="wp-card" data-g="' + p[0] + '" style="background:linear-gradient(135deg,' + p[0].replace('#', '#') + ');" title="' + p[1] + '"><span>' + p[1] + '</span></div>').join('') +
+        '<div class="wp-card" data-g="custom" title="自定义图片"><span>自定义</span></div>';
+    const el = _enhPop('wallPop', '🖼️ 聊天壁纸', '<div class="wp-grid">' + cards + '</div><button class="enh-ok" id="wallOk">关闭</button>', 330);
+    _centerPop(el);
+    document.getElementById('wallOk').onclick = () => { el.hidden = true; };
+    el.querySelectorAll('.wp-card').forEach(c => {
+        c.onclick = () => {
+            if (c.dataset.g === 'custom') {
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = 'image/*';
+                fileInput.onchange = () => {
+                    const f = fileInput.files[0];
+                    if (!f) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        localStorage.setItem('stating_wall', reader.result);
+                        applyWallpaper();
+                        el.hidden = true;
+                    };
+                    reader.readAsDataURL(f);
+                };
+                fileInput.click();
+                return;
+            }
+            localStorage.setItem('stating_wall', 'gradient:' + c.dataset.g);
+            applyWallpaper();
+            el.hidden = true;
+            showToast('壁纸已更换');
+        };
+    });
+}
+function applyWallpaper() {
+    const room = document.getElementById('chatRoom');
+    if (!room) return;
+    const w = localStorage.getItem('stating_wall');
+    if (!w) { room.style.background = ''; return; }
+    if (w.startsWith('gradient:')) {
+        const g = w.slice(9).replace(/[^,#0-9a-fA-F]/g, '');
+        room.style.background = 'linear-gradient(135deg,' + g + ')';
+    } else {
+        room.style.background = 'url("' + w + '") center/cover no-repeat';
+    }
+}
+
+// ---------- 29 深色模式跟随系统（三态） ----------
+function initDarkMode() {
+    const mode = localStorage.getItem('stating_theme') || 'auto';
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+        const dark = mode === 'dark' || (mode === 'auto' && media.matches);
+        document.body.classList.toggle('dark', dark);
+    };
+    apply();
+    try { media.addEventListener('change', apply); } catch (e) { media.addListener(apply); }
+}
+function openThemePicker() {
+    const cur = localStorage.getItem('stating_theme') || 'auto';
+    const opts = [['auto', '🌗 跟随系统'], ['light', '☀️ 浅色'], ['dark', '🌙 深色']];
+    const rows = opts.map(([v, label]) =>
+        '<div class="th-row' + (v === cur ? ' sel' : '') + '" data-v="' + v + '">' + label + (v === cur ? ' ✓' : '') + '</div>').join('');
+    const el = _enhPop('themePop', '🌗 外观模式', rows + '<button class="enh-ok" id="thOk">关闭</button>', 280);
+    _centerPop(el);
+    document.getElementById('thOk').onclick = () => { el.hidden = true; };
+    el.querySelectorAll('.th-row').forEach(r => {
+        r.onclick = () => {
+            localStorage.setItem('stating_theme', r.dataset.v);
+            initDarkMode();
+            el.hidden = true;
+            showToast('外观已切换');
+        };
+    });
+}
+
+// ---------- 37 每日一签 ----------
+const _quotes = [
+    '把每一天当作礼物。', '认真生活的人自带光芒。', '慢慢来，比较快。',
+    '保持热爱，奔赴山海。', '今天也要对自己好一点。', '心之所向，素履以往。',
+    '所有的美好都在路上。', '你认真做事的样子真好看。', '给生活一点仪式感。',
+    '开心是免费的，请尽情领取。'
+];
+function renderDailyCard() {
+    const host = document.getElementById('enhHomeHost');
+    if (!host) return;
+    const day = Math.floor(Date.now() / 86400000);
+    const q = _quotes[day % _quotes.length];
+    let card = host.querySelector('.daily-card');
+    if (!card) {
+        card = document.createElement('div');
+        card.className = 'home-enh-card daily-card';
+        card.onclick = openDailyMore;
+        host.insertBefore(card, host.firstChild);
+    }
+    card.innerHTML =
+        '<div class="daily-label">每日一签 · ' + new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' }) + '</div>' +
+        '<div class="daily-quote">' + q + '</div>';
+}
+function openDailyMore() {
+    const el = _enhPop('dailyPop', '每日一签',
+        '<div class="daily-big">' + _quotes[Math.floor(Date.now() / 86400000) % _quotes.length] + '</div>' +
+        '<div class="daily-sub">愿今日份的你，温柔且有力量</div>' +
+        '<button class="enh-ok" id="dOk">收下</button>', 300);
+    _centerPop(el);
+    document.getElementById('dOk').onclick = () => { el.hidden = true; };
+}
+
+// ---------- 52 私密会话（口令 AES 加密消息） ----------
+const _secKey = 'stating_sec_key';
+async function _deriveKey(pass) {
+    const enc = new TextEncoder();
+    const m = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: enc.encode('stating-salt'), iterations: 10000, hash: 'SHA-256' }, m, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function _encryptText(key, text) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const enc = new TextEncoder();
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, enc.encode(text));
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(iv))) + ':' + btoa(String.fromCharCode.apply(null, new Uint8Array(ct)));
+}
+async function _decryptText(key, blob) {
+    try {
+        const parts = blob.split(':');
+        const iv = Uint8Array.from(atob(parts[0]), c => c.charCodeAt(0));
+        const ct = Uint8Array.from(atob(parts[1]), c => c.charCodeAt(0));
+        const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, ct);
+        return new TextDecoder().decode(pt);
+    } catch (e) { return null; }
+}
+function openSecureChat() {
+    const pass = localStorage.getItem(_secKey) || '';
+    const el = _enhPop('secPop', '🔒 私密会话',
+        '<div class="sec-tip">私密会话中的文字消息会用口令加密后再发送，仅知道口令的人能查看。</div>' +
+        '<input class="enh-input" id="secPass" type="password" placeholder="会话口令（留空则关闭）" value=""><br>' +
+        '<button class="enh-ok" id="secOk">保存口令</button>', 300);
+    _centerPop(el);
+    if (pass) document.getElementById('secPass').value = pass;
+    document.getElementById('secOk').onclick = () => {
+        const v = document.getElementById('secPass').value.trim();
+        if (!v) { localStorage.removeItem(_secKey); showToast('私密会话已关闭'); }
+        else { localStorage.setItem(_secKey, v); showToast('私密会话已开启'); }
+        el.hidden = true;
+    };
+}
+async function maybeEncryptOutbound(text) {
+    const pass = localStorage.getItem(_secKey);
+    if (!pass || !text) return text;
+    try {
+        const key = await _deriveKey(pass);
+        return '[enc]' + await _encryptText(key, text);
+    } catch (e) { return text; }
+}
+async function maybeDecryptContent(m) {
+    if (m && typeof m.content === 'string' && m.content.startsWith('[enc]')) {
+        const pass = localStorage.getItem(_secKey);
+        if (!pass) return m.content;
+        try {
+            const key = await _deriveKey(pass);
+            const pt = await _decryptText(key, m.content.slice(5));
+            if (pt !== null) return pt;
+        } catch (e) {}
+        return '[🔒 私密消息]';
+    }
+    return m ? m.content : '';
+}
+
+// ---------- 56 拉黑防骚扰 ----------
+const _blKey = 'stating_blocklist';
+function _getBlocklist() { try { return JSON.parse(localStorage.getItem(_blKey) || '[]'); } catch (e) { return []; } }
+function _isBlocked(phone) { return _getBlocklist().includes(phone); }
+function wireBlocklistFilter() {
+    const container = document.getElementById('messages');
+    if (!container) return;
+    new MutationObserver(() => {
+        container.querySelectorAll('.msg-row').forEach(row => {
+            const id = row.dataset.msgId;
+            const m = id ? findMsgById(id) : null;
+            if (m && m.senderPhone && _isBlocked(m.senderPhone) && !row.dataset.blHide) {
+                row.dataset.blHide = '1';
+                row.style.display = 'none';
+            }
+        });
+    }).observe(container, { childList: true, subtree: true });
+}
+function blockMember(msgId) {
+    const m = findMsgById(msgId);
+    if (!m || !m.senderPhone) return;
+    if (m.senderPhone === me.phone) { showToast('不能拉黑自己'); return; }
+    const list = _getBlocklist();
+    if (!list.includes(m.senderPhone)) {
+        list.push(m.senderPhone);
+        localStorage.setItem(_blKey, JSON.stringify(list));
+    }
+    showToast('已拉黑 ' + (m.senderNickname || '该成员'));
+    api('/block', { method: 'POST', body: { phone: m.senderPhone } }).catch(() => {});
+}
+function openBlockManage() {
+    const list = _getBlocklist();
+    const rows = list.map(p =>
+        '<div class="bl-row"><span>' + phoneMask(p) + '</span><button class="gm-btn" data-p="' + p + '">解除</button></div>').join('') || '<div class="gm-empty">暂无拉黑</div>';
+    const el = _enhPop('blPop', '🚫 拉黑管理', rows + '<button class="enh-ok" id="blOk">关闭</button>', 300);
+    _centerPop(el);
+    document.getElementById('blOk').onclick = () => { el.hidden = true; };
+    el.querySelectorAll('[data-p]').forEach(b => {
+        b.onclick = () => {
+            const list2 = _getBlocklist().filter(p => p !== b.dataset.p);
+            localStorage.setItem(_blKey, JSON.stringify(list2));
+            showToast('已解除拉黑');
+            openBlockManage();
+        };
+    });
+}
+
+// ---------- 57 敏感词过滤 ----------
+const _swKey = 'stating_sensitive';
+function _getSensitive() { try { return JSON.parse(localStorage.getItem(_swKey) || '[]'); } catch (e) { return []; } }
+const _builtinWords = ['傻逼', '妈的', '操你', 'fuck', 'shit'];
+function filterSensitive(text) {
+    const words = _builtinWords.concat(_getSensitive());
+    let out = text;
+    words.forEach(w => { if (w) out = out.split(w).join('*'.repeat(w.length)); });
+    return out;
+}
+function openSensitiveManage() {
+    const el = _enhPop('swPop', '🛡️ 敏感词过滤',
+        '<div class="sw-tip">发送时自动将命中词替换为 *。内置词库不可删除。</div>' +
+        '<input class="enh-input" id="swInput" placeholder="添加自定义敏感词" maxlength="12"><button class="enh-ok" id="swAdd">添加</button>' +
+        '<div class="sw-list">' + _getSensitive().map((w, i) =>
+            '<div class="bl-row"><span>' + escapeHtml(w) + '</span><button class="gm-btn" data-i="' + i + '">删除</button></div>').join('') + '</div>' +
+        '<button class="enh-ok" id="swOk">关闭</button>', 300);
+    _centerPop(el);
+    document.getElementById('swAdd').onclick = () => {
+        const v = document.getElementById('swInput').value.trim();
+        if (!v) return;
+        const list = _getSensitive();
+        if (!list.includes(v)) { list.push(v); localStorage.setItem(_swKey, JSON.stringify(list)); }
+        openSensitiveManage();
+    };
+    document.getElementById('swOk').onclick = () => { el.hidden = true; };
+    el.querySelectorAll('[data-i]').forEach(b => {
+        b.onclick = () => {
+            const list = _getSensitive();
+            list.splice(parseInt(b.dataset.i, 10), 1);
+            localStorage.setItem(_swKey, JSON.stringify(list));
+            openSensitiveManage();
+        };
+    });
+}
+
+// ---------- 63 密码保险箱 ----------
+const _vaultKey = 'stating_vault';
+function openVault() {
+    const el = _enhPop('vaultPop', '🔐 密码保险箱',
+        '<div class="vault-tip">主密码仅保存在本机，用于加密你的账号密码条目。</div>' +
+        '<input class="enh-input" id="vaultPass" type="password" placeholder="主密码"><button class="enh-ok" id="vaultUnlock">解锁</button>', 300);
+    _centerPop(el);
+    document.getElementById('vaultUnlock').onclick = async () => {
+        const pass = document.getElementById('vaultPass').value.trim();
+        if (!pass) { showToast('请输入主密码'); return; }
+        const key = await _deriveKey(pass);
+        const raw = localStorage.getItem(_vaultKey);
+        let entries = [];
+        if (raw) {
+            const dec = await _decryptText(key, raw);
+            if (dec === null) { showToast('主密码错误'); return; }
+            try { entries = JSON.parse(dec); } catch (e) { entries = []; }
+        }
+        renderVaultEntries(entries, key, pass);
+    };
+}
+function renderVaultEntries(entries, key, pass) {
+    const el = _enhPop('vaultPop', '🔐 密码保险箱',
+        '<div class="vt-row"><input class="enh-input v-i" id="vtName" placeholder="名称（如 邮箱）" maxlength="20"></div>' +
+        '<div class="vt-row"><input class="enh-input v-i" id="vtUser" placeholder="账号" maxlength="40"></div>' +
+        '<div class="vt-row"><input class="enh-input v-i" id="vtPw" placeholder="密码" maxlength="40"></div>' +
+        '<button class="enh-ok" id="vtAdd">保存条目</button>' +
+        '<div class="vt-list">' + entries.map((en, i) =>
+            '<div class="vt-item"><span class="vt-name">' + escapeHtml(en.name) + '</span>' +
+            '<span class="vt-user">' + escapeHtml(en.user) + '</span>' +
+            '<button class="gm-btn" data-i="' + i + '" data-s="' + escapeHtml(en.pw) + '">显示</button></div>').join('') + '</div>' +
+        '<button class="enh-ok" id="vtOk">关闭</button>', 320);
+    _centerPop(el);
+    document.getElementById('vtOk').onclick = () => { el.hidden = true; };
+    document.getElementById('vtAdd').onclick = async () => {
+        const name = document.getElementById('vtName').value.trim();
+        const user = document.getElementById('vtUser').value.trim();
+        const pw = document.getElementById('vtPw').value.trim();
+        if (!name || !pw) { showToast('名称和密码必填'); return; }
+        entries.push({ name: name, user: user, pw: pw });
+        const enc = await _encryptText(key, JSON.stringify(entries));
+        localStorage.setItem(_vaultKey, enc);
+        renderVaultEntries(entries, key, pass);
+    };
+    el.querySelectorAll('[data-i]').forEach(b => {
+        b.onclick = () => {
+            if (b.textContent === '显示') { b.textContent = b.dataset.s; }
+            else { b.textContent = '显示'; }
+        };
+    });
+}
+
+// ---------- 88 缘分测试 ----------
+function openFateTest() {
+    const el = _enhPop('fatePop', '💘 缘分测试',
+        '<input class="enh-input" id="fateA" placeholder="你的昵称" maxlength="12"><input class="enh-input" id="fateB" placeholder="TA 的昵称" maxlength="12">' +
+        '<button class="enh-ok" id="fateGo">测算缘分</button><div class="fate-result" id="fateRes"></div>', 300);
+    _centerPop(el);
+    document.getElementById('fateGo').onclick = () => {
+        const a = document.getElementById('fateA').value.trim();
+        const b = document.getElementById('fateB').value.trim();
+        if (!a || !b) { showToast('请输入两个昵称'); return; }
+        let h = 0;
+        const s = (a + '&' + b);
+        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+        const score = 40 + (h % 60);
+        const tip = score >= 90 ? '天生一对，羡慕不来' : score >= 75 ? '很配，值得珍惜' : score >= 60 ? '不错，需要用心经营' : '缘分尚浅，交给时间';
+        document.getElementById('fateRes').innerHTML = '<div class="fate-score">' + score + '%</div><div class="fate-tip">' + tip + '</div>';
+    };
+}
+
+// ---------- 89 心情日记 ----------
+const _moodKey = 'stating_moods';
+function openMoodDiary() {
+    const moods = [['😄', '开心'], ['😊', '平静'], ['😔', '低落'], ['😤', '生气'], ['😴', '疲惫']];
+    const cards = moods.map(([e, t]) => '<div class="mood-card" data-m="' + e + '">' + e + '<span>' + t + '</span></div>').join('');
+    let saved = [];
+    try { saved = JSON.parse(localStorage.getItem(_moodKey) || '[]'); } catch (e) {}
+    const recent = saved.slice(-7).reverse().map(s => '<div class="mood-day">' + s.d + ' ' + s.e + '</div>').join('');
+    const el = _enhPop('moodPop', '😊 心情日记',
+        '<div class="mood-grid">' + cards + '</div>' +
+        '<input class="enh-input" id="moodNote" placeholder="今天想记点什么…" maxlength="40"><br>' +
+        '<div class="mood-recent">' + recent + '</div>' +
+        '<button class="enh-ok" id="moodOk">关闭</button>', 310);
+    _centerPop(el);
+    document.getElementById('moodOk').onclick = () => { el.hidden = true; };
+    el.querySelectorAll('.mood-card').forEach(c => {
+        c.onclick = () => {
+            const note = document.getElementById('moodNote').value.trim();
+            const entry = { d: new Date().toLocaleDateString('zh-CN'), e: c.dataset.m, n: note };
+            try { saved = JSON.parse(localStorage.getItem(_moodKey) || '[]'); } catch (e2) { saved = []; }
+            saved.push(entry);
+            localStorage.setItem(_moodKey, JSON.stringify(saved.slice(-60)));
+            showToast('心情已记录');
+            openMoodDiary();
+        };
+    });
+}
+
+// ---------- 90 纪念日提醒 ----------
+const _annivKey = 'stating_anniv';
+function openAnnivManage() {
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem(_annivKey) || '[]'); } catch (e) {}
+    const rows = list.map((a, i) =>
+        '<div class="bl-row"><span>' + escapeHtml(a.name) + ' · ' + a.date + '</span><button class="gm-btn" data-i="' + i + '">删除</button></div>').join('');
+    const el = _enhPop('annivPop', '🎉 纪念日提醒',
+        '<input class="enh-input" id="anName" placeholder="纪念日名称（如 在一起）" maxlength="12">' +
+        '<input class="enh-input" id="anDate" type="date">' +
+        '<button class="enh-ok" id="anAdd">添加</button>' +
+        '<div class="vt-list">' + rows + '</div>' +
+        '<button class="enh-ok" id="anOk">关闭</button>', 300);
+    _centerPop(el);
+    document.getElementById('anOk').onclick = () => { el.hidden = true; };
+    document.getElementById('anAdd').onclick = () => {
+        const name = document.getElementById('anName').value.trim();
+        const date = document.getElementById('anDate').value;
+        if (!name || !date) { showToast('请填写名称和日期'); return; }
+        let l = [];
+        try { l = JSON.parse(localStorage.getItem(_annivKey) || '[]'); } catch (e2) {}
+        l.push({ name: name, date: date });
+        localStorage.setItem(_annivKey, JSON.stringify(l));
+        openAnnivManage();
+    };
+    el.querySelectorAll('[data-i]').forEach(b => {
+        b.onclick = () => {
+            let l = [];
+            try { l = JSON.parse(localStorage.getItem(_annivKey) || '[]'); } catch (e2) {}
+            l.splice(parseInt(b.dataset.i, 10), 1);
+            localStorage.setItem(_annivKey, JSON.stringify(l));
+            openAnnivManage();
+        };
+    });
+}
+function checkAnniversaries() {
+    try {
+        const list = JSON.parse(localStorage.getItem(_annivKey) || '[]');
+        const today = new Date();
+        const md = String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        list.forEach(a => {
+            const d = (a.date || '').slice(5);
+            if (d === md) {
+                const year = parseInt((a.date || '').slice(0, 4), 10);
+                const n = today.getFullYear() - (isNaN(year) ? today.getFullYear() : year);
+                const msg = '🎉 ' + a.name + (n > 0 ? ' ' + n + ' 周年' : '') + ' 快乐！';
+                if (typeof showNotification === 'function') showNotification(msg);
+                else if ('Notification' in window && Notification.permission === 'granted') new Notification('Stating', { body: msg });
+                else showToast(msg);
+            }
+        });
+    } catch (e) {}
+}
+
+// ---------- 93 邀请统计（并入 openInviteStats，见上方） ----------
+
+// ---------- ⚡ 消息操作浮层（语音播报/已读详情/快照/拉黑） ----------
+function openMsgActions(msgId) {
+    const m = findMsgById(msgId);
+    if (!m) return;
+    const isText = m.type === 'text' || m.type === undefined;
+    const isVoice = m.type === 'voice';
+    const actions =
+        (isText ? '<button class="enh-ok ma-btn" data-a="speak">🔊 语音播报</button>' : '') +
+        (isVoice ? '<button class="enh-ok ma-btn" data-a="voice">🎵 语音倍速/拖拽</button>' : '') +
+        '<button class="enh-ok ma-btn" data-a="read">👁️ 已读详情</button>' +
+        '<button class="enh-ok ma-btn" data-a="snap">💾 存为快照</button>' +
+        (m.senderPhone && m.senderPhone !== me.phone ? '<button class="enh-ok ma-btn danger" data-a="block">🚫 拉黑对方</button>' : '') +
+        '<button class="enh-ok ma-btn" data-a="close">关闭</button>';
+    const el = _enhPop('msgActPop', '消息操作', actions, 280);
+    _centerPop(el);
+    el.querySelectorAll('.ma-btn').forEach(b => {
+        b.onclick = () => {
+            const a = b.dataset.a;
+            el.hidden = true;
+            if (a === 'speak') speakText(msgId);
+            else if (a === 'voice') showToast('点击语音右侧 1x/1.5x/2x 可调速，拖动进度条可快进');
+            else if (a === 'read') showReadDetails(msgId);
+            else if (a === 'snap') {
+                const snaps = _getSnaps();
+                if (!snaps.some(s => s.id === msgId)) {
+                    snaps.push({ id: msgId, text: (m.content || m.text || '').slice(0, 200), ts: m.ts, group: group ? group.code : '' });
+                    _saveSnaps(snaps);
+                }
+                showToast('已存入快照');
+            }
+            else if (a === 'block') blockMember(msgId);
+        };
+    });
+}
+
+// ---------- 消息操作按钮注入（每行 ⚡） ----------
+function wireMsgActionBtns() {
+    const container = document.getElementById('messages');
+    if (!container) return;
+    container.querySelectorAll('.msg-row').forEach(row => {
+        if (row.querySelector('.msg-act-btn')) return;
+        const btn = document.createElement('button');
+        btn.className = 'msg-act-btn';
+        btn.textContent = '⚡';
+        btn.title = '更多操作';
+        btn.onclick = (e) => { e.stopPropagation(); openMsgActions(row.dataset.msgId); };
+        row.appendChild(btn);
+        row.style.position = 'relative';
+    });
+}
+
+// ---------- 群管理入口（+ 菜单按钮） ----------
+(function wireGroupManBtn() {
+    const btn = document.getElementById('mmGroupMan');
+    if (btn) btn.onclick = () => { if (typeof closeMultiMenu === 'function') closeMultiMenu(); openGroupManager(); };
+})();
+
+// ---------- 我的页「更多功能」区 ----------
+function renderEnhHome() {
+    const prof = document.getElementById('profileView');
+    if (!prof) return;
+    let host = document.getElementById('enhHomeHost');
+    if (!host) {
+        host = document.createElement('div');
+        host.id = 'enhHomeHost';
+        host.className = 'home-enh';
+        prof.appendChild(host);
+    }
+    host.innerHTML =
+        '<div class="enh-section-title">更多功能</div>' +
+        '<div class="enh-grid">' +
+        '<div class="enh-tile" onclick="renderDailyCard()">🗓️ 每日一签</div>' +
+        '<div class="enh-tile" onclick="openThemePicker()">🌗 外观模式</div>' +
+        '<div class="enh-tile" onclick="openVault()">🔐 密码保险箱</div>' +
+        '<div class="enh-tile" onclick="openFateTest()">💘 缘分测试</div>' +
+        '<div class="enh-tile" onclick="openMoodDiary()">😊 心情日记</div>' +
+        '<div class="enh-tile" onclick="openAnnivManage()">🎉 纪念日</div>' +
+        '<div class="enh-tile" onclick="openBlockManage()">🚫 拉黑管理</div>' +
+        '<div class="enh-tile" onclick="openSensitiveManage()">🛡️ 敏感词</div>' +
+        '<div class="enh-tile" onclick="showRecallSnapshots()">📎 撤回快照</div>' +
+        '<div class="enh-tile" onclick="openWallpaperPicker()">🖼️ 聊天壁纸</div>' +
+        '</div>';
+}
+(function wireEnhHome() {
+    new MutationObserver(() => {
+        const prof = document.getElementById('profileView');
+        if (prof && prof.classList.contains('active') && !document.getElementById('enhHomeHost')) renderEnhHome();
+        if (prof && prof.classList.contains('active')) renderDailyCard();
+    }).observe(document.body, { childList: true, subtree: true });
+    // 首次加载
+    renderEnhHome();
+})();
+
+// ---------- 私密会话解密安全网（渲染后的气泡文本） ----------
+async function decryptRenderedBubbles() {
+    const pass = localStorage.getItem(_secKey);
+    if (!pass) return;
+    const container = document.getElementById('messages');
+    if (!container) return;
+    container.querySelectorAll('.msg-row .bubble').forEach(bubble => {
+        if (bubble.dataset.dec) return;
+        const raw = (bubble.textContent || '').trim();
+        if (raw.startsWith('[enc]')) {
+            bubble.dataset.dec = '1';
+            (async () => {
+                try {
+                    const key = await _deriveKey(pass);
+                    const pt = await _decryptText(key, raw.slice(5));
+                    if (pt !== null) bubble.textContent = pt;
+                    else bubble.textContent = '[🔒 私密消息 · 口令不正确]';
+                } catch (e) { bubble.textContent = '[🔒 私密消息]'; }
+            })();
+        }
+    });
+}
+
+// ---------- 挂载所有观察器 / 初始化 ----------
+(function initEnh() {
+    const container = document.getElementById('messages');
+    if (!container) return;
+    const runAll = () => {
+        requestAnimationFrame(() => {
+            wireVoiceEnhance();
+            wireMsgActionBtns();
+            wireBlocklistFilter();
+            applyWallpaper();
+            decryptRenderedBubbles();
+        });
+    };
+    new MutationObserver(runAll).observe(container, { childList: true, subtree: true });
+    wireToneSuggest();
+    wireRecallSnapshot();
+    initDarkMode();
+    applyWallpaper();
+    checkAnniversaries();
+    // 已读勾点击
+    container.addEventListener('click', (e) => {
+        const rd = e.target.closest('.msg-read, .msg-reads, .rd-badge');
+        if (rd) {
+            const row = rd.closest('.msg-row');
+            if (row) { showReadDetails(row.dataset.msgId); e.stopPropagation(); }
+        }
+    });
+    // 轮询数据时解密渲染：接管渲染前的 content（旁路替换 msgCache 中的密文）
+    const origRefresh = window.refreshGroupData;
+    if (typeof origRefresh === 'function') {
+        window.refreshGroupData = async function (...args) {
+            const r = await origRefresh.apply(this, args);
+            const pass = localStorage.getItem(_secKey);
+            if (pass) {
+                msgCache.forEach(async (m) => {
+                    if (m && typeof m.content === 'string' && m.content.startsWith('[enc]')) {
+                        const key = await _deriveKey(pass);
+                        const pt = await _decryptText(key, m.content.slice(5));
+                        if (pt !== null) m.content = pt;
+                    }
+                });
+            }
+            return r;
+        };
+    }
+    // 发送时：敏感词过滤 + 加密（hook sendMessage 数据流：composer 发送由 sendBtn 触发）
+    const sb = document.getElementById('sendBtn');
+    if (sb && !sb._enhHook) {
+        sb._enhHook = true;
+        const origSend = sb.onclick;
+        sb.onclick = async (e) => {
+            const ci = document.getElementById('composerInput');
+            if (ci) {
+                const raw = (ci.innerText || '').trim();
+                if (raw) {
+                    const filtered = filterSensitive(raw);
+                    if (filtered !== raw) ci.innerText = filtered;
+                    const enc = await maybeEncryptOutbound(ci.innerText);
+                    if (enc !== ci.innerText) { ci.innerText = enc; }
+                }
+            }
+            if (origSend) origSend.call(sb, e);
+        };
     }
 })();

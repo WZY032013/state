@@ -207,3 +207,74 @@ CREATE TABLE IF NOT EXISTS wx_tickets (
   avatar TEXT DEFAULT '',
   expires INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS upload_chunks (
+  uploadId TEXT PRIMARY KEY,
+  name TEXT DEFAULT '',
+  mime TEXT DEFAULT '',
+  size INTEGER DEFAULT 0,
+  totalChunks INTEGER DEFAULT 0,
+  chunks TEXT DEFAULT '[]',
+  phone TEXT DEFAULT '',
+  ts INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS push_subs (
+  phone TEXT PRIMARY KEY,
+  subJson TEXT DEFAULT '',
+  ts INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS upload_chunks (
+  uploadId TEXT PRIMARY KEY,
+  name TEXT DEFAULT '',
+  mime TEXT DEFAULT '',
+  size INTEGER DEFAULT 0,
+  totalChunks INTEGER DEFAULT 0,
+  chunks TEXT DEFAULT '[]',
+  phone TEXT DEFAULT '',
+  ts INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS push_subs (
+  phone TEXT PRIMARY KEY,
+  subJson TEXT DEFAULT '',
+  ts INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS group_meta (
+  groupId TEXT PRIMARY KEY,
+  meta TEXT DEFAULT '{}',
+  ts INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS join_requests (
+  groupId TEXT,
+  phone TEXT,
+  nickname TEXT DEFAULT '',
+  ts INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'pending',
+  PRIMARY KEY (groupId, phone)
+);
+CREATE TABLE IF NOT EXISTS group_bans (
+  groupId TEXT,
+  phone TEXT,
+  until INTEGER DEFAULT 0,
+  byPhone TEXT DEFAULT '',
+  ts INTEGER DEFAULT 0,
+  PRIMARY KEY (groupId, phone)
+);
+CREATE TABLE IF NOT EXISTS group_roles (
+  groupId TEXT,
+  phone TEXT,
+  role TEXT DEFAULT 'member',
+  ts INTEGER DEFAULT 0,
+  PRIMARY KEY (groupId, phone)
+);
+CREATE TABLE IF NOT EXISTS group_cards (
+  groupId TEXT,
+  phone TEXT,
+  nickname TEXT DEFAULT '',
+  ts INTEGER DEFAULT 0,
+  PRIMARY KEY (groupId, phone)
+);
+CREATE TABLE IF NOT EXISTS blocklist (
+  phone TEXT,
+  blockedPhone TEXT,
+  ts INTEGER DEFAULT 0,
+  PRIMARY KEY (phone, blockedPhone)
+);

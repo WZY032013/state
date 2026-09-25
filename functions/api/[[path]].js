@@ -539,6 +539,17 @@ async function handleJoinGroup(env, user, code) {
   code = code.toUpperCase();
   const group = await getGroup(env, code);
   if (!group) return fail('邀请码无效', 404);
+  // 入群审核：开启后新成员需群主批准
+  if (!group.members.includes(user.phone) && group.owner !== user.phone) {
+    const metaRow = await env.DB.prepare('SELECT meta FROM group_meta WHERE groupId = ?').bind(code).first().catch(() => null);
+    let meta = {};
+    if (metaRow && metaRow.meta) { try { meta = JSON.parse(metaRow.meta); } catch (e) {} }
+    if (meta.joinReview) {
+      await env.DB.prepare('INSERT INTO join_requests (groupId, phone, nickname, ts, status) VALUES (?,?,?,?,\'pending\') ON CONFLICT(groupId, phone) DO UPDATE SET ts = excluded.ts, status = \'pending\'')
+        .bind(code, user.phone, user.nickname || '', Date.now()).run().catch(() => {});
+      return fail('该群已开启入群审核，申请已提交，请等待群主批准', 403);
+    }
+  }
   if (!group.members.includes(user.phone)) {
     group.members.push(user.phone);
     await saveGroup(env, group);
@@ -642,7 +653,23 @@ async function handleSendMessage(env, user, code, body) {
   if (!group) return fail('群聊不存在', 404);
   if (!group.members.includes(user.phone)) return fail('你不是群成员', 403);
   const { type, text, content, imageData, voiceData, voiceDuration, fileData, fileName, fileType, fileSize, mediaUrl, location, lat, lng, replyToId, ephemeral, ephemeralSec, unlockAt, whisper, bioSigned, bioSig } = body;
-  const msg = {
+  // 禁言检查
+  const banRow = await env.DB.prepare('SELECT * FROM group_bans WHERE groupId = ? AND phone = ? AND until > ?').bind(code, user.phone, Date.now()).first().catch(() => null);
+  if (banRow) return fail('你已被禁言，无法发送消息');
+  // 敏感词过滤（内置词库兜底，前端已过滤）
+  if (typeof text === 'string' || typeof content === 'string') {
+    const rawText = String(text || content || '');
+    const dirty = ['傻逼', '妈的', '操你', 'fuck', 'shit'];
+    let cleanText = rawText;
+    for (const w of dirty) { if (w) cleanText = cleanText.split(w).join('*'.repeat(w.length)); }
+    if (cleanText !== rawText) {
+      if (typeof text === 'string') body.text = cleanText;
+      if (typeof content === 'string') body.content = cleanText;
+    }
+  }
+
+  
+      const msg = {
     id: makeId(), senderPhone: user.phone, type: type || 'text',
     content: content || text || '', ts: Date.now(), readBy: [user.phone],
     senderNickname: user.nickname, senderAvatar: user.avatar
@@ -2043,6 +2070,11 @@ export async function onRequest(context) {
       return handleAdminUserGroups(env, user, parts[2]);
     }
 
+    // 拉黑（防骚扰）
+    if (parts[0] === 'block' && method === 'POST') {
+      return handleBlockUser(env, user, await request.json().catch(() => ({})));
+    }
+
     // 群聊相关
     if (parts[0] === 'groups') {
       // 创建群聊
@@ -2119,6 +2151,18 @@ export async function onRequest(context) {
       if (parts[2] === 'settings' && method === 'POST') {
         return handleGroupSettings(env, user, parts[1], await request.json().catch(() => ({})));
       }
+      // 群元数据（审核 / 邀请限制等）
+      if (parts[2] === 'meta' && method === 'GET') { return handleGroupMeta(env, user, parts[1]); }
+      if (parts[2] === 'meta' && method === 'POST') { return handleSetGroupMeta(env, user, parts[1], await request.json().catch(() => ({}))); }
+      // 群名片
+      if (parts[2] === 'card' && method === 'POST') { return handleGroupCard(env, user, parts[1], await request.json().catch(() => ({}))); }
+      // 禁言
+      if (parts[2] === 'ban' && method === 'POST') { return handleBanMember(env, user, parts[1], await request.json().catch(() => ({}))); }
+      // 角色
+      if (parts[2] === 'role' && method === 'POST') { return handleSetRole(env, user, parts[1], await request.json().catch(() => ({}))); }
+      // 入群审核申请
+      if (parts[2] === 'requests' && method === 'GET') { return handleGetRequests(env, user, parts[1]); }
+      if (parts[2] === 'requests' && method === 'POST') { return handleReviewRequest(env, user, parts[1], await request.json().catch(() => ({}))); }
       // 导出聊天
       if (parts[2] === 'export' && method === 'GET') {
         return handleExportChat(env, user, parts[1]);
@@ -2820,4 +2864,110 @@ async function handleRecoverConfirm(env, body) {
   await rateClear(env, 'login:' + t.phone);
   secLog(env, t.phone, 'password_reset', '密码重置成功，已下线全部设备');
   return ok();
+}
+
+
+// ============ 批次B–F 后端：群管理 / 审核 / 禁言 / 角色 / 名片 / 黑名单 ============
+async function getGroupMetaMap(env, groupId) {
+  const row = await env.DB.prepare('SELECT meta FROM group_meta WHERE groupId = ?').bind(groupId).first().catch(() => null);
+  if (!row || !row.meta) return {};
+  try { return JSON.parse(row.meta || '{}'); } catch (e) { return {}; }
+}
+async function setGroupMetaMap(env, groupId, patch) {
+  const cur = await getGroupMetaMap(env, groupId);
+  const next = Object.assign({}, cur, patch);
+  await env.DB.prepare('INSERT INTO group_meta (groupId, meta, ts) VALUES (?,?,?) ON CONFLICT(groupId) DO UPDATE SET meta = excluded.meta, ts = excluded.ts')
+    .bind(groupId, JSON.stringify(next), Date.now()).run();
+  return next;
+}
+async function handleGroupMeta(env, user, code) {
+  code = code.toUpperCase();
+  const group = await getGroup(env, code);
+  if (!group) return fail('群聊不存在', 404);
+  return ok({ meta: await getGroupMetaMap(env, code) });
+}
+async function handleSetGroupMeta(env, user, code, body) {
+  code = code.toUpperCase();
+  const group = await getGroup(env, code);
+  if (!group) return fail('群聊不存在', 404);
+  if (group.owner !== user.phone) return fail('仅群主可操作', 403);
+  const meta = await setGroupMetaMap(env, code, body);
+  return ok({ meta });
+}
+async function handleGroupCard(env, user, code, body) {
+  code = code.toUpperCase();
+  const group = await getGroup(env, code);
+  if (!group) return fail('群聊不存在', 404);
+  if (!group.members.includes(user.phone)) return fail('你不是群成员', 403);
+  await env.DB.prepare('INSERT INTO group_cards (groupId, phone, nickname, ts) VALUES (?,?,?,?) ON CONFLICT(groupId, phone) DO UPDATE SET nickname = excluded.nickname, ts = excluded.ts')
+    .bind(code, user.phone, String(body.nickname || '').slice(0, 16), Date.now()).run();
+  return ok({ nickname: body.nickname || '' });
+}
+async function handleBanMember(env, user, code, body) {
+  code = code.toUpperCase();
+  const group = await getGroup(env, code);
+  if (!group) return fail('群聊不存在', 404);
+  if (group.owner !== user.phone) return fail('仅群主可禁言', 403);
+  const phone = String(body.phone || '');
+  const until = parseInt(body.until, 10) || 0;
+  if (!phone) return fail('缺少成员手机号');
+  if (until <= 0) {
+    await env.DB.prepare('DELETE FROM group_bans WHERE groupId = ? AND phone = ?').bind(code, phone).run();
+  } else {
+    await env.DB.prepare('INSERT INTO group_bans (groupId, phone, until, byPhone, ts) VALUES (?,?,?,?,?) ON CONFLICT(groupId, phone) DO UPDATE SET until = excluded.until, byPhone = excluded.byPhone, ts = excluded.ts')
+      .bind(code, phone, until, user.phone, Date.now()).run();
+  }
+  return ok({ banned: until > 0 });
+}
+async function handleSetRole(env, user, code, body) {
+  code = code.toUpperCase();
+  const group = await getGroup(env, code);
+  if (!group) return fail('群聊不存在', 404);
+  if (group.owner !== user.phone) return fail('仅群主可设置角色', 403);
+  const phone = String(body.phone || '');
+  const role = body.role === 'admin' ? 'admin' : 'member';
+  if (!phone) return fail('缺少成员手机号');
+  await env.DB.prepare('INSERT INTO group_roles (groupId, phone, role, ts) VALUES (?,?,?,?) ON CONFLICT(groupId, phone) DO UPDATE SET role = excluded.role, ts = excluded.ts')
+    .bind(code, phone, role, Date.now()).run();
+  return ok({ role });
+}
+async function handleGetRequests(env, user, code) {
+  code = code.toUpperCase();
+  const group = await getGroup(env, code);
+  if (!group) return fail('群聊不存在', 404);
+  if (group.owner !== user.phone) return fail('仅群主可查看', 403);
+  const rows = await env.DB.prepare('SELECT * FROM join_requests WHERE groupId = ? AND status = \'pending\' ORDER BY ts DESC').bind(code).all();
+  return ok({ requests: (rows.results || []).map(r => ({ phone: r.phone, nickname: r.nickname, ts: r.ts })) });
+}
+async function handleReviewRequest(env, user, code, body) {
+  code = code.toUpperCase();
+  const group = await getGroup(env, code);
+  if (!group) return fail('群聊不存在', 404);
+  if (group.owner !== user.phone) return fail('仅群主可审批', 403);
+  const phone = String(body.phone || '');
+  const action = body.action === 'approve' ? 'approve' : 'reject';
+  const req = await env.DB.prepare('SELECT * FROM join_requests WHERE groupId = ? AND phone = ?').bind(code, phone).first().catch(() => null);
+  if (!req) return fail('申请不存在');
+  if (action === 'reject') {
+    await env.DB.prepare('UPDATE join_requests SET status = \'rejected\' WHERE groupId = ? AND phone = ?').bind(code, phone).run();
+    return ok({ approved: false });
+  }
+  if (!group.members.includes(phone)) {
+    group.members.push(phone);
+    await saveGroup(env, group);
+  }
+  const u = await getUser(env, phone);
+  if (u && !u.joinedGroups.includes(code)) {
+    u.joinedGroups.push(code);
+    await saveUser(env, u);
+  }
+  await env.DB.prepare('UPDATE join_requests SET status = \'approved\' WHERE groupId = ? AND phone = ?').bind(code, phone).run();
+  return ok({ approved: true });
+}
+async function handleBlockUser(env, user, body) {
+  const blockedPhone = String(body.phone || '');
+  if (!blockedPhone || blockedPhone === user.phone) return fail('参数错误');
+  await env.DB.prepare('INSERT INTO blocklist (phone, blockedPhone, ts) VALUES (?,?,?) ON CONFLICT(phone, blockedPhone) DO NOTHING')
+    .bind(user.phone, blockedPhone, Date.now()).run();
+  return ok({ blocked: true });
 }

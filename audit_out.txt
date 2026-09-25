@@ -1,0 +1,54 @@
+﻿=== 1. SIM 一键登录 + 注册 ===
+  SIM后状态: {"smsModal":false,"profileStep":false,"nickInput":true,"regBtn":true,"mainVisible":true}
+  注册后: {"mainVisible":true,"token":true}
+
+=== 2. 个人菜单入口 ===
+  入口: {"heatmap":true,"yearReport":true,"bioRoom":true}
+
+=== 3. 热力图 ===
+  热力图: {"visible":true,"cells":365,"stats":"共发送 12 条消息 · 活跃天数 1 天"}
+
+=== 4. 年度报告 ===
+  年度报告: {"visible":true,"cards":5,"content":"12条消息1活跃天数11:00最爱聊天时段12单日最高（2026-09-25）💬 累计聊天 12 条，相当于 0 本书的字数"}
+
+=== 5. 双人生物房间 ===
+  生物房间: {"visible":true,"createBtn":true,"joinInput":true}
+
+=== 6. 建群 ===
+  建群按钮: {"createBtn":true,"addBtn":false,"plusBtn":false,"allButtons":["brCreate","signKeyGenBtn","showCreateGroup","createGroupBtn","multiPlusBtn","nearCreateBtn"]}
+
+=== 6. 建群（UI流程） ===
+  入口状态: {"inviteGate":true,"createCard":false,"showCreateBtn":true}
+  创建卡可见: {"createCardVisible":true,"nameVal":"","avatarItems":0}
+  建群后: {"createError":"","inviteGateHidden":true,"chatRoomVisible":true,"chatName":"审计群聊"}
+  群列表: {"count":0}
+  进入聊天: {"inChat":true,"inviteGateHidden":true,"groupName":"审计群聊","composer":true}
+
+=== 7. + 菜单 ===
+  +菜单: {"ephemeral":true,"capsule":true,"whisper":true,"bioSign":true}
+
+=== 8. 发消息 ===
+  消息: {"count":1}
+
+=== 9. 右键菜单 ===
+  右键菜单: {"visible":true,"items":["回复","表情","转发","收藏","翻译","多选","置顶","编辑","撤回"]}
+
+=== 10. 文字动效 ===
+  发送前: {"sendDisabled":false,"inputHasText":false,"groupSet":false}
+  发送检查: {"inputVal":"生日快乐","btnOnclickType":"function","sendDisabled":false,"err":null}
+  动效: {"layer":true,"particles":40,"msgCount":2}
+
+=== 11. 阅后即焚 ===
+  模式条: {"bar":true,"text":"阅后即焚 · 5秒"}
+  阅后即焚: {"ephemeralTag":true,"epCd":"5","msgCount":3,"inputVal":"看完就烧","sendDisabled":false,"err":null}
+
+=== 12. 定时胶囊 ===
+  定时胶囊: {"orb":false,"locked":false}
+
+
+========== 排查汇总 ==========
+Console Errors (0):
+
+Console Warnings (0):
+
+Failed API Requests (0):
