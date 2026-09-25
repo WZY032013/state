@@ -5,29 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#EEF2F9">
     <title>Stating</title>
-    <!-- 关键资源预加载：首屏必须的 CSS/JS -->
     <link rel="preload" href="style.css" as="style">
     <link rel="preload" href="icons.js" as="script">
     <link rel="preload" href="script.js" as="script">
-    <!-- DNS 预连接：第三方资源 -->
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link rel="dns-prefetch" href="https://server.arcgisonline.com">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.webmanifest">
-    <!-- Leaflet 非首屏：改为懒加载（进入地图页前才注入） -->
 </head>
 <body>
-
-<!-- 背景光斑 -->
 <div class="bg-blobs" aria-hidden="true">
     <span class="blob b1"></span>
     <span class="blob b2"></span>
     <span class="blob b3"></span>
     <span class="blob b4"></span>
 </div>
-
-<!-- ============ 注册 / 登录 ============ -->
 <div id="authScreen" class="auth-screen">
     <div class="auth-card glass">
         <div class="auth-logo">
@@ -35,20 +28,16 @@
             <h1>Stating</h1>
             <p>与世界，轻轻对话</p>
         </div>
-
         <div class="auth-tabs glass-pill">
             <button type="button" class="auth-tab active" data-tab="login">登录</button>
             <button type="button" class="auth-tab" data-tab="register">注册</button>
             <button type="button" class="auth-tab auth-tab-qr" data-tab="qr" title="扫码登录"><span data-icon="qr"></span></button>
         </div>
-
         <div class="auth-more">
             <button type="button" class="auth-more-btn glass-pill" id="passkeyLoginBtn" hidden><span data-icon="key"></span> Passkey 登录</button>
             <button type="button" class="auth-more-btn glass-pill" id="deviceCodeBtn"><span data-icon="monitor"></span> 设备码登录</button>
             <button type="button" class="auth-more-btn glass-pill" id="forgotBtn"><span data-icon="lock"></span> 忘记密码</button>
         </div>
-
-        <!-- 登录 -->
         <form id="loginForm" class="auth-form active" autocomplete="off">
             <div class="field glass-field">
                 <span class="field-icon" data-icon="phone"></span>
@@ -60,8 +49,6 @@
             </div>
             <button type="submit" class="btn-primary">登 录</button>
         </form>
-
-        <!-- 注册 -->
         <form id="registerForm" class="auth-form" autocomplete="off">
             <div class="field glass-field">
                 <span class="field-icon" data-icon="phone"></span>
@@ -79,18 +66,14 @@
                 <span class="field-icon" data-icon="edit"></span>
                 <input type="text" id="regNickname" placeholder="昵称" maxlength="20">
             </div>
-
             <div class="avatar-section">
                 <div class="avatar-label">选择头像</div>
                 <div class="avatar-grid" id="avatarGrid"></div>
                 <button type="button" class="avatar-upload-btn" id="avatarUploadBtn"><span data-icon="image"></span> 上传本地照片</button>
                 <input type="file" id="avatarUpload" accept="image/*" hidden>
             </div>
-
             <button type="submit" class="btn-primary">注 册</button>
         </form>
-
-        <!-- 扫码登录 -->
         <div id="qrForm" class="auth-form qr-login-panel">
             <div class="qr-stage">
                 <div class="qr-card glass" id="qrCard">
@@ -106,8 +89,6 @@
             <p class="qr-status-text" id="qrStatusText">打开手机 Stating 「我的 → 扫一扫」</p>
             <p class="qr-status-sub" id="qrStatusSub">扫描二维码，安全登录网页版</p>
         </div>
-
-        <!-- 本机号码 / 微信 免密登录注册（登录/注册/扫码三种方式下方统一入口） -->
         <div class="auth-oauth-divider"><span>免密登录 / 注册</span></div>
         <div class="auth-oauth">
             <button type="button" class="oauth-btn oauth-sim" id="simLoginBtn">
@@ -127,12 +108,9 @@
             </button>
         </div>
         <div class="auth-oauth-note">登录注册同一入口：未注册手机号通过验证后自动创建账号，无需设置密码</div>
-
         <div id="authError" class="auth-error"></div>
     </div>
 </div>
-
-<!-- 管理员密钥验证 -->
 <div id="adminKeyScreen" class="auth-screen" hidden>
     <div class="auth-card glass">
         <div class="auth-logo">
@@ -153,24 +131,19 @@
         <button type="button" class="btn-text" id="adminKeyCancel">← 返回登录</button>
     </div>
 </div>
-
-<!-- 手机扫码后：登录确认屏 -->
 <div id="qrConfirmScreen" class="auth-screen" hidden>
     <div class="auth-card glass qr-confirm-card">
-        <!-- 加载中 -->
         <div class="qrc-state" id="qrcLoading">
             <div class="qr-spinner"></div>
             <h1>正在验证二维码</h1>
             <p>请稍候…</p>
         </div>
-        <!-- 未登录 -->
         <div class="qrc-state" id="qrcGuest" hidden>
             <div class="logo-badge" data-icon="qr"></div>
             <h1>扫码登录</h1>
             <p>登录 Stating 后，即可授权电脑端登录</p>
             <button class="btn-primary" id="qrcGoLogin">前往登录</button>
         </div>
-        <!-- 已登录：确认授权 -->
         <div class="qrc-state" id="qrcAsk" hidden>
             <div class="logo-badge qr-logo-badge" data-icon="qr"></div>
             <h1>确认登录网页版？</h1>
@@ -186,14 +159,12 @@
             <button class="btn-primary" id="qrcConfirmBtn">确认登录</button>
             <button type="button" class="btn-text" id="qrcCancelBtn">取消登录</button>
         </div>
-        <!-- 成功 -->
         <div class="qrc-state" id="qrcDone" hidden>
             <div class="qrc-success"><span data-icon="checkDouble"></span></div>
             <h1>登录成功</h1>
             <p>请返回电脑端查看，已安全登录</p>
             <button class="btn-primary" id="qrcCloseDone">完成</button>
         </div>
-        <!-- 失败/过期/取消 -->
         <div class="qrc-state" id="qrcFail" hidden>
             <div class="logo-badge">⚠️</div>
             <h1 id="qrcFailTitle">操作未完成</h1>
@@ -202,9 +173,6 @@
         </div>
     </div>
 </div>
-
-<!-- ============ 安全中心 ============ -->
-<!-- 设备码登录 -->
 <div id="deviceCodeModal" class="sec-overlay" hidden>
     <div class="sec-card glass">
         <button type="button" class="sec-close" id="dcClose"><span data-icon="close"></span></button>
@@ -217,8 +185,6 @@
         <button type="button" class="btn-primary" id="dcRefreshBtn" hidden>重新获取</button>
     </div>
 </div>
-
-<!-- 安全中心（Passkey 管理 + 设备授权） -->
 <div id="passkeyModal" class="sec-overlay" hidden>
     <div class="sec-card glass">
         <button type="button" class="sec-close" id="pkClose"><span data-icon="close"></span></button>
@@ -239,15 +205,12 @@
         <p class="dc-bio-note" id="dcBioNote" hidden><span data-icon="key"></span> 本账号已开启生物识别：授权时必须通过本机面容 / 指纹验证</p>
     </div>
 </div>
-
-<!-- ============ 本机号码（短信验证码）登录 / 注册 ============ -->
 <div id="smsModal" class="sec-overlay" hidden>
     <div class="sec-card glass lg-flow-card">
         <button type="button" class="sec-close" id="smsCloseBtn"><span data-icon="close"></span></button>
         <div class="sec-badge lg-badge-sms"><span data-icon="phone"></span></div>
         <h1>本机号码登录</h1>
         <p class="sec-sub">短信验证码核验身份，支持自动读取<br>未注册的手机号验证后自动创建账号</p>
-
         <div class="lg-flow" data-smsstep="phone">
             <div class="field glass-field">
                 <span class="field-icon" data-icon="phone"></span>
@@ -257,7 +220,6 @@
             <div class="auth-error" id="smsErr"></div>
             <div class="lg-devhint" id="smsDevHint" hidden></div>
         </div>
-
         <div class="lg-flow" data-smsstep="code" hidden>
             <p class="lg-code-tip">验证码已发送至 <b id="smsPhoneShown"></b></p>
             <div class="lg-otp" id="smsOtp"></div>
@@ -266,7 +228,6 @@
             <div class="lg-resend" id="smsResendWrap">重新发送（<span id="smsCd">60</span>s）</div>
             <div class="auth-error" id="smsCodeErr"></div>
         </div>
-
         <div class="lg-flow" data-smsstep="profile" hidden>
             <p class="lg-code-tip">验证通过，补全资料完成注册</p>
             <div class="field glass-field">
@@ -279,15 +240,12 @@
         </div>
     </div>
 </div>
-
-<!-- ============ 微信登录 / 注册（扫码授权 + 手机号绑定） ============ -->
 <div id="wxModal" class="sec-overlay" hidden>
     <div class="sec-card glass lg-flow-card">
         <button type="button" class="sec-close" id="wxCloseBtn"><span data-icon="close"></span></button>
         <div class="sec-badge lg-badge-wx"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.74-1.78 6.22.942 2.452 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-3.044-5.837-7.062-6.122zm-2.095 2.98c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/></svg></div>
         <h1>微信登录 / 注册</h1>
         <p class="sec-sub">微信授权后验证本机手机号<br>老用户直接绑定登录，新用户自动注册</p>
-
         <div class="lg-flow" data-wxstep="qr">
             <div class="wx-qr glass" id="wxQr"><div class="wx-qr-loading"><div class="loading-spinner"></div></div></div>
             <div class="wx-state" id="wxState">正在生成微信登录二维码…</div>
@@ -296,7 +254,6 @@
             <button type="button" class="btn-ghost lg-block-btn" id="wxCancelBtn">取消</button>
             <div class="lg-devhint" id="wxHint"></div>
         </div>
-
         <div class="lg-flow" data-wxstep="bind" hidden>
             <div class="wx-profile" id="wxProfileChip"><span class="wx-profile-ic">💬</span><span class="wx-profile-name">微信用户</span></div>
             <div class="field glass-field">
@@ -312,8 +269,6 @@
         </div>
     </div>
 </div>
-
-<!-- ============ 注册/登录后：本机生物识别引导 ============ -->
 <div id="bioOnboardModal" class="sec-overlay" hidden>
     <div class="sec-card glass lg-flow-card bio-onboard-card">
         <div class="bio-onboard-orb"><span data-icon="key"></span></div>
@@ -323,8 +278,6 @@
         <button type="button" class="btn-ghost lg-block-btn" id="bioLaterBtn">稍后再说</button>
     </div>
 </div>
-
-<!-- 聊天热力图 Q10 -->
 <div id="heatmapModal" class="sec-overlay" hidden>
     <div class="sec-card glass lg-flow-card" style="max-width:560px;">
         <button type="button" class="sec-close" id="heatmapClose"><span data-icon="close"></span></button>
@@ -335,8 +288,6 @@
         <div id="heatmapStats" class="heatmap-stats"></div>
     </div>
 </div>
-
-<!-- 年度聊天报告 Q11 -->
 <div id="yearReportModal" class="sec-overlay" hidden>
     <div class="sec-card glass lg-flow-card" style="max-width:440px;">
         <button type="button" class="sec-close" id="yearReportClose"><span data-icon="close"></span></button>
@@ -345,8 +296,6 @@
         <div id="yrContent" class="yr-content"></div>
     </div>
 </div>
-
-<!-- 双人生物房间 N6 -->
 <div id="bioRoomModal" class="sec-overlay" hidden>
     <div class="sec-card glass lg-flow-card" style="max-width:440px;">
         <button type="button" class="sec-close" id="bioRoomClose"><span data-icon="close"></span></button>
@@ -356,8 +305,6 @@
         <div id="bioRoomBody"></div>
     </div>
 </div>
-
-<!-- 找回密码 -->
 <div id="recoverModal" class="sec-overlay" hidden>
     <div class="sec-card glass">
         <button type="button" class="sec-close" id="recClose"><span data-icon="close"></span></button>
@@ -397,8 +344,6 @@
         <div id="recError" class="auth-error"></div>
     </div>
 </div>
-
-<!-- 安全日志 -->
 <div id="secLogModal" class="sec-overlay" hidden>
     <div class="sec-card glass sec-log-card">
         <button type="button" class="sec-close" id="slClose"><span data-icon="close"></span></button>
@@ -408,8 +353,6 @@
         <div class="sec-log-list" id="secLogList"></div>
     </div>
 </div>
-
-<!-- 签名验签工具 -->
 <div id="signToolOverlay" class="scanner-overlay sign-tool-overlay" hidden>
     <div class="sign-scroll">
         <button type="button" class="scanner-close glass-pill" id="stClose" title="关闭"><span data-icon="close"></span></button>
@@ -436,8 +379,6 @@
         </div>
     </div>
 </div>
-
-<!-- 扫一扫（相机取景） -->
 <div id="scannerOverlay" class="scanner-overlay" hidden>
     <video id="scannerVideo" class="scanner-video" playsinline muted autoplay></video>
     <canvas id="scannerCanvas" hidden></canvas>
@@ -453,11 +394,7 @@
         <input type="file" id="scannerFile" accept="image/*" hidden>
     </div>
 </div>
-
-<!-- ============ 主应用 ============ -->
 <div id="mainApp" class="main-app" hidden>
-
-    <!-- 顶部导航 -->
     <div class="topbar-wrap">
         <nav class="topbar glass-pill">
             <div class="brand">Stating</div>
@@ -486,10 +423,7 @@
             </div>
         </nav>
     </div>
-
     <main class="views">
-
-        <!-- 首页 -->
         <section id="homeView" class="view active">
             <div class="home-hero glass">
                 <div class="hero-avatar" id="heroAvatar">😀</div>
@@ -516,14 +450,9 @@
                 </button>
             </div>
         </section>
-
-        <!-- 聊天 -->
         <section id="chatView" class="view">
-
-            <!-- 邀请码 / 创建群聊 -->
             <div id="inviteGate" class="invite-gate">
                 <div class="gate-wrap">
-                    <!-- 输入邀请码 -->
                     <div class="invite-card glass" id="inviteCard">
                         <div class="invite-icon" data-icon="key"></div>
                         <h2>输入邀请码</h2>
@@ -540,8 +469,6 @@
                         <button class="btn-primary" id="inviteSubmit">进入群聊</button>
                         <button type="button" class="btn-text" id="showCreateGroup">＋ 创建新群聊</button>
                     </div>
-
-                    <!-- 创建群聊 -->
                     <div class="invite-card glass" id="createGroupCard" hidden>
                         <div class="invite-icon">✨</div>
                         <h2>创建群聊</h2>
@@ -564,12 +491,8 @@
                     </div>
                 </div>
             </div>
-
-            <!-- 聊天室 -->
             <div id="chatRoom" class="chat-room" hidden>
-                <!-- 弹幕遮罩层 -->
                 <div class="danmaku-layer" id="danmakuLayer" hidden></div>
-                <!-- 在线面板 -->
                 <aside class="online-panel glass" id="onlinePanel">
                     <div class="op-header">
                         <div class="op-group-avatar" id="opGroupAvatar">💬</div>
@@ -580,9 +503,7 @@
                     <div class="online-list" id="onlineList"></div>
                 </aside>
                 <button class="online-toggle" id="onlineToggle" title="在线列表"><span data-icon="users"></span></button>
-
                 <div class="chat-main">
-                    <!-- 聊天头部 -->
                     <header class="chat-header glass">
                         <button class="back-btn" id="backToGate" title="返回">‹</button>
                         <div class="ch-avatar" id="chatAvatar">💬</div>
@@ -593,8 +514,6 @@
                         <div class="ch-avatars" id="headerAvatars"></div>
                         <button class="group-menu-btn" id="groupMenuBtn" title="群设置">⋯</button>
                     </header>
-
-                    <!-- 群设置菜单 -->
                     <div class="group-menu glass" id="groupMenu" hidden>
                         <button class="gm-item" id="gmMembers"><span class="gm-icon" data-icon="members"></span> 群成员</button>
                         <button class="gm-item gm-owner" id="gmEditGroup" hidden><span class="gm-icon" data-icon="edit"></span> 编辑群信息</button>
@@ -612,22 +531,16 @@
                         <button class="gm-item gm-leave" id="gmLeaveGroup"><span class="gm-icon" data-icon="leave"></span> 退出群聊</button>
                         <button class="gm-item gm-dismiss" id="gmDismissGroup" hidden><span class="gm-icon" data-icon="dismiss"></span> 注销群聊</button>
                     </div>
-
-                    <!-- 置顶消息横幅 -->
                     <div id="pinnedBanner" class="pinned-banner glass" hidden>
                         <span class="pb-icon" data-icon="pin"></span>
                         <span class="pb-text" id="pinnedText"></span>
                         <button class="pb-close" id="pinnedClose">✕</button>
                     </div>
-
-                    <!-- 群公告横幅 -->
                     <div id="announcementBanner" class="announcement-banner glass" hidden>
                         <span class="ann-icon" data-icon="announcement"></span>
                         <span class="ann-text" id="annText"></span>
                         <button class="ann-close" id="annClose">✕</button>
                     </div>
-
-                    <!-- 通话横幅 -->
                     <div id="callBanner" class="call-banner" hidden>
                         <div class="call-banner-avatar" id="callBannerAvatar" data-icon="phone"></div>
                         <div class="call-banner-info">
@@ -637,34 +550,25 @@
                         <div class="call-banner-timer" id="callBannerTimer">00:00</div>
                         <button class="call-banner-join" id="callBannerJoin">加入</button>
                     </div>
-                    <!-- 实时位置共享横幅 -->
                     <div class="loc-share-banner glass" id="locShareBanner" hidden>
                         <div class="lsb-avatars" id="lsbAvatars"></div>
                         <button class="lsb-join-btn" id="lsbJoinBtn">正在共享实时位置，点击加入</button>
                         <button class="lsb-close-btn" id="lsbCloseBtn" title="停止共享">✕</button>
                     </div>
-                    <!-- 实时地图 -->
                     <div class="loc-map-wrap" id="locMapWrap" hidden>
                         <div id="locMap" class="loc-map"></div>
                     </div>
-
-                    <!-- 消息区 -->
                     <div class="messages" id="messages"></div>
-
-                    <!-- 输入中 -->
                     <div class="typing-wrap" id="typingWrap" hidden>
                         <div class="typing-bubble">
                             <span class="typing-name" id="typingName"></span>
                             <span class="typing-dots"><i></i><i></i><i></i></span>
                         </div>
                     </div>
-
-                    <!-- 输入栏 -->
                     <div class="composer-wrap">
                         <div class="emoji-panel glass" id="emojiPanel" hidden>
                             <div class="emoji-grid" id="emojiGrid"></div>
                         </div>
-                        <!-- 录音中状态条 -->
                         <div class="recording-bar glass" id="recordingBar" hidden>
                             <span class="rec-dot"></span>
                             <span class="rec-text">正在录音 <span id="recTime">0"</span></span>
@@ -673,7 +577,6 @@
                         </div>
                         <div class="composer glass-pill">
                             <button class="composer-btn" id="emojiBtn" title="表情"><span data-icon="smile"></span></button>
-                            <!-- 多功能+键 -->
                             <div class="multi-btn-wrap">
                                 <button class="composer-btn multi-plus-btn" id="multiPlusBtn" title="更多">+</button>
                             </div>
@@ -684,7 +587,6 @@
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                             </button>
                         </div>
-                        <!-- 多功能菜单（放在composer外避免overflow:hidden裁切） -->
                         <div class="multi-menu glass" id="multiMenu" hidden>
                             <button class="multi-menu-item" id="mmImage" title="图片"><span class="mm-icon" data-icon="image"></span><span class="mm-label">图片</span></button>
                             <button class="multi-menu-item" id="mmFile" title="文件"><span class="mm-icon" data-icon="file"></span><span class="mm-label">文件</span></button>
@@ -699,13 +601,11 @@
                             <button class="multi-menu-item" id="mmSchedule" title="定时发送"><span class="mm-icon" data-icon="clock"></span><span class="mm-label">定时发送</span></button>
                             <button class="multi-menu-item" id="mmGroupMan" title="群管理"><span class="mm-icon" data-icon="gear"></span><span class="mm-label">群管理</span></button>
                         </div>
-                        <!-- 消息模式指示条 -->
                         <div class="composer-mode-bar glass" id="composerModeBar" hidden>
                             <span class="cmb-icon" id="cmbIcon"></span>
                             <span class="cmb-text" id="cmbText"></span>
                             <button class="cmb-cancel" id="cmbCancel">×</button>
                         </div>
-                        <!-- 阅后即焚秒数选择 -->
                         <div class="ephemeral-picker glass" id="ephemeralPicker" hidden>
                             <div class="ep-title">阅后即焚 · 查看后存活</div>
                             <div class="ep-options">
@@ -715,7 +615,6 @@
                                 <button data-sec="60">1分钟</button>
                             </div>
                         </div>
-                        <!-- 定时胶囊时间选择 -->
                         <div class="capsule-picker glass" id="capsulePicker" hidden>
                             <div class="cp-title">定时胶囊 · 解锁时间</div>
                             <input type="datetime-local" id="capsuleTime" class="cp-time">
@@ -726,11 +625,9 @@
                             </div>
                             <button class="cp-confirm" id="capsuleConfirm">封存</button>
                         </div>
-                        <!-- 长按位置菜单 -->
                         <div class="loc-menu glass" id="locMenu" hidden>
                             <button class="loc-menu-item" id="locSendOnce"><span data-icon="location"></span>发送当前位置</button>
                         </div>
-                        <!-- 手机端在线成员栏 -->
                         <div class="mobile-online-bar" id="mobileOnlineBar" hidden>
                             <span class="mob-online-label">在线</span>
                             <div class="mob-online-list" id="mobileOnlineList"></div>
@@ -739,8 +636,6 @@
                 </div>
             </div>
         </section>
-
-        <!-- 用户 -->
         <section id="usersView" class="view">
             <div class="users-header glass">
                 <h2>用户列表</h2>
@@ -748,8 +643,6 @@
             </div>
             <div class="users-list" id="usersList"></div>
         </section>
-
-        <!-- 我的 -->
         <section id="profileView" class="view">
             <button type="button" class="profile-scan-btn glass-pill" id="openScannerBtn" title="扫一扫">
                 <span data-icon="qr"></span>
@@ -815,7 +708,6 @@
                         <input type="time" id="focusEnd" class="focus-time" value="">
                     </div>
                 </div>
-                <!-- 会话列表弹窗 -->
                 <div id="sessionsDialog" class="confirm-overlay" hidden>
                     <div class="confirm-card glass">
                         <h3>登录设备</h3>
@@ -825,7 +717,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- 收藏列表弹窗 -->
                 <div id="savedDialog" class="confirm-overlay" hidden>
                     <div class="confirm-card glass" style="max-width:400px;">
                         <h3>我的收藏</h3>
@@ -836,22 +727,17 @@
                     </div>
                 </div>
             </div>
-
-            <!-- 我的群聊 -->
             <div class="my-groups glass" id="myGroupsCard">
                 <h3>我的群聊</h3>
                 <div class="my-groups-list" id="myGroupsList"></div>
             </div>
         </section>
-
-        <!-- 博采 -->
         <section id="feedbackView" class="view">
             <div class="fb-header glass">
                 <h2>博采众长</h2>
                 <p>你的每一条建议都在塑造 Stating 的未来</p>
             </div>
             <div class="fb-content">
-                <!-- 功能说明磁贴 -->
                 <div class="fb-tiles">
                     <div class="fb-tile glass">
                         <div class="fb-tile-icon" data-icon="lightbulb"></div>
@@ -875,8 +761,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- 提交区 -->
                 <div class="fb-submit glass">
                     <h3>提交你的建议</h3>
                     <textarea class="fb-input" id="fbInput" placeholder="描述你想要的功能或改进建议..." rows="3"></textarea>
@@ -891,8 +775,6 @@
                         <button class="fb-submit-btn" id="fbSubmitBtn">提交</button>
                     </div>
                 </div>
-
-                <!-- 建议列表 -->
                 <div class="fb-list-wrap glass">
                     <div class="fb-list-header">
                         <h3>大家的建议</h3>
@@ -900,8 +782,6 @@
                     </div>
                     <div class="fb-list" id="fbList"></div>
                 </div>
-
-                <!-- 管理员统计（仅管理员可见） -->
                 <div class="fb-admin glass" id="fbAdminPanel" hidden>
                     <h3>管理员面板</h3>
                     <div class="fb-admin-stats">
@@ -919,11 +799,8 @@
             </div>
         </section>
     </main>
-
     <footer class="footer">@2026 WZY</footer>
 </div>
-
-<!-- ============ 管理员面板 ============ -->
 <div id="adminPanel" class="admin-overlay" hidden>
     <div class="admin-panel glass">
         <div class="ap-header">
@@ -948,8 +825,6 @@
         </div>
     </div>
 </div>
-
-<!-- ============ 管理员消息查看器 ============ -->
 <div id="adminMsgViewer" class="admin-overlay" hidden>
     <div class="admin-msg-panel glass">
         <div class="ap-header">
@@ -966,8 +841,6 @@
         <div class="admin-messages" id="adminMessages"></div>
     </div>
 </div>
-
-<!-- 通话弹窗 -->
 <div id="callModal" class="call-overlay" hidden>
     <div class="call-panel" id="callPanel">
         <button class="call-pip-btn" id="callPipBtn" title="小窗">⤢</button>
@@ -991,7 +864,6 @@
         </div>
     </div>
 </div>
-<!-- 确认对话框 -->
 <div id="confirmDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass">
         <div class="confirm-icon" id="confirmIcon" data-icon="info"></div>
@@ -1003,8 +875,6 @@
         </div>
     </div>
 </div>
-
-<!-- 博采回复对话框 -->
 <div id="fbReplyModal" class="confirm-overlay" hidden>
     <div class="confirm-card glass">
         <div class="confirm-icon" data-icon="chat"></div>
@@ -1016,17 +886,11 @@
         </div>
     </div>
 </div>
-
-<!-- 图片查看器 -->
 <div class="lightbox" id="lightbox" hidden>
     <img id="lightboxImg" src="" alt="图片">
     <button class="lightbox-save-btn" id="lightboxSaveBtn" hidden><span data-icon="download"></span> 保存图片</button>
 </div>
-
-<!-- 头像上传 -->
 <input type="file" id="avatarUploadInput" accept="image/*" hidden>
-
-<!-- 二维码结果弹窗 -->
 <div id="qrResultDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass">
         <div class="confirm-icon" data-icon="qr"></div>
@@ -1038,8 +902,6 @@
         </div>
     </div>
 </div>
-
-<!-- 打卡对话框 -->
 <div id="checkinDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass" style="max-width:420px;">
         <h3>位置打卡</h3>
@@ -1053,8 +915,6 @@
         </div>
     </div>
 </div>
-
-<!-- 蓝牙 / 低数据通信对话框 -->
 <div id="bluetoothDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass bluetooth-card" style="max-width:440px;">
         <div class="bt-hero">
@@ -1072,7 +932,6 @@
             <button class="bt-seg-btn" id="btTabBt">📡 蓝牙</button>
             <div class="bt-seg-thumb" id="btSegThumb"></div>
         </div>
-        <!-- 低数据模式 -->
         <div id="btPanelNear">
             <div class="bt-desc-box">
                 <div class="bt-desc-title">低数据模式</div>
@@ -1108,7 +967,6 @@
                 <button class="btn-text bt-disconnect" id="nearDisconnectBtn">断开</button>
             </div>
         </div>
-        <!-- 蓝牙 -->
         <div id="btPanelBt" hidden>
             <div class="bt-desc-box">
                 <div class="bt-desc-title">蓝牙</div>
@@ -1143,8 +1001,6 @@
         </div>
     </div>
 </div>
-
-<!-- 气泡皮肤选择对话框 -->
 <div id="bubbleDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass" style="max-width:420px;">
         <h3>选择气泡皮肤</h3>
@@ -1161,8 +1017,6 @@
         </div>
     </div>
 </div>
-
-<!-- 群相册回忆 -->
 <div id="memoriesDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass" style="max-width:480px;">
         <h3>去年今日 <span id="memoriesDate" style="font-size:14px;color:var(--ink-3);"></span></h3>
@@ -1172,8 +1026,6 @@
         </div>
     </div>
 </div>
-
-<!-- iMessage 信息说明弹窗 -->
 <div id="imsgInfoDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass imsg-info-card">
         <div class="confirm-icon" data-icon="brain"></div>
@@ -1193,8 +1045,6 @@
         </div>
     </div>
 </div>
-
-<!-- 消息右键/长按菜单 -->
 <div id="msgContextMenu" class="msg-ctx-menu glass" hidden>
     <button class="ctx-item" data-action="reply"><span data-icon="reply"></span>回复</button>
     <button class="ctx-item" data-action="react"><span data-icon="smile"></span>表情</button>
@@ -1206,8 +1056,6 @@
     <button class="ctx-item ctx-own" data-action="edit"><span data-icon="edit"></span>编辑</button>
     <button class="ctx-item ctx-own" data-action="recall"><span data-icon="recall"></span>撤回</button>
 </div>
-
-<!-- 多选操作栏 -->
 <div id="multiSelectBar" class="multi-select-bar glass" hidden>
     <span class="msb-count" id="msbCount">已选 0 条</span>
     <div class="msb-actions">
@@ -1217,11 +1065,7 @@
     </div>
     <button class="msb-cancel" id="msbCancel">取消</button>
 </div>
-
-<!-- 文字动效全屏层 -->
 <div id="textEffectLayer" class="text-effect-layer" hidden></div>
-
-<!-- 表情选择器 -->
 <div id="reactionPicker" class="reaction-picker glass" hidden>
     <button class="rp-emoji" data-emoji="👍">👍</button>
     <button class="rp-emoji" data-emoji="❤️">❤️</button>
@@ -1232,8 +1076,6 @@
     <button class="rp-emoji" data-emoji="🔥">🔥</button>
     <button class="rp-emoji" data-emoji="🎉">🎉</button>
 </div>
-
-<!-- 回复预览条 -->
 <div id="replyBar" class="reply-bar glass" hidden>
     <div class="reply-info">
         <span class="reply-label">回复</span>
@@ -1242,14 +1084,10 @@
     </div>
     <button class="reply-cancel" id="replyCancel">✕</button>
 </div>
-
-<!-- 输入中提示 -->
 <div id="typingIndicator" class="typing-indicator" hidden>
     <span class="typing-dots"><span></span><span></span><span></span></span>
     <span id="typingText">有人正在输入...</span>
 </div>
-
-<!-- 用户资料卡 -->
 <div id="profileCard" class="confirm-overlay" hidden>
     <div class="confirm-card glass profile-card-modal">
         <div class="pc-avatar" id="pcAvatar">😀</div>
@@ -1266,8 +1104,6 @@
         </div>
     </div>
 </div>
-
-<!-- 搜索面板 -->
 <div id="searchPanel" class="search-panel glass" hidden>
     <div class="sp-header">
         <input type="text" id="searchInput" placeholder="搜索消息..." class="sp-input">
@@ -1275,8 +1111,6 @@
     </div>
     <div class="sp-results" id="searchResults"></div>
 </div>
-
-<!-- 转发对话框 -->
 <div id="forwardDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass">
         <h3>转发到</h3>
@@ -1286,8 +1120,6 @@
         </div>
     </div>
 </div>
-
-<!-- 群二维码弹窗 -->
 <div id="qrDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass">
         <h3 id="qrGroupName">群聊邀请</h3>
@@ -1298,8 +1130,6 @@
         </div>
     </div>
 </div>
-
-<!-- 群公告编辑 -->
 <div id="announcementDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass">
         <h3>群公告</h3>
@@ -1311,8 +1141,6 @@
         </div>
     </div>
 </div>
-
-<!-- 群成员弹窗 -->
 <div id="membersDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass" style="max-width:380px;">
         <h3>群成员 <span id="membersCount" style="font-size:14px;color:var(--ink-3);"></span></h3>
@@ -1322,8 +1150,6 @@
         </div>
     </div>
 </div>
-
-<!-- 编辑群信息弹窗 -->
 <div id="editGroupDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass">
         <h3>编辑群信息</h3>
@@ -1341,8 +1167,6 @@
         </div>
     </div>
 </div>
-
-<!-- 置顶消息弹窗 -->
 <div id="pinnedDialog" class="confirm-overlay" hidden>
     <div class="confirm-card glass" style="max-width:400px;">
         <h3>置顶消息</h3>
@@ -1352,18 +1176,9 @@
         </div>
     </div>
 </div>
-
-<!-- @提及选择器 -->
 <div id="mentionPicker" class="mention-picker glass" hidden>
     <div class="mp-list" id="mentionList"></div>
 </div>
-
-<!--
-  非首屏 JS：
-  - script.js 放 body 末尾，保证 DOM 就绪，避免解析阻塞
-  - Leaflet 地图库 / jsQR 二维码库：改为按需懒加载（首次进入位置共享/扫描图片时才注入），
-    显著减少首屏 JS 体积与 TTI
--->
 <script src="icons.js" defer></script>
 <script src="script.js" defer></script>
 </body>
