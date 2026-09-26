@@ -1,0 +1,27 @@
+/*
+ * Stating — CF Pages 缓存策略（_headers）
+ * 静态资源一年长缓存（浏览器直取，零回源）；HTML 每次回源验证（保证新版本可见）
+ */
+/script.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/style.css
+  Cache-Control: public, max-age=31536000, immutable
+
+/icons.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/lib/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/manifest.webmanifest
+  Cache-Control: public, max-age=3600
+
+/icons/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*
+  Cache-Control: public, max-age=0, must-revalidate
