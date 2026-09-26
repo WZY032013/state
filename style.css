@@ -65,3 +65,34 @@ body.dark .multi-menu-item{background:rgba(255,255,255,.07)}
 .mm-label{font-size:11px !important;white-space:nowrap}
 /* 通话远程音频隐藏 */
 #callRemoteAudio{display:none}
+
+/* ============ 覆盖层 7：视频通话（FaceTime 式）+ 来电弹窗 ============ */
+/* 远端视频：全屏背景 */
+#callRemoteVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;display:none}
+#callRemoteVideo.active{display:block}
+/* 本地小窗（画中画） */
+#callVideo.pip{position:absolute;right:14px;top:calc(14px + env(safe-area-inset-top,0));width:96px;height:128px;object-fit:cover;border-radius:16px;border:1.5px solid rgba(255,255,255,.5);box-shadow:0 4px 16px rgba(0,0,0,.35);z-index:5;background:#000}
+#callVideo:not(.pip){position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+/* 翻转按钮 */
+.call-flip{display:none}
+#callModal.video-mode .call-flip{display:flex}
+/* 来电弹窗 */
+.call-incoming{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,rgba(20,24,40,.82),rgba(12,14,24,.92));backdrop-filter:blur(28px) saturate(160%);-webkit-backdrop-filter:blur(28px) saturate(160%);animation:ciFade .35s var(--spring-bounce)}
+body.light .call-incoming{background:linear-gradient(160deg,rgba(235,240,250,.86),rgba(210,218,238,.94))}
+.call-incoming-panel{position:relative;display:flex;flex-direction:column;align-items:center;gap:14px;padding:42px 46px 34px;border-radius:28px;box-shadow:var(--glass-shadow-deep);text-align:center;animation:ciPop .4s var(--spring-bounce)}
+.call-incoming-ring{position:absolute;top:-40px;left:50%;width:140px;height:140px;margin-left:-70px;border-radius:50%;border:2.5px solid rgba(90,150,255,.5);animation:ciRing 1.4s ease-out infinite}
+.call-incoming-avatar{width:86px;height:86px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:34px;background:linear-gradient(135deg,#5B8DEF,#7B3FF2);color:#fff;box-shadow:0 8px 24px rgba(91,142,239,.4);overflow:hidden}
+.call-incoming-avatar img{width:100%;height:100%;object-fit:cover}
+.call-incoming-name{font-size:21px;font-weight:700;color:var(--ink)}
+.call-incoming-type{font-size:13px;color:var(--ink-3)}
+.call-incoming-actions{display:flex;gap:34px;margin-top:10px}
+.call-incoming-btn{display:flex;flex-direction:column;align-items:center;gap:6px;border:none;background:none;cursor:pointer;color:var(--ink-2)}
+.call-incoming-btn .cib-icon{display:flex;align-items:center;justify-content:center;width:58px;height:58px;border-radius:50%;font-size:22px;color:#fff;transition:transform .15s}
+.call-incoming-btn:active .cib-icon{transform:scale(.9)}
+.call-incoming-btn.accept .cib-icon{background:linear-gradient(135deg,#34C759,#28A745);box-shadow:0 6px 18px rgba(52,199,89,.4)}
+.call-incoming-btn.decline .cib-icon{background:linear-gradient(135deg,#FF3B30,#E0352B);box-shadow:0 6px 18px rgba(255,59,48,.4)}
+.call-incoming-btn .cib-label{font-size:12px;font-weight:600}
+@keyframes ciFade{from{opacity:0}to{opacity:1}}
+@keyframes ciPop{from{opacity:0;transform:scale(.85) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes ciRing{0%{transform:scale(.7);opacity:.7}100%{transform:scale(1.6);opacity:0}}
+@media (prefers-reduced-motion:reduce){.call-incoming-ring{animation:none}}

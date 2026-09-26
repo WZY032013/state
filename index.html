@@ -855,13 +855,28 @@
         <div class="call-name" id="callName">通话中</div>
         <div class="call-status" id="callStatus">正在呼叫...</div>
         <div class="call-members" id="callMembers"></div>
+        <video id="callRemoteVideo" autoplay playsinline></video>
         <video id="callVideo" autoplay playsinline hidden></video>
         <audio id="callRemoteAudio" autoplay></audio>
         <div class="call-controls">
             <button class="call-btn call-mute" id="callMuteBtn" title="麦克风"><span data-icon="mic"></span></button>
             <button class="call-btn call-speaker" id="callSpeakerBtn" title="免提"><span data-icon="speaker"></span></button>
             <button class="call-btn call-camera" id="callCameraBtn" title="摄像头"><span data-icon="video"></span></button>
+            <button class="call-btn call-flip" id="callFlipBtn" title="翻转摄像头"><span data-icon="refresh-cw"></span></button>
             <button class="call-btn call-hangup" id="callHangupBtn" title="挂断"><span data-icon="phone"></span></button>
+        </div>
+    </div>
+</div>
+<!-- 来电通知弹窗（FaceTime 风格） -->
+<div id="callIncoming" class="call-incoming" hidden>
+    <div class="call-incoming-panel glass">
+        <div class="call-incoming-ring"></div>
+        <div class="call-incoming-avatar" id="callIncomingAvatar">💬</div>
+        <div class="call-incoming-name" id="callIncomingName">正在呼叫...</div>
+        <div class="call-incoming-type" id="callIncomingType">语音通话</div>
+        <div class="call-incoming-actions">
+            <button class="call-incoming-btn decline" id="callIncomingDecline"><span class="cib-icon">✕</span><span class="cib-label">拒绝</span></button>
+            <button class="call-incoming-btn accept" id="callIncomingAccept"><span class="cib-icon" data-icon="phone"></span><span class="cib-label">接听</span></button>
         </div>
     </div>
 </div>
