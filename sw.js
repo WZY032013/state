@@ -1,5 +1,5 @@
-/* Stating Service Worker v3: 预缓存关键资源 + 静态资源 SWR + 网络优先 HTML + Push */
-const CACHE_NAME = 'stating-cache-v3';
+/* Stating Service Worker v4: 预缓存关键资源 + 动态库（扫码/热点/地图）+ 静态资源 SWR + 网络优先 HTML + Push */
+const CACHE_NAME = 'stating-cache-v4';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -8,7 +8,14 @@ const PRECACHE_URLS = [
   '/icons.js',
   '/manifest.webmanifest',
   '/icons/icon-192.png',
-  '/icons/icon-512.png'
+  '/icons/icon-512.png',
+  // 动态库：安装时后台预缓存，功能秒开 + 离线可用
+  '/lib/qrcode/qrcode.min.js',
+  '/lib/qrcode/jsQR.js',
+  '/lib/lz-string.min.js',
+  '/lib/leaflet/leaflet.js',
+  '/lib/leaflet/leaflet.css',
+  '/lib/leaflet/images/layers.png'
 ];
 
 self.addEventListener('install', (e) => {
