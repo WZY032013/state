@@ -598,6 +598,7 @@
                             <button class="multi-menu-item" id="mmVoiceCall" title="语音通话"><span class="mm-icon" data-icon="phone"></span><span class="mm-label">语音通话</span></button>
                             <button class="multi-menu-item" id="mmCheckin" title="位置打卡"><span class="mm-icon" data-icon="location"></span><span class="mm-label">打卡</span></button>
                             <button class="multi-menu-item" id="mmBluetooth" title="蓝牙 / 低数据模式"><span class="mm-icon" data-icon="bluetooth"></span><span class="mm-label">蓝牙</span></button>
+                            <button class="multi-menu-item" id="mmHotspot" title="热点直连（离线 P2P）"><span class="mm-icon" data-icon="wifi"></span><span class="mm-label">热点</span></button>
                             <button class="multi-menu-item" id="mmEphemeral" title="阅后即焚"><span class="mm-icon" data-icon="flame"></span><span class="mm-label">阅后即焚</span></button>
                             <button class="multi-menu-item" id="mmCapsule" title="定时胶囊"><span class="mm-icon" data-icon="clock"></span><span class="mm-label">定时胶囊</span></button>
                             <button class="multi-menu-item" id="mmWhisper" title="悄悄话"><span class="mm-icon" data-icon="lock"></span><span class="mm-label">悄悄话</span></button>
@@ -1018,6 +1019,47 @@
         </div>
         <div class="confirm-btns">
             <button class="btn-ghost" id="btCloseBtn">关闭</button>
+        </div>
+    </div>
+</div>
+<div id="hotspotDialog" class="confirm-overlay" hidden>
+    <div class="confirm-card glass" style="max-width:440px;">
+        <div class="bt-hero">
+            <div class="bt-hero-text">
+                <h3>热点直连</h3>
+                <div class="bt-hero-sub">离线局域网 P2P · 扫码配对</div>
+            </div>
+        </div>
+        <div class="bt-desc-box">
+            <div class="bt-desc-title">完全没网也能互发消息</div>
+            <div class="bt-desc-body">两台设备处于<b>同一 Wi-Fi / 热点</b>下，用二维码交换配对信息，<b>无需服务器</b>直接点对点直连。适合断网环境，全浏览器（含 iOS Safari）。</div>
+            <div class="bt-desc-steps">
+                <span class="bt-step"><b>1</b> 一方「生成直连码」</span>
+                <span class="bt-step"><b>2</b> 另一方「扫码连接」后显示应答码</span>
+                <span class="bt-step"><b>3</b> 发起方扫码应答码，自动建立直连</span>
+            </div>
+        </div>
+        <div class="bt-status-row"><span class="bt-chip" id="hotStatusChip">待机</span><span class="bt-status" id="hotStatus">生成直连码或扫码连接开始</span></div>
+        <div class="near-code-row">
+            <button class="btn-primary" id="hotCreateBtn" style="flex:1.2;">生成直连码</button>
+            <button class="btn-ghost" id="hotScanBtn" style="flex:1;">扫码连接</button>
+        </div>
+        <div id="hotQrWrap" class="hot-qr-wrap" hidden>
+            <div id="hotQrCanvas"></div>
+            <div class="hot-qr-tip" id="hotQrTip"></div>
+        </div>
+        <div id="hotConnected" hidden>
+            <div class="field glass-field bt-send-row">
+                <input type="text" id="hotSendInput" placeholder="输入文本，回车发送…" maxlength="500" autocomplete="off">
+            </div>
+            <div class="bt-btn-row">
+                <button class="btn-primary" id="hotSendBtn" style="flex:1;">发送</button>
+                <button class="btn-ghost" id="hotDisconnectBtn" style="flex:1;">断开</button>
+            </div>
+            <div class="bt-rx-log" id="hotRxLog"><div class="bt-rx-title">消息记录</div></div>
+        </div>
+        <div class="confirm-btns">
+            <button class="btn-ghost" id="hotCloseBtn">关闭</button>
         </div>
     </div>
 </div>
