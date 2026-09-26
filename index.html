@@ -1,1245 +1,1245 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#EEF2F9">
-    <title>Stating</title>
-    <link rel="preload" href="style.css" as="style">
-    <link rel="preload" href="icons.js" as="script">
-    <link rel="preload" href="script.js" as="script">
-    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-    <link rel="dns-prefetch" href="https://server.arcgisonline.com">
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.webmanifest">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#EEF2F9">
+<title>Stating</title>
+<link rel="preload" href="style.css" as="style">
+<link rel="preload" href="icons.js" as="script">
+<link rel="preload" href="script.js" as="script">
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<link rel="dns-prefetch" href="https://server.arcgisonline.com">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
 <div id="offlineBanner" class="offline-banner" hidden>
-    <span class="ob-dot"></span>
-    <span>离线模式 · 可浏览与蓝牙通信，无法发送消息</span>
+<span class="ob-dot"></span>
+<span>离线模式 · 可浏览与蓝牙通信，无法发送消息</span>
 </div>
 <div class="bg-blobs" aria-hidden="true">
-    <span class="blob b1"></span>
-    <span class="blob b2"></span>
-    <span class="blob b3"></span>
-    <span class="blob b4"></span>
+<span class="blob b1"></span>
+<span class="blob b2"></span>
+<span class="blob b3"></span>
+<span class="blob b4"></span>
 </div>
 <div id="authScreen" class="auth-screen">
-    <div class="auth-card glass">
-        <div class="auth-logo">
-            <div class="logo-badge" data-icon="logo"></div>
-            <h1>Stating</h1>
-            <p>与世界，轻轻对话</p>
-        </div>
-        <div class="auth-tabs glass-pill">
-            <button type="button" class="auth-tab active" data-tab="login">登录</button>
-            <button type="button" class="auth-tab" data-tab="register">注册</button>
-            <button type="button" class="auth-tab auth-tab-qr" data-tab="qr" title="扫码登录"><span data-icon="qr"></span></button>
-        </div>
-        <div class="auth-more">
-            <button type="button" class="auth-more-btn glass-pill" id="passkeyLoginBtn" hidden><span data-icon="key"></span> Passkey 登录</button>
-            <button type="button" class="auth-more-btn glass-pill" id="deviceCodeBtn"><span data-icon="monitor"></span> 设备码登录</button>
-            <button type="button" class="auth-more-btn glass-pill" id="forgotBtn"><span data-icon="lock"></span> 忘记密码</button>
-        </div>
-        <form id="loginForm" class="auth-form active" autocomplete="off">
-            <div class="field glass-field">
-                <span class="field-icon" data-icon="phone"></span>
-                <input type="tel" id="loginPhone" placeholder="手机号" maxlength="11" inputmode="numeric" autocomplete="username webauthn">
-            </div>
-            <div class="field glass-field">
-                <span class="field-icon" data-icon="lock"></span>
-                <input type="password" id="loginPassword" placeholder="密码" maxlength="32">
-            </div>
-            <button type="submit" class="btn-primary">登 录</button>
-        </form>
-        <form id="registerForm" class="auth-form" autocomplete="off">
-            <div class="field glass-field">
-                <span class="field-icon" data-icon="phone"></span>
-                <input type="tel" id="regPhone" placeholder="手机号" maxlength="11" inputmode="numeric">
-            </div>
-            <div class="field glass-field">
-                <span class="field-icon" data-icon="lock"></span>
-                <input type="password" id="regPassword" placeholder="设置密码（8位以上，含字母和数字）" maxlength="64">
-            </div>
-            <div class="field glass-field">
-                <span class="field-icon" data-icon="mail"></span>
-                <input type="text" id="regEmail" placeholder="电子邮件（可填“无”）" maxlength="50">
-            </div>
-            <div class="field glass-field">
-                <span class="field-icon" data-icon="edit"></span>
-                <input type="text" id="regNickname" placeholder="昵称" maxlength="20">
-            </div>
-            <div class="avatar-section">
-                <div class="avatar-label">选择头像</div>
-                <div class="avatar-grid" id="avatarGrid"></div>
-                <button type="button" class="avatar-upload-btn" id="avatarUploadBtn"><span data-icon="image"></span> 上传本地照片</button>
-                <input type="file" id="avatarUpload" accept="image/*" hidden>
-            </div>
-            <button type="submit" class="btn-primary">注 册</button>
-        </form>
-        <div id="qrForm" class="auth-form qr-login-panel">
-            <div class="qr-stage">
-                <div class="qr-card glass" id="qrCard">
-                    <div class="qr-img" id="qrImg"></div>
-                    <div class="qr-mask-line"></div>
-                    <div class="qr-state-overlay" id="qrStateOverlay" hidden>
-                        <div class="qr-state-icon" id="qrStateIcon"></div>
-                        <p id="qrStateText"></p>
-                        <button type="button" class="btn-primary qr-reload-btn" id="qrReloadBtn" hidden><span data-icon="back" style="transform:rotate(180deg)"></span> 刷新二维码</button>
-                    </div>
-                </div>
-            </div>
-            <p class="qr-status-text" id="qrStatusText">打开手机 Stating 「我的 → 扫一扫」</p>
-            <p class="qr-status-sub" id="qrStatusSub">扫描二维码，安全登录网页版</p>
-        </div>
-        <div class="auth-oauth-divider"><span>免密登录 / 注册</span></div>
-        <div class="auth-oauth">
-            <button type="button" class="oauth-btn oauth-sim" id="simLoginBtn">
-                <span class="oauth-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><line x1="12" y1="18" x2="12" y2="18"/></svg></span>
-                <span class="oauth-tx"><b>本机号码一键登录</b><small>运营商取号 · 免输密码短信</small></span>
-                <span class="oauth-go" data-icon="chevron"></span>
-            </button>
-            <button type="button" class="oauth-btn oauth-sms" id="smsLoginBtn">
-                <span class="oauth-ic"><span data-icon="phone"></span></span>
-                <span class="oauth-tx"><b>短信验证码登录</b><small>输入手机号 · 6 位验证码</small></span>
-                <span class="oauth-go" data-icon="chevron"></span>
-            </button>
-            <button type="button" class="oauth-btn oauth-wx" id="wxLoginBtn">
-                <span class="oauth-ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.74-1.78 6.22.942 2.452 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-3.044-5.837-7.062-6.122zm-2.095 2.98c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/></svg></span>
-                <span class="oauth-tx"><b>微信</b><small>扫码授权 · 手机号绑定即用</small></span>
-                <span class="oauth-go" data-icon="chevron"></span>
-            </button>
-        </div>
-        <div class="auth-oauth-note">登录注册同一入口：未注册手机号通过验证后自动创建账号，无需设置密码</div>
-        <div id="authError" class="auth-error"></div>
-    </div>
+<div class="auth-card glass">
+<div class="auth-logo">
+<div class="logo-badge" data-icon="logo"></div>
+<h1>Stating</h1>
+<p>与世界，轻轻对话</p>
+</div>
+<div class="auth-tabs glass-pill">
+<button type="button" class="auth-tab active" data-tab="login">登录</button>
+<button type="button" class="auth-tab" data-tab="register">注册</button>
+<button type="button" class="auth-tab auth-tab-qr" data-tab="qr" title="扫码登录"><span data-icon="qr"></span></button>
+</div>
+<div class="auth-more">
+<button type="button" class="auth-more-btn glass-pill" id="passkeyLoginBtn" hidden><span data-icon="key"></span> Passkey 登录</button>
+<button type="button" class="auth-more-btn glass-pill" id="deviceCodeBtn"><span data-icon="monitor"></span> 设备码登录</button>
+<button type="button" class="auth-more-btn glass-pill" id="forgotBtn"><span data-icon="lock"></span> 忘记密码</button>
+</div>
+<form id="loginForm" class="auth-form active" autocomplete="off">
+<div class="field glass-field">
+<span class="field-icon" data-icon="phone"></span>
+<input type="tel" id="loginPhone" placeholder="手机号" maxlength="11" inputmode="numeric" autocomplete="username webauthn">
+</div>
+<div class="field glass-field">
+<span class="field-icon" data-icon="lock"></span>
+<input type="password" id="loginPassword" placeholder="密码" maxlength="32">
+</div>
+<button type="submit" class="btn-primary">登 录</button>
+</form>
+<form id="registerForm" class="auth-form" autocomplete="off">
+<div class="field glass-field">
+<span class="field-icon" data-icon="phone"></span>
+<input type="tel" id="regPhone" placeholder="手机号" maxlength="11" inputmode="numeric">
+</div>
+<div class="field glass-field">
+<span class="field-icon" data-icon="lock"></span>
+<input type="password" id="regPassword" placeholder="设置密码（8位以上，含字母和数字）" maxlength="64">
+</div>
+<div class="field glass-field">
+<span class="field-icon" data-icon="mail"></span>
+<input type="text" id="regEmail" placeholder="电子邮件（可填“无”）" maxlength="50">
+</div>
+<div class="field glass-field">
+<span class="field-icon" data-icon="edit"></span>
+<input type="text" id="regNickname" placeholder="昵称" maxlength="20">
+</div>
+<div class="avatar-section">
+<div class="avatar-label">选择头像</div>
+<div class="avatar-grid" id="avatarGrid"></div>
+<button type="button" class="avatar-upload-btn" id="avatarUploadBtn"><span data-icon="image"></span> 上传本地照片</button>
+<input type="file" id="avatarUpload" accept="image/*" hidden>
+</div>
+<button type="submit" class="btn-primary">注 册</button>
+</form>
+<div id="qrForm" class="auth-form qr-login-panel">
+<div class="qr-stage">
+<div class="qr-card glass" id="qrCard">
+<div class="qr-img" id="qrImg"></div>
+<div class="qr-mask-line"></div>
+<div class="qr-state-overlay" id="qrStateOverlay" hidden>
+<div class="qr-state-icon" id="qrStateIcon"></div>
+<p id="qrStateText"></p>
+<button type="button" class="btn-primary qr-reload-btn" id="qrReloadBtn" hidden><span data-icon="back" style="transform:rotate(180deg)"></span> 刷新二维码</button>
+</div>
+</div>
+</div>
+<p class="qr-status-text" id="qrStatusText">打开手机 Stating 「我的 → 扫一扫」</p>
+<p class="qr-status-sub" id="qrStatusSub">扫描二维码，安全登录网页版</p>
+</div>
+<div class="auth-oauth-divider"><span>免密登录 / 注册</span></div>
+<div class="auth-oauth">
+<button type="button" class="oauth-btn oauth-sim" id="simLoginBtn">
+<span class="oauth-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><line x1="12" y1="18" x2="12" y2="18"/></svg></span>
+<span class="oauth-tx"><b>本机号码一键登录</b><small>运营商取号 · 免输密码短信</small></span>
+<span class="oauth-go" data-icon="chevron"></span>
+</button>
+<button type="button" class="oauth-btn oauth-sms" id="smsLoginBtn">
+<span class="oauth-ic"><span data-icon="phone"></span></span>
+<span class="oauth-tx"><b>短信验证码登录</b><small>输入手机号 · 6 位验证码</small></span>
+<span class="oauth-go" data-icon="chevron"></span>
+</button>
+<button type="button" class="oauth-btn oauth-wx" id="wxLoginBtn">
+<span class="oauth-ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.74-1.78 6.22.942 2.452 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-3.044-5.837-7.062-6.122zm-2.095 2.98c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/></svg></span>
+<span class="oauth-tx"><b>微信</b><small>扫码授权 · 手机号绑定即用</small></span>
+<span class="oauth-go" data-icon="chevron"></span>
+</button>
+</div>
+<div class="auth-oauth-note">登录注册同一入口：未注册手机号通过验证后自动创建账号，无需设置密码</div>
+<div id="authError" class="auth-error"></div>
+</div>
 </div>
 <div id="adminKeyScreen" class="auth-screen" hidden>
-    <div class="auth-card glass">
-        <div class="auth-logo">
-            <div class="logo-badge">🔐</div>
-            <h1>管理员验证</h1>
-            <p>请输入6位管理员密钥</p>
-        </div>
-        <div class="otp-inputs" id="adminKeyInputs">
-            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
-            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
-            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
-            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
-            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
-            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
-        </div>
-        <div id="adminKeyError" class="auth-error"></div>
-        <button class="btn-primary" id="adminKeySubmit">验证并登录</button>
-        <button type="button" class="btn-text" id="adminKeyCancel">← 返回登录</button>
-    </div>
+<div class="auth-card glass">
+<div class="auth-logo">
+<div class="logo-badge">🔐</div>
+<h1>管理员验证</h1>
+<p>请输入6位管理员密钥</p>
+</div>
+<div class="otp-inputs" id="adminKeyInputs">
+<input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+<input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+<input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+<input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+<input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+<input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+</div>
+<div id="adminKeyError" class="auth-error"></div>
+<button class="btn-primary" id="adminKeySubmit">验证并登录</button>
+<button type="button" class="btn-text" id="adminKeyCancel">← 返回登录</button>
+</div>
 </div>
 <div id="qrConfirmScreen" class="auth-screen" hidden>
-    <div class="auth-card glass qr-confirm-card">
-        <div class="qrc-state" id="qrcLoading">
-            <div class="qr-spinner"></div>
-            <h1>正在验证二维码</h1>
-            <p>请稍候…</p>
-        </div>
-        <div class="qrc-state" id="qrcGuest" hidden>
-            <div class="logo-badge" data-icon="qr"></div>
-            <h1>扫码登录</h1>
-            <p>登录 Stating 后，即可授权电脑端登录</p>
-            <button class="btn-primary" id="qrcGoLogin">前往登录</button>
-        </div>
-        <div class="qrc-state" id="qrcAsk" hidden>
-            <div class="logo-badge qr-logo-badge" data-icon="qr"></div>
-            <h1>确认登录网页版？</h1>
-            <p>扫码后请确认是本人操作</p>
-            <div class="qrc-user glass-pill">
-                <span class="qrc-avatar" id="qrcAvatar">😀</span>
-                <span class="qrc-meta">
-                    <span class="qrc-name" id="qrcNickname"></span>
-                    <span class="qrc-phone" id="qrcPhone"></span>
-                </span>
-            </div>
-            <div id="qrcError" class="auth-error"></div>
-            <button class="btn-primary" id="qrcConfirmBtn">确认登录</button>
-            <button type="button" class="btn-text" id="qrcCancelBtn">取消登录</button>
-        </div>
-        <div class="qrc-state" id="qrcDone" hidden>
-            <div class="qrc-success"><span data-icon="checkDouble"></span></div>
-            <h1>登录成功</h1>
-            <p>请返回电脑端查看，已安全登录</p>
-            <button class="btn-primary" id="qrcCloseDone">完成</button>
-        </div>
-        <div class="qrc-state" id="qrcFail" hidden>
-            <div class="logo-badge">⚠️</div>
-            <h1 id="qrcFailTitle">操作未完成</h1>
-            <p id="qrcFailText">二维码可能已失效</p>
-            <button class="btn-primary" id="qrcCloseFail">关闭</button>
-        </div>
-    </div>
+<div class="auth-card glass qr-confirm-card">
+<div class="qrc-state" id="qrcLoading">
+<div class="qr-spinner"></div>
+<h1>正在验证二维码</h1>
+<p>请稍候…</p>
+</div>
+<div class="qrc-state" id="qrcGuest" hidden>
+<div class="logo-badge" data-icon="qr"></div>
+<h1>扫码登录</h1>
+<p>登录 Stating 后，即可授权电脑端登录</p>
+<button class="btn-primary" id="qrcGoLogin">前往登录</button>
+</div>
+<div class="qrc-state" id="qrcAsk" hidden>
+<div class="logo-badge qr-logo-badge" data-icon="qr"></div>
+<h1>确认登录网页版？</h1>
+<p>扫码后请确认是本人操作</p>
+<div class="qrc-user glass-pill">
+<span class="qrc-avatar" id="qrcAvatar">😀</span>
+<span class="qrc-meta">
+<span class="qrc-name" id="qrcNickname"></span>
+<span class="qrc-phone" id="qrcPhone"></span>
+</span>
+</div>
+<div id="qrcError" class="auth-error"></div>
+<button class="btn-primary" id="qrcConfirmBtn">确认登录</button>
+<button type="button" class="btn-text" id="qrcCancelBtn">取消登录</button>
+</div>
+<div class="qrc-state" id="qrcDone" hidden>
+<div class="qrc-success"><span data-icon="checkDouble"></span></div>
+<h1>登录成功</h1>
+<p>请返回电脑端查看，已安全登录</p>
+<button class="btn-primary" id="qrcCloseDone">完成</button>
+</div>
+<div class="qrc-state" id="qrcFail" hidden>
+<div class="logo-badge">⚠️</div>
+<h1 id="qrcFailTitle">操作未完成</h1>
+<p id="qrcFailText">二维码可能已失效</p>
+<button class="btn-primary" id="qrcCloseFail">关闭</button>
+</div>
+</div>
 </div>
 <div id="deviceCodeModal" class="sec-overlay" hidden>
-    <div class="sec-card glass">
-        <button type="button" class="sec-close" id="dcClose"><span data-icon="close"></span></button>
-        <div class="sec-badge"><span data-icon="monitor"></span></div>
-        <h1>设备码登录</h1>
-        <p class="sec-sub">在任意已登录的 Stating 设备中<br>打开「安全中心 → 设备授权」输入此码</p>
-        <div class="dc-code glass" id="dcUserCode">····-····</div>
-        <div class="dc-state" id="dcState">等待授权…</div>
-        <div class="dc-spinner" id="dcSpinner"></div>
-        <button type="button" class="btn-primary" id="dcRefreshBtn" hidden>重新获取</button>
-    </div>
+<div class="sec-card glass">
+<button type="button" class="sec-close" id="dcClose"><span data-icon="close"></span></button>
+<div class="sec-badge"><span data-icon="monitor"></span></div>
+<h1>设备码登录</h1>
+<p class="sec-sub">在任意已登录的 Stating 设备中<br>打开「安全中心 → 设备授权」输入此码</p>
+<div class="dc-code glass" id="dcUserCode">····-····</div>
+<div class="dc-state" id="dcState">等待授权…</div>
+<div class="dc-spinner" id="dcSpinner"></div>
+<button type="button" class="btn-primary" id="dcRefreshBtn" hidden>重新获取</button>
+</div>
 </div>
 <div id="passkeyModal" class="sec-overlay" hidden>
-    <div class="sec-card glass">
-        <button type="button" class="sec-close" id="pkClose"><span data-icon="close"></span></button>
-        <div class="sec-badge"><span data-icon="key"></span></div>
-        <h1>安全中心</h1>
-        <p class="sec-sub">Passkey 钥匙与设备授权</p>
-        <div class="pk-list" id="passkeyList"></div>
-        <button type="button" class="btn-primary" id="passkeyAddBtn"><span data-icon="plus"></span> 添加 Passkey</button>
-        <div class="pk-divider"></div>
-        <div class="pk-section-title">设备授权</div>
-        <p class="pk-hint">在未登录设备上生成设备码后，在此输入授权其登录</p>
-        <div class="field glass-field">
-            <span class="field-icon" data-icon="monitor"></span>
-            <input type="text" id="dcAuthInput" placeholder="如 XK4M-7QP9" maxlength="9">
-        </div>
-        <button type="button" class="btn-primary" id="dcAuthBtn">授权此设备</button>
-        <div id="dcAuthError" class="auth-error"></div>
-        <p class="dc-bio-note" id="dcBioNote" hidden><span data-icon="key"></span> 本账号已开启生物识别：授权时必须通过本机面容 / 指纹验证</p>
-    </div>
+<div class="sec-card glass">
+<button type="button" class="sec-close" id="pkClose"><span data-icon="close"></span></button>
+<div class="sec-badge"><span data-icon="key"></span></div>
+<h1>安全中心</h1>
+<p class="sec-sub">Passkey 钥匙与设备授权</p>
+<div class="pk-list" id="passkeyList"></div>
+<button type="button" class="btn-primary" id="passkeyAddBtn"><span data-icon="plus"></span> 添加 Passkey</button>
+<div class="pk-divider"></div>
+<div class="pk-section-title">设备授权</div>
+<p class="pk-hint">在未登录设备上生成设备码后，在此输入授权其登录</p>
+<div class="field glass-field">
+<span class="field-icon" data-icon="monitor"></span>
+<input type="text" id="dcAuthInput" placeholder="如 XK4M-7QP9" maxlength="9">
+</div>
+<button type="button" class="btn-primary" id="dcAuthBtn">授权此设备</button>
+<div id="dcAuthError" class="auth-error"></div>
+<p class="dc-bio-note" id="dcBioNote" hidden><span data-icon="key"></span> 本账号已开启生物识别：授权时必须通过本机面容 / 指纹验证</p>
+</div>
 </div>
 <div id="smsModal" class="sec-overlay" hidden>
-    <div class="sec-card glass lg-flow-card">
-        <button type="button" class="sec-close" id="smsCloseBtn"><span data-icon="close"></span></button>
-        <div class="sec-badge lg-badge-sms"><span data-icon="phone"></span></div>
-        <h1>本机号码登录</h1>
-        <p class="sec-sub">短信验证码核验身份，支持自动读取<br>未注册的手机号验证后自动创建账号</p>
-        <div class="lg-flow" data-smsstep="phone">
-            <div class="field glass-field">
-                <span class="field-icon" data-icon="phone"></span>
-                <input type="tel" id="smsPhone" inputmode="numeric" maxlength="15" placeholder="请输入手机号" autocomplete="tel">
-            </div>
-            <button type="button" class="btn-primary lg-block-btn" id="smsSendBtn">获取验证码</button>
-            <div class="auth-error" id="smsErr"></div>
-            <div class="lg-devhint" id="smsDevHint" hidden></div>
-        </div>
-        <div class="lg-flow" data-smsstep="code" hidden>
-            <p class="lg-code-tip">验证码已发送至 <b id="smsPhoneShown"></b></p>
-            <div class="lg-otp" id="smsOtp"></div>
-            <button type="button" class="btn-primary lg-block-btn" id="smsVerifyBtn">验证并登录</button>
-            <button type="button" class="btn-ghost lg-block-btn" id="smsBackBtn">返回修改手机号</button>
-            <div class="lg-resend" id="smsResendWrap">重新发送（<span id="smsCd">60</span>s）</div>
-            <div class="auth-error" id="smsCodeErr"></div>
-        </div>
-        <div class="lg-flow" data-smsstep="profile" hidden>
-            <p class="lg-code-tip">验证通过，补全资料完成注册</p>
-            <div class="field glass-field">
-                <span class="field-icon" data-icon="user"></span>
-                <input type="text" id="smsNick" maxlength="16" placeholder="给自己起个昵称">
-            </div>
-            <div class="lg-avatar-row" id="smsAvatars"></div>
-            <button type="button" class="btn-primary lg-block-btn" id="smsRegBtn">完成注册并进入</button>
-            <div class="auth-error" id="smsRegErr"></div>
-        </div>
-    </div>
+<div class="sec-card glass lg-flow-card">
+<button type="button" class="sec-close" id="smsCloseBtn"><span data-icon="close"></span></button>
+<div class="sec-badge lg-badge-sms"><span data-icon="phone"></span></div>
+<h1>本机号码登录</h1>
+<p class="sec-sub">短信验证码核验身份，支持自动读取<br>未注册的手机号验证后自动创建账号</p>
+<div class="lg-flow" data-smsstep="phone">
+<div class="field glass-field">
+<span class="field-icon" data-icon="phone"></span>
+<input type="tel" id="smsPhone" inputmode="numeric" maxlength="15" placeholder="请输入手机号" autocomplete="tel">
+</div>
+<button type="button" class="btn-primary lg-block-btn" id="smsSendBtn">获取验证码</button>
+<div class="auth-error" id="smsErr"></div>
+<div class="lg-devhint" id="smsDevHint" hidden></div>
+</div>
+<div class="lg-flow" data-smsstep="code" hidden>
+<p class="lg-code-tip">验证码已发送至 <b id="smsPhoneShown"></b></p>
+<div class="lg-otp" id="smsOtp"></div>
+<button type="button" class="btn-primary lg-block-btn" id="smsVerifyBtn">验证并登录</button>
+<button type="button" class="btn-ghost lg-block-btn" id="smsBackBtn">返回修改手机号</button>
+<div class="lg-resend" id="smsResendWrap">重新发送（<span id="smsCd">60</span>s）</div>
+<div class="auth-error" id="smsCodeErr"></div>
+</div>
+<div class="lg-flow" data-smsstep="profile" hidden>
+<p class="lg-code-tip">验证通过，补全资料完成注册</p>
+<div class="field glass-field">
+<span class="field-icon" data-icon="user"></span>
+<input type="text" id="smsNick" maxlength="16" placeholder="给自己起个昵称">
+</div>
+<div class="lg-avatar-row" id="smsAvatars"></div>
+<button type="button" class="btn-primary lg-block-btn" id="smsRegBtn">完成注册并进入</button>
+<div class="auth-error" id="smsRegErr"></div>
+</div>
+</div>
 </div>
 <div id="wxModal" class="sec-overlay" hidden>
-    <div class="sec-card glass lg-flow-card">
-        <button type="button" class="sec-close" id="wxCloseBtn"><span data-icon="close"></span></button>
-        <div class="sec-badge lg-badge-wx"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.74-1.78 6.22.942 2.452 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-3.044-5.837-7.062-6.122zm-2.095 2.98c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/></svg></div>
-        <h1>微信登录 / 注册</h1>
-        <p class="sec-sub">微信授权后验证本机手机号<br>老用户直接绑定登录，新用户自动注册</p>
-        <div class="lg-flow" data-wxstep="qr">
-            <div class="wx-qr glass" id="wxQr"><div class="wx-qr-loading"><div class="loading-spinner"></div></div></div>
-            <div class="wx-state" id="wxState">正在生成微信登录二维码…</div>
-            <button type="button" class="btn-primary lg-block-btn" id="wxMockBtn" hidden>模拟微信中确认授权</button>
-            <button type="button" class="btn-primary lg-block-btn" id="wxOpenBtn" hidden>打开微信授权页</button>
-            <button type="button" class="btn-ghost lg-block-btn" id="wxCancelBtn">取消</button>
-            <div class="lg-devhint" id="wxHint"></div>
-        </div>
-        <div class="lg-flow" data-wxstep="bind" hidden>
-            <div class="wx-profile" id="wxProfileChip"><span class="wx-profile-ic">💬</span><span class="wx-profile-name">微信用户</span></div>
-            <div class="field glass-field">
-                <span class="field-icon" data-icon="phone"></span>
-                <input type="tel" id="wxBindPhone" inputmode="numeric" maxlength="15" placeholder="绑定本机手机号" autocomplete="tel">
-            </div>
-            <button type="button" class="btn-ghost lg-block-btn" id="wxBindSendBtn">发送验证码</button>
-            <div class="lg-otp" id="wxBindOtp"></div>
-            <button type="button" class="btn-primary lg-block-btn" id="wxBindConfirmBtn">验证并完成登录 / 注册</button>
-            <button type="button" class="btn-ghost lg-block-btn" id="wxBindBackBtn">返回扫码</button>
-            <div class="auth-error" id="wxBindErr"></div>
-            <div class="lg-devhint" id="wxBindDevHint" hidden></div>
-        </div>
-    </div>
+<div class="sec-card glass lg-flow-card">
+<button type="button" class="sec-close" id="wxCloseBtn"><span data-icon="close"></span></button>
+<div class="sec-badge lg-badge-wx"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.74-1.78 6.22.942 2.452 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-3.044-5.837-7.062-6.122zm-2.095 2.98c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/></svg></div>
+<h1>微信登录 / 注册</h1>
+<p class="sec-sub">微信授权后验证本机手机号<br>老用户直接绑定登录，新用户自动注册</p>
+<div class="lg-flow" data-wxstep="qr">
+<div class="wx-qr glass" id="wxQr"><div class="wx-qr-loading"><div class="loading-spinner"></div></div></div>
+<div class="wx-state" id="wxState">正在生成微信登录二维码…</div>
+<button type="button" class="btn-primary lg-block-btn" id="wxMockBtn" hidden>模拟微信中确认授权</button>
+<button type="button" class="btn-primary lg-block-btn" id="wxOpenBtn" hidden>打开微信授权页</button>
+<button type="button" class="btn-ghost lg-block-btn" id="wxCancelBtn">取消</button>
+<div class="lg-devhint" id="wxHint"></div>
+</div>
+<div class="lg-flow" data-wxstep="bind" hidden>
+<div class="wx-profile" id="wxProfileChip"><span class="wx-profile-ic">💬</span><span class="wx-profile-name">微信用户</span></div>
+<div class="field glass-field">
+<span class="field-icon" data-icon="phone"></span>
+<input type="tel" id="wxBindPhone" inputmode="numeric" maxlength="15" placeholder="绑定本机手机号" autocomplete="tel">
+</div>
+<button type="button" class="btn-ghost lg-block-btn" id="wxBindSendBtn">发送验证码</button>
+<div class="lg-otp" id="wxBindOtp"></div>
+<button type="button" class="btn-primary lg-block-btn" id="wxBindConfirmBtn">验证并完成登录 / 注册</button>
+<button type="button" class="btn-ghost lg-block-btn" id="wxBindBackBtn">返回扫码</button>
+<div class="auth-error" id="wxBindErr"></div>
+<div class="lg-devhint" id="wxBindDevHint" hidden></div>
+</div>
+</div>
 </div>
 <div id="bioOnboardModal" class="sec-overlay" hidden>
-    <div class="sec-card glass lg-flow-card bio-onboard-card">
-        <div class="bio-onboard-orb"><span data-icon="key"></span></div>
-        <h1>开启面容 / 触控登录</h1>
-        <p class="sec-sub">检测到本机支持系统生物识别（Face ID / 指纹 / Windows Hello）<br>开启后可一键免密登录；授权其他设备登录时，也将强制本机生物验证</p>
-        <button type="button" class="btn-primary lg-block-btn" id="bioEnableBtn">立即开启生物登录</button>
-        <button type="button" class="btn-ghost lg-block-btn" id="bioLaterBtn">稍后再说</button>
-    </div>
+<div class="sec-card glass lg-flow-card bio-onboard-card">
+<div class="bio-onboard-orb"><span data-icon="key"></span></div>
+<h1>开启面容 / 触控登录</h1>
+<p class="sec-sub">检测到本机支持系统生物识别（Face ID / 指纹 / Windows Hello）<br>开启后可一键免密登录；授权其他设备登录时，也将强制本机生物验证</p>
+<button type="button" class="btn-primary lg-block-btn" id="bioEnableBtn">立即开启生物登录</button>
+<button type="button" class="btn-ghost lg-block-btn" id="bioLaterBtn">稍后再说</button>
+</div>
 </div>
 <div id="heatmapModal" class="sec-overlay" hidden>
-    <div class="sec-card glass lg-flow-card" style="max-width:560px;">
-        <button type="button" class="sec-close" id="heatmapClose"><span data-icon="close"></span></button>
-        <h1>聊天热力图</h1>
-        <p class="sec-sub">你过去一年的聊天活跃度</p>
-        <div id="heatmapGrid" class="heatmap-grid"></div>
-        <div class="heatmap-legend"><span>少</span><i class="hl-0"></i><i class="hl-1"></i><i class="hl-2"></i><i class="hl-3"></i><i class="hl-4"></i><span>多</span></div>
-        <div id="heatmapStats" class="heatmap-stats"></div>
-    </div>
+<div class="sec-card glass lg-flow-card" style="max-width:560px;">
+<button type="button" class="sec-close" id="heatmapClose"><span data-icon="close"></span></button>
+<h1>聊天热力图</h1>
+<p class="sec-sub">你过去一年的聊天活跃度</p>
+<div id="heatmapGrid" class="heatmap-grid"></div>
+<div class="heatmap-legend"><span>少</span><i class="hl-0"></i><i class="hl-1"></i><i class="hl-2"></i><i class="hl-3"></i><i class="hl-4"></i><span>多</span></div>
+<div id="heatmapStats" class="heatmap-stats"></div>
+</div>
 </div>
 <div id="yearReportModal" class="sec-overlay" hidden>
-    <div class="sec-card glass lg-flow-card" style="max-width:440px;">
-        <button type="button" class="sec-close" id="yearReportClose"><span data-icon="close"></span></button>
-        <div class="yr-orb">📊</div>
-        <h1>年度聊天报告</h1>
-        <div id="yrContent" class="yr-content"></div>
-    </div>
+<div class="sec-card glass lg-flow-card" style="max-width:440px;">
+<button type="button" class="sec-close" id="yearReportClose"><span data-icon="close"></span></button>
+<div class="yr-orb">📊</div>
+<h1>年度聊天报告</h1>
+<div id="yrContent" class="yr-content"></div>
+</div>
 </div>
 <div id="bioRoomModal" class="sec-overlay" hidden>
-    <div class="sec-card glass lg-flow-card" style="max-width:440px;">
-        <button type="button" class="sec-close" id="bioRoomClose"><span data-icon="close"></span></button>
-        <div class="yr-orb">🔐</div>
-        <h1>双人生物房间</h1>
-        <p class="sec-sub">双方完成生物验证后进入，关闭后所有消息物理删除</p>
-        <div id="bioRoomBody"></div>
-    </div>
+<div class="sec-card glass lg-flow-card" style="max-width:440px;">
+<button type="button" class="sec-close" id="bioRoomClose"><span data-icon="close"></span></button>
+<div class="yr-orb">🔐</div>
+<h1>双人生物房间</h1>
+<p class="sec-sub">双方完成生物验证后进入，关闭后所有消息物理删除</p>
+<div id="bioRoomBody"></div>
+</div>
 </div>
 <div id="recoverModal" class="sec-overlay" hidden>
-    <div class="sec-card glass">
-        <button type="button" class="sec-close" id="recClose"><span data-icon="close"></span></button>
-        <div class="sec-badge"><span data-icon="lock"></span></div>
-        <h1>找回密码</h1>
-        <div id="recStep1">
-            <p class="sec-sub">输入注册手机号，验证身份后重设密码</p>
-            <div class="field glass-field">
-                <span class="field-icon" data-icon="phone"></span>
-                <input type="tel" id="recPhone" placeholder="手机号" maxlength="11" inputmode="numeric">
-            </div>
-            <button type="button" class="btn-primary" id="recNextBtn">下一步</button>
-        </div>
-        <div id="recStep2" hidden>
-            <p class="sec-sub" id="recMethodHint">选择一种方式验证身份</p>
-            <div id="recAdminBox" hidden>
-                <div class="field glass-field">
-                    <span class="field-icon" data-icon="key"></span>
-                    <input type="password" id="recAdminKey" placeholder="管理员密钥" maxlength="16">
-                </div>
-                <button type="button" class="btn-primary" id="recAdminBtn">验证管理员密钥</button>
-            </div>
-            <div id="recPasskeyBox" hidden>
-                <button type="button" class="btn-primary" id="recPasskeyBtn"><span data-icon="key"></span> 使用 Passkey 验证身份</button>
-            </div>
-        </div>
-        <div id="recStep3" hidden>
-            <p class="sec-sub">身份验证通过，请设置新密码</p>
-            <div class="field glass-field">
-                <span class="field-icon" data-icon="lock"></span>
-                <input type="password" id="recNewPass" placeholder="新密码（8位以上，含字母和数字）" maxlength="64">
-            </div>
-            <div class="rec-strength"><div class="rec-strength-bar" id="recStrengthBar"></div></div>
-            <div class="rec-strength-text" id="recStrengthText"></div>
-            <button type="button" class="btn-primary" id="recConfirmBtn">重置密码</button>
-        </div>
-        <div id="recError" class="auth-error"></div>
-    </div>
+<div class="sec-card glass">
+<button type="button" class="sec-close" id="recClose"><span data-icon="close"></span></button>
+<div class="sec-badge"><span data-icon="lock"></span></div>
+<h1>找回密码</h1>
+<div id="recStep1">
+<p class="sec-sub">输入注册手机号，验证身份后重设密码</p>
+<div class="field glass-field">
+<span class="field-icon" data-icon="phone"></span>
+<input type="tel" id="recPhone" placeholder="手机号" maxlength="11" inputmode="numeric">
+</div>
+<button type="button" class="btn-primary" id="recNextBtn">下一步</button>
+</div>
+<div id="recStep2" hidden>
+<p class="sec-sub" id="recMethodHint">选择一种方式验证身份</p>
+<div id="recAdminBox" hidden>
+<div class="field glass-field">
+<span class="field-icon" data-icon="key"></span>
+<input type="password" id="recAdminKey" placeholder="管理员密钥" maxlength="16">
+</div>
+<button type="button" class="btn-primary" id="recAdminBtn">验证管理员密钥</button>
+</div>
+<div id="recPasskeyBox" hidden>
+<button type="button" class="btn-primary" id="recPasskeyBtn"><span data-icon="key"></span> 使用 Passkey 验证身份</button>
+</div>
+</div>
+<div id="recStep3" hidden>
+<p class="sec-sub">身份验证通过，请设置新密码</p>
+<div class="field glass-field">
+<span class="field-icon" data-icon="lock"></span>
+<input type="password" id="recNewPass" placeholder="新密码（8位以上，含字母和数字）" maxlength="64">
+</div>
+<div class="rec-strength"><div class="rec-strength-bar" id="recStrengthBar"></div></div>
+<div class="rec-strength-text" id="recStrengthText"></div>
+<button type="button" class="btn-primary" id="recConfirmBtn">重置密码</button>
+</div>
+<div id="recError" class="auth-error"></div>
+</div>
 </div>
 <div id="secLogModal" class="sec-overlay" hidden>
-    <div class="sec-card glass sec-log-card">
-        <button type="button" class="sec-close" id="slClose"><span data-icon="close"></span></button>
-        <div class="sec-badge"><span data-icon="monitor"></span></div>
-        <h1>安全日志</h1>
-        <p class="sec-sub">最近的登录与安全事件（最多 50 条）</p>
-        <div class="sec-log-list" id="secLogList"></div>
-    </div>
+<div class="sec-card glass sec-log-card">
+<button type="button" class="sec-close" id="slClose"><span data-icon="close"></span></button>
+<div class="sec-badge"><span data-icon="monitor"></span></div>
+<h1>安全日志</h1>
+<p class="sec-sub">最近的登录与安全事件（最多 50 条）</p>
+<div class="sec-log-list" id="secLogList"></div>
+</div>
 </div>
 <div id="signToolOverlay" class="scanner-overlay sign-tool-overlay" hidden>
-    <div class="sign-scroll">
-        <button type="button" class="scanner-close glass-pill" id="stClose" title="关闭"><span data-icon="close"></span></button>
-        <div class="sign-card glass">
-            <div class="sec-badge"><span data-icon="key"></span></div>
-            <h1>签名验签</h1>
-            <p class="sec-sub">ECDSA P-256 · 私钥口令加密仅存本机 · 签名含时间戳防抵赖</p>
-            <div class="st-key-row glass-pill" id="stKeyStatus">未创建签名钥匙</div>
-            <textarea id="signInput" rows="3" placeholder="输入要签名的内容；或粘贴 STSIG1. 开头的签名串进行验证"></textarea>
-            <div id="stPassRow" hidden>
-                <input type="password" id="stPass" placeholder="钥匙口令" maxlength="64">
-            </div>
-            <div class="st-actions">
-                <button type="button" class="btn-primary" id="signGenBtn">签名</button>
-                <button type="button" class="btn-text" id="signVerifyBtn">验证</button>
-            </div>
-            <div class="st-output glass" id="signOutput" hidden></div>
-            <div class="st-keys">
-                <button type="button" class="btn-text" id="signKeyGenBtn">创建钥匙</button>
-                <button type="button" class="btn-text" id="signKeyBackupBtn">导出备份</button>
-                <button type="button" class="btn-text" id="signKeyImportBtn">导入备份</button>
-                <input type="file" id="signKeyFile" accept=".stkey,application/json" hidden>
-            </div>
-        </div>
-    </div>
+<div class="sign-scroll">
+<button type="button" class="scanner-close glass-pill" id="stClose" title="关闭"><span data-icon="close"></span></button>
+<div class="sign-card glass">
+<div class="sec-badge"><span data-icon="key"></span></div>
+<h1>签名验签</h1>
+<p class="sec-sub">ECDSA P-256 · 私钥口令加密仅存本机 · 签名含时间戳防抵赖</p>
+<div class="st-key-row glass-pill" id="stKeyStatus">未创建签名钥匙</div>
+<textarea id="signInput" rows="3" placeholder="输入要签名的内容；或粘贴 STSIG1. 开头的签名串进行验证"></textarea>
+<div id="stPassRow" hidden>
+<input type="password" id="stPass" placeholder="钥匙口令" maxlength="64">
+</div>
+<div class="st-actions">
+<button type="button" class="btn-primary" id="signGenBtn">签名</button>
+<button type="button" class="btn-text" id="signVerifyBtn">验证</button>
+</div>
+<div class="st-output glass" id="signOutput" hidden></div>
+<div class="st-keys">
+<button type="button" class="btn-text" id="signKeyGenBtn">创建钥匙</button>
+<button type="button" class="btn-text" id="signKeyBackupBtn">导出备份</button>
+<button type="button" class="btn-text" id="signKeyImportBtn">导入备份</button>
+<input type="file" id="signKeyFile" accept=".stkey,application/json" hidden>
+</div>
+</div>
+</div>
 </div>
 <div id="scannerOverlay" class="scanner-overlay" hidden>
-    <video id="scannerVideo" class="scanner-video" playsinline muted autoplay></video>
-    <canvas id="scannerCanvas" hidden></canvas>
-    <div class="scanner-ui">
-        <button type="button" class="scanner-close glass-pill" id="scannerClose" title="关闭"><span data-icon="close"></span></button>
-        <div class="scanner-frame">
-            <i class="sf-corner tl"></i><i class="sf-corner tr"></i>
-            <i class="sf-corner bl"></i><i class="sf-corner br"></i>
-            <span class="sf-line"></span>
-        </div>
-        <p class="scanner-tip" id="scannerTip">将二维码放入框内，即可自动扫描</p>
-        <button type="button" class="scanner-album glass-pill" id="scannerAlbum"><span data-icon="image"></span> 相册选码</button>
-        <input type="file" id="scannerFile" accept="image/*" hidden>
-    </div>
+<video id="scannerVideo" class="scanner-video" playsinline muted autoplay></video>
+<canvas id="scannerCanvas" hidden></canvas>
+<div class="scanner-ui">
+<button type="button" class="scanner-close glass-pill" id="scannerClose" title="关闭"><span data-icon="close"></span></button>
+<div class="scanner-frame">
+<i class="sf-corner tl"></i><i class="sf-corner tr"></i>
+<i class="sf-corner bl"></i><i class="sf-corner br"></i>
+<span class="sf-line"></span>
+</div>
+<p class="scanner-tip" id="scannerTip">将二维码放入框内，即可自动扫描</p>
+<button type="button" class="scanner-album glass-pill" id="scannerAlbum"><span data-icon="image"></span> 相册选码</button>
+<input type="file" id="scannerFile" accept="image/*" hidden>
+</div>
 </div>
 <div id="mainApp" class="main-app" hidden>
-    <div class="topbar-wrap">
-        <nav class="topbar glass-pill">
-            <div class="brand">Stating</div>
-            <div class="nav-items">
-                <button class="nav-item active" data-view="home">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V9.5z"/></svg>
-                    <span>首页</span>
-                </button>
-                <button class="nav-item" data-view="chat">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-                    <span>聊天</span>
-                    <span class="nav-badge" id="navBadge" hidden>0</span>
-                </button>
-                <button class="nav-item" data-view="users">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    <span>用户</span>
-                </button>
-                <button class="nav-item" data-view="profile">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    <span>我的</span>
-                </button>
-                <button class="nav-item" data-view="feedback">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
-                    <span>博采</span>
-                </button>
-            </div>
-        </nav>
-    </div>
-    <main class="views">
-        <section id="homeView" class="view active">
-            <div class="home-hero glass">
-                <div class="hero-avatar" id="heroAvatar">😀</div>
-                <h1>hi, 这里是Stating</h1>
-                <p>一个简单、纯粹的聊天空间</p>
-                <p class="hero-sub">创建群聊，分享邀请码，邀请朋友一起聊</p>
-                <button class="btn-ghost" data-goto="chat">开始聊天</button>
-            </div>
-            <div class="feature-cards">
-                <button class="feature-card glass fc-btn" id="devTileBtn">
-                    <div class="fc-icon" data-icon="code"></div>
-                    <h3>Developer</h3>
-                    <p>wzy</p>
-                </button>
-                <button class="feature-card glass fc-btn" id="imsgTileBtn">
-                    <div class="fc-icon" data-icon="brain"></div>
-                    <h3>iMessage 信息</h3>
-                    <p>一目了然</p>
-                </button>
-                <button class="feature-card glass fc-btn" id="iosTileBtn">
-                    <div class="fc-icon" data-icon="apple"></div>
-                    <h3>iOS</h3>
-                    <p>Liquid glass</p>
-                </button>
-            </div>
-        </section>
-        <section id="chatView" class="view">
-            <div id="inviteGate" class="invite-gate">
-                <div class="gate-wrap">
-                    <div class="invite-card glass" id="inviteCard">
-                        <div class="invite-icon" data-icon="key"></div>
-                        <h2>输入邀请码</h2>
-                        <p>请输入 6 位邀请码进入群聊</p>
-                        <div class="otp-inputs" id="otpInputs">
-                            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
-                            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
-                            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
-                            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
-                            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
-                            <input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
-                        </div>
-                        <div id="inviteError" class="invite-error" hidden></div>
-                        <button class="btn-primary" id="inviteSubmit">进入群聊</button>
-                        <button type="button" class="btn-text" id="showCreateGroup">＋ 创建新群聊</button>
-                    </div>
-                    <div class="invite-card glass" id="createGroupCard" hidden>
-                        <div class="invite-icon">✨</div>
-                        <h2>创建群聊</h2>
-                        <p>设置群聊名称、邀请码和头像</p>
-                        <div class="field glass-field">
-                            <span class="field-icon" data-icon="chat"></span>
-                            <input type="text" id="groupName" placeholder="群聊名称" maxlength="20">
-                        </div>
-                        <div class="field glass-field">
-                            <span class="field-icon" data-icon="key"></span>
-                            <input type="text" id="groupCode" placeholder="6 位邀请码（字母或数字）" maxlength="6">
-                        </div>
-                        <div class="avatar-section">
-                            <div class="avatar-label">群头像</div>
-                            <div class="avatar-grid" id="groupAvatarGrid"></div>
-                        </div>
-                        <div id="createError" class="invite-error"></div>
-                        <button class="btn-primary" id="createGroupBtn">创建并进入</button>
-                        <button type="button" class="btn-text" id="backToInvite">← 返回输入邀请码</button>
-                    </div>
-                </div>
-            </div>
-            <div id="chatRoom" class="chat-room" hidden>
-                <div class="danmaku-layer" id="danmakuLayer" hidden></div>
-                <aside class="online-panel glass" id="onlinePanel">
-                    <div class="op-header">
-                        <div class="op-group-avatar" id="opGroupAvatar">💬</div>
-                        <div class="op-group-name" id="opGroupName">群聊</div>
-                        <div class="op-group-code" id="opGroupCode"></div>
-                    </div>
-                    <div class="op-title">在线 <span class="op-count" id="onlineCount">1</span></div>
-                    <div class="online-list" id="onlineList"></div>
-                </aside>
-                <button class="online-toggle" id="onlineToggle" title="在线列表"><span data-icon="users"></span></button>
-                <div class="chat-main">
-                    <header class="chat-header glass">
-                        <button class="back-btn" id="backToGate" title="返回">‹</button>
-                        <div class="ch-avatar" id="chatAvatar">💬</div>
-                        <div class="ch-info">
-                            <div class="ch-name" id="chatName">群聊</div>
-                            <div class="ch-status" id="chatStatus">1 人在线</div>
-                        </div>
-                        <div class="ch-avatars" id="headerAvatars"></div>
-                        <button class="group-menu-btn" id="groupMenuBtn" title="群设置">⋯</button>
-                    </header>
-                    <div class="group-menu glass" id="groupMenu" hidden>
-                        <button class="gm-item" id="gmMembers"><span class="gm-icon" data-icon="members"></span> 群成员</button>
-                        <button class="gm-item gm-owner" id="gmEditGroup" hidden><span class="gm-icon" data-icon="edit"></span> 编辑群信息</button>
-                        <button class="gm-item" id="gmPinned"><span class="gm-icon" data-icon="pin"></span> 置顶消息</button>
-                        <button class="gm-item" id="gmSearch"><span class="gm-icon" data-icon="search"></span> 搜索消息</button>
-                        <button class="gm-item" id="gmAnnouncement"><span class="gm-icon" data-icon="announcement"></span> 群公告</button>
-                        <button class="gm-item" id="gmQR"><span class="gm-icon" data-icon="qr"></span> 群二维码</button>
-                        <button class="gm-item" id="gmExport"><span class="gm-icon" data-icon="download"></span> 导出聊天</button>
-                        <button class="gm-item" id="gmPin"><span class="gm-icon" data-icon="pin"></span> 置顶群聊</button>
-                        <button class="gm-item" id="gmMute"><span class="gm-icon" data-icon="bellOff"></span> 消息免打扰</button>
-                        <button class="gm-item" id="gmLockChat"><span class="gm-icon" data-icon="lock"></span> 聊天锁</button>
-                        <button class="gm-item" id="gmCopyCode"><span class="gm-icon" data-icon="copy"></span> 复制邀请码</button>
-                        <button class="gm-item" id="gmDanmaku"><span class="gm-icon" data-icon="chat"></span> 弹幕模式</button>
-                        <button class="gm-item" id="gmMemories"><span class="gm-icon" data-icon="clock"></span> 去年今日</button>
-                        <button class="gm-item gm-leave" id="gmLeaveGroup"><span class="gm-icon" data-icon="leave"></span> 退出群聊</button>
-                        <button class="gm-item gm-dismiss" id="gmDismissGroup" hidden><span class="gm-icon" data-icon="dismiss"></span> 注销群聊</button>
-                    </div>
-                    <div id="pinnedBanner" class="pinned-banner glass" hidden>
-                        <span class="pb-icon" data-icon="pin"></span>
-                        <span class="pb-text" id="pinnedText"></span>
-                        <button class="pb-close" id="pinnedClose">✕</button>
-                    </div>
-                    <div id="announcementBanner" class="announcement-banner glass" hidden>
-                        <span class="ann-icon" data-icon="announcement"></span>
-                        <span class="ann-text" id="annText"></span>
-                        <button class="ann-close" id="annClose">✕</button>
-                    </div>
-                    <div id="callBanner" class="call-banner" hidden>
-                        <div class="call-banner-avatar" id="callBannerAvatar" data-icon="phone"></div>
-                        <div class="call-banner-info">
-                            <div class="call-banner-title" id="callBannerTitle">语音通话中</div>
-                            <div class="call-banner-sub" id="callBannerSub">点击加入</div>
-                        </div>
-                        <div class="call-banner-timer" id="callBannerTimer">00:00</div>
-                        <button class="call-banner-join" id="callBannerJoin">加入</button>
-                    </div>
-                    <div class="loc-share-banner glass" id="locShareBanner" hidden>
-                        <div class="lsb-avatars" id="lsbAvatars"></div>
-                        <button class="lsb-join-btn" id="lsbJoinBtn">正在共享实时位置，点击加入</button>
-                        <button class="lsb-close-btn" id="lsbCloseBtn" title="停止共享">✕</button>
-                    </div>
-                    <div class="loc-map-wrap" id="locMapWrap" hidden>
-                        <div id="locMap" class="loc-map"></div>
-                    </div>
-                    <div class="messages" id="messages"></div>
-                    <div class="typing-wrap" id="typingWrap" hidden>
-                        <div class="typing-bubble">
-                            <span class="typing-name" id="typingName"></span>
-                            <span class="typing-dots"><i></i><i></i><i></i></span>
-                        </div>
-                    </div>
-                    <div class="composer-wrap">
-                        <div class="emoji-panel glass" id="emojiPanel" hidden>
-                            <div class="emoji-grid" id="emojiGrid"></div>
-                        </div>
-                        <div class="recording-bar glass" id="recordingBar" hidden>
-                            <span class="rec-dot"></span>
-                            <span class="rec-text">正在录音 <span id="recTime">0"</span></span>
-                            <button class="rec-stop-btn" id="recStopBtn">停止发送</button>
-                            <button class="rec-cancel-btn" id="recCancelBtn">取消</button>
-                        </div>
-                        <div class="composer glass-pill">
-                            <button class="composer-btn" id="emojiBtn" title="表情"><span data-icon="smile"></span></button>
-                            <div class="multi-btn-wrap">
-                                <button class="composer-btn multi-plus-btn" id="multiPlusBtn" title="更多">+</button>
-                            </div>
-                            <input type="file" id="imgInput" accept="image/*" hidden>
-                            <input type="file" id="fileInput" hidden>
-                            <div class="composer-input" id="composerInput" contenteditable="true" data-placeholder="iMessage" spellcheck="false"></div>
-                            <button class="send-btn" id="sendBtn" disabled title="长按发送位置">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-                            </button>
-                        </div>
-                        <div class="multi-menu glass" id="multiMenu" hidden>
-                            <button class="multi-menu-item" id="mmImage" title="图片"><span class="mm-icon" data-icon="image"></span><span class="mm-label">图片</span></button>
-                            <button class="multi-menu-item" id="mmFile" title="文件"><span class="mm-icon" data-icon="file"></span><span class="mm-label">文件</span></button>
-                            <button class="multi-menu-item" id="mmVoice" title="语音信箱"><span class="mm-icon" data-icon="mic"></span><span class="mm-label">语音信箱</span></button>
-                            <button class="multi-menu-item" id="mmVoiceCall" title="语音通话"><span class="mm-icon" data-icon="phone"></span><span class="mm-label">语音通话</span></button>
-                            <button class="multi-menu-item" id="mmCheckin" title="位置打卡"><span class="mm-icon" data-icon="location"></span><span class="mm-label">打卡</span></button>
-                            <button class="multi-menu-item" id="mmBluetooth" title="蓝牙 / 低数据模式"><span class="mm-icon" data-icon="bluetooth"></span><span class="mm-label">蓝牙</span></button>
-                            <button class="multi-menu-item" id="mmHotspot" title="热点直连（离线 P2P）"><span class="mm-icon" data-icon="wifi"></span><span class="mm-label">热点</span></button>
-                            <button class="multi-menu-item" id="mmEphemeral" title="阅后即焚"><span class="mm-icon" data-icon="flame"></span><span class="mm-label">阅后即焚</span></button>
-                            <button class="multi-menu-item" id="mmCapsule" title="定时胶囊"><span class="mm-icon" data-icon="clock"></span><span class="mm-label">定时胶囊</span></button>
-                            <button class="multi-menu-item" id="mmWhisper" title="悄悄话"><span class="mm-icon" data-icon="lock"></span><span class="mm-label">悄悄话</span></button>
-                            <button class="multi-menu-item" id="mmBioSign" title="生物签名"><span class="mm-icon" data-icon="fingerprint"></span><span class="mm-label">生物签名</span></button>
-                            <button class="multi-menu-item" id="mmSchedule" title="定时发送"><span class="mm-icon" data-icon="clock"></span><span class="mm-label">定时发送</span></button>
-                            <button class="multi-menu-item" id="mmGroupMan" title="群管理"><span class="mm-icon" data-icon="gear"></span><span class="mm-label">群管理</span></button>
-                        </div>
-                        <div class="composer-mode-bar glass" id="composerModeBar" hidden>
-                            <span class="cmb-icon" id="cmbIcon"></span>
-                            <span class="cmb-text" id="cmbText"></span>
-                            <button class="cmb-cancel" id="cmbCancel">×</button>
-                        </div>
-                        <div class="ephemeral-picker glass" id="ephemeralPicker" hidden>
-                            <div class="ep-title">阅后即焚 · 查看后存活</div>
-                            <div class="ep-options">
-                                <button data-sec="5">5秒</button>
-                                <button data-sec="10">10秒</button>
-                                <button data-sec="30">30秒</button>
-                                <button data-sec="60">1分钟</button>
-                            </div>
-                        </div>
-                        <div class="capsule-picker glass" id="capsulePicker" hidden>
-                            <div class="cp-title">定时胶囊 · 解锁时间</div>
-                            <input type="datetime-local" id="capsuleTime" class="cp-time">
-                            <div class="cp-quick">
-                                <button data-min="1">1分钟后</button>
-                                <button data-min="60">1小时后</button>
-                                <button data-min="1440">明天此时</button>
-                            </div>
-                            <button class="cp-confirm" id="capsuleConfirm">封存</button>
-                        </div>
-                        <div class="loc-menu glass" id="locMenu" hidden>
-                            <button class="loc-menu-item" id="locSendOnce"><span data-icon="location"></span>发送当前位置</button>
-                        </div>
-                        <div class="mobile-online-bar" id="mobileOnlineBar" hidden>
-                            <span class="mob-online-label">在线</span>
-                            <div class="mob-online-list" id="mobileOnlineList"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-        <section id="usersView" class="view">
-            <div class="users-header glass">
-                <h2>用户列表</h2>
-                <p id="usersSubtitle">正在加载…</p>
-            </div>
-            <div class="users-list" id="usersList"></div>
-        </section>
-        <section id="profileView" class="view">
-            <button type="button" class="profile-scan-btn glass-pill" id="openScannerBtn" title="扫一扫">
-                <span data-icon="qr"></span>
-                <span class="psb-label">扫一扫</span>
-            </button>
-            <div class="profile-card glass">
-                <div class="profile-avatar" id="profileAvatar">😀</div>
-                <h2 id="profileNickname">昵称</h2>
-                <p id="profileId">ID: </p>
-                <div id="adminBadge" class="admin-tag" hidden><span data-icon="crown"></span> 管理员</div>
-                <div class="profile-list">
-                    <div class="profile-row">
-                        <span class="pr-label"><span data-icon="phone"></span> 电话</span>
-                        <span class="pr-value" id="profilePhone"></span>
-                    </div>
-                    <div class="profile-row">
-                        <span class="pr-label"><span data-icon="mail"></span> 邮箱</span>
-                        <span class="pr-value" id="profileEmail"></span>
-                        <button class="pr-edit-btn" id="editEmailBtn" title="修改邮箱"><span data-icon="edit"></span></button>
-                    </div>
-                    <div class="profile-row">
-                        <span class="pr-label"><span data-icon="edit"></span> 昵称</span>
-                        <span class="pr-value" id="profileNickRow"></span>
-                        <button class="pr-edit-btn" id="editNickBtn" title="修改昵称"><span data-icon="edit"></span></button>
-                    </div>
-                    <div class="profile-row">
-                        <span class="pr-label"><span data-icon="profile"></span> 头像</span>
-                        <span class="pr-value" id="profileAvatarRow"></span>
-                        <button class="pr-edit-btn" id="editAvatarBtn" title="修改头像"><span data-icon="edit"></span></button>
-                    </div>
-                </div>
-                <button class="btn-logout" id="logoutBtn"><span data-icon="logout"></span> 退出登录</button>
-                <button class="btn-delete-account" id="deleteAccountBtn"><span data-icon="trash"></span> 注销账号</button>
-                <button class="btn-wipe" id="wipeBtn"><span data-icon="dismiss"></span> 紧急擦除</button>
-                <div class="dark-mode-row glass-pill">
-                    <span class="dm-label"><span data-icon="moon"></span> 深色模式</span>
-                    <label class="dm-switch">
-                        <input type="checkbox" id="darkModeToggle">
-                        <span class="dm-slider"></span>
-                    </label>
-                </div>
-                <div class="dark-mode-row glass-pill">
-                    <span class="dm-label"><span data-icon="bell"></span> 消息通知</span>
-                    <label class="dm-switch">
-                        <input type="checkbox" id="notifyToggle">
-                        <span class="dm-slider"></span>
-                    </label>
-                </div>
-                <button class="btn-sessions" id="sessionsBtn"><span data-icon="monitor"></span> 登录设备管理</button>
-                <button class="btn-sessions" id="savedBtn"><span data-icon="star"></span> 我的收藏</button>
-                <button class="btn-sessions" id="heatmapBtn"><span data-icon="chart"></span> 聊天热力图</button>
-                <button class="btn-sessions" id="yearReportBtn"><span data-icon="calendar"></span> 年度聊天报告</button>
-                <button class="btn-sessions" id="bioRoomBtn"><span data-icon="lock"></span> 双人生物房间</button>
-                <button class="btn-sessions" id="bubbleBtn"><span data-icon="chat"></span> 气泡皮肤</button>
-                <button class="btn-sessions" id="passkeyManageBtn"><span data-icon="key"></span> 安全中心 <span class="sec-count" id="passkeyCount"></span></button>
-                <button class="btn-sessions" id="signToolBtn"><span data-icon="edit"></span> 签名验签工具</button>
-                <button class="btn-sessions" id="secLogBtn"><span data-icon="monitor"></span> 安全日志</button>
-                <div class="focus-mode-row glass-pill">
-                    <span class="dm-label"><span data-icon="moon"></span> 专注模式</span>
-                    <div class="focus-time-inputs">
-                        <input type="time" id="focusStart" class="focus-time" value="">
-                        <span style="color:var(--ink-3);">至</span>
-                        <input type="time" id="focusEnd" class="focus-time" value="">
-                    </div>
-                </div>
-                <div id="sessionsDialog" class="confirm-overlay" hidden>
-                    <div class="confirm-card glass">
-                        <h3>登录设备</h3>
-                        <div class="sessions-list" id="sessionsList"></div>
-                        <div class="confirm-btns">
-                            <button class="btn-primary" id="sessionsClose">关闭</button>
-                        </div>
-                    </div>
-                </div>
-                <div id="savedDialog" class="confirm-overlay" hidden>
-                    <div class="confirm-card glass" style="max-width:400px;">
-                        <h3>我的收藏</h3>
-                        <div class="saved-list" id="savedList"></div>
-                        <div class="confirm-btns">
-                            <button class="btn-primary" id="savedClose">关闭</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="my-groups glass" id="myGroupsCard">
-                <h3>我的群聊</h3>
-                <div class="my-groups-list" id="myGroupsList"></div>
-            </div>
-        </section>
-        <section id="feedbackView" class="view">
-            <div class="fb-header glass">
-                <h2>博采众长</h2>
-                <p>你的每一条建议都在塑造 Stating 的未来</p>
-            </div>
-            <div class="fb-content">
-                <div class="fb-tiles">
-                    <div class="fb-tile glass">
-                        <div class="fb-tile-icon" data-icon="lightbulb"></div>
-                        <div class="fb-tile-text">
-                            <h4>征集新功能</h4>
-                            <p>告诉我们你想要什么功能，越具体越好</p>
-                        </div>
-                    </div>
-                    <div class="fb-tile glass">
-                        <div class="fb-tile-icon" data-icon="starFill"></div>
-                        <div class="fb-tile-text">
-                            <h4>评分反馈</h4>
-                            <p>为当前体验打分，满分5星，匿名提交</p>
-                        </div>
-                    </div>
-                    <div class="fb-tile glass">
-                        <div class="fb-tile-icon" data-icon="info"></div>
-                        <div class="fb-tile-text">
-                            <h4>透明公开</h4>
-                            <p>所有建议公开可见，管理员定期回复</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="fb-submit glass">
-                    <h3>提交你的建议</h3>
-                    <textarea class="fb-input" id="fbInput" placeholder="描述你想要的功能或改进建议..." rows="3"></textarea>
-                    <div class="fb-submit-row">
-                        <div class="fb-stars" id="fbStars">
-                            <span class="fb-star" data-v="1">☆</span>
-                            <span class="fb-star" data-v="2">☆</span>
-                            <span class="fb-star" data-v="3">☆</span>
-                            <span class="fb-star" data-v="4">☆</span>
-                            <span class="fb-star" data-v="5">☆</span>
-                        </div>
-                        <button class="fb-submit-btn" id="fbSubmitBtn">提交</button>
-                    </div>
-                </div>
-                <div class="fb-list-wrap glass">
-                    <div class="fb-list-header">
-                        <h3>大家的建议</h3>
-                        <span class="fb-count" id="fbCount">0 条</span>
-                    </div>
-                    <div class="fb-list" id="fbList"></div>
-                </div>
-                <div class="fb-admin glass" id="fbAdminPanel" hidden>
-                    <h3>管理员面板</h3>
-                    <div class="fb-admin-stats">
-                        <div class="fb-stat">
-                            <div class="fb-stat-num" id="fbAvgRating">0.0</div>
-                            <div class="fb-stat-label">平均评分</div>
-                        </div>
-                        <div class="fb-stat">
-                            <div class="fb-stat-num" id="fbTotalCount">0</div>
-                            <div class="fb-stat-label">总建议数</div>
-                        </div>
-                    </div>
-                    <div class="fb-admin-list" id="fbAdminList"></div>
-                </div>
-            </div>
-        </section>
-    </main>
-    <footer class="footer">@2026 WZY</footer>
+<div class="topbar-wrap">
+<nav class="topbar glass-pill">
+<div class="brand">Stating</div>
+<div class="nav-items">
+<button class="nav-item active" data-view="home">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V9.5z"/></svg>
+<span>首页</span>
+</button>
+<button class="nav-item" data-view="chat">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+<span>聊天</span>
+<span class="nav-badge" id="navBadge" hidden>0</span>
+</button>
+<button class="nav-item" data-view="users">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+<span>用户</span>
+</button>
+<button class="nav-item" data-view="profile">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+<span>我的</span>
+</button>
+<button class="nav-item" data-view="feedback">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+<span>博采</span>
+</button>
+</div>
+</nav>
+</div>
+<main class="views">
+<section id="homeView" class="view active">
+<div class="home-hero glass">
+<div class="hero-avatar" id="heroAvatar">😀</div>
+<h1>hi, 这里是Stating</h1>
+<p>一个简单、纯粹的聊天空间</p>
+<p class="hero-sub">创建群聊，分享邀请码，邀请朋友一起聊</p>
+<button class="btn-ghost" data-goto="chat">开始聊天</button>
+</div>
+<div class="feature-cards">
+<button class="feature-card glass fc-btn" id="devTileBtn">
+<div class="fc-icon" data-icon="code"></div>
+<h3>Developer</h3>
+<p>wzy</p>
+</button>
+<button class="feature-card glass fc-btn" id="imsgTileBtn">
+<div class="fc-icon" data-icon="brain"></div>
+<h3>iMessage 信息</h3>
+<p>一目了然</p>
+</button>
+<button class="feature-card glass fc-btn" id="iosTileBtn">
+<div class="fc-icon" data-icon="apple"></div>
+<h3>iOS</h3>
+<p>Liquid glass</p>
+</button>
+</div>
+</section>
+<section id="chatView" class="view">
+<div id="inviteGate" class="invite-gate">
+<div class="gate-wrap">
+<div class="invite-card glass" id="inviteCard">
+<div class="invite-icon" data-icon="key"></div>
+<h2>输入邀请码</h2>
+<p>请输入 6 位邀请码进入群聊</p>
+<div class="otp-inputs" id="otpInputs">
+<input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+<input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+<input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+<input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+<input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+<input type="text" maxlength="1" class="otp-box" inputmode="text" autocomplete="off">
+</div>
+<div id="inviteError" class="invite-error" hidden></div>
+<button class="btn-primary" id="inviteSubmit">进入群聊</button>
+<button type="button" class="btn-text" id="showCreateGroup">＋ 创建新群聊</button>
+</div>
+<div class="invite-card glass" id="createGroupCard" hidden>
+<div class="invite-icon">✨</div>
+<h2>创建群聊</h2>
+<p>设置群聊名称、邀请码和头像</p>
+<div class="field glass-field">
+<span class="field-icon" data-icon="chat"></span>
+<input type="text" id="groupName" placeholder="群聊名称" maxlength="20">
+</div>
+<div class="field glass-field">
+<span class="field-icon" data-icon="key"></span>
+<input type="text" id="groupCode" placeholder="6 位邀请码（字母或数字）" maxlength="6">
+</div>
+<div class="avatar-section">
+<div class="avatar-label">群头像</div>
+<div class="avatar-grid" id="groupAvatarGrid"></div>
+</div>
+<div id="createError" class="invite-error"></div>
+<button class="btn-primary" id="createGroupBtn">创建并进入</button>
+<button type="button" class="btn-text" id="backToInvite">← 返回输入邀请码</button>
+</div>
+</div>
+</div>
+<div id="chatRoom" class="chat-room" hidden>
+<div class="danmaku-layer" id="danmakuLayer" hidden></div>
+<aside class="online-panel glass" id="onlinePanel">
+<div class="op-header">
+<div class="op-group-avatar" id="opGroupAvatar">💬</div>
+<div class="op-group-name" id="opGroupName">群聊</div>
+<div class="op-group-code" id="opGroupCode"></div>
+</div>
+<div class="op-title">在线 <span class="op-count" id="onlineCount">1</span></div>
+<div class="online-list" id="onlineList"></div>
+</aside>
+<button class="online-toggle" id="onlineToggle" title="在线列表"><span data-icon="users"></span></button>
+<div class="chat-main">
+<header class="chat-header glass">
+<button class="back-btn" id="backToGate" title="返回">‹</button>
+<div class="ch-avatar" id="chatAvatar">💬</div>
+<div class="ch-info">
+<div class="ch-name" id="chatName">群聊</div>
+<div class="ch-status" id="chatStatus">1 人在线</div>
+</div>
+<div class="ch-avatars" id="headerAvatars"></div>
+<button class="group-menu-btn" id="groupMenuBtn" title="群设置">⋯</button>
+</header>
+<div class="group-menu glass" id="groupMenu" hidden>
+<button class="gm-item" id="gmMembers"><span class="gm-icon" data-icon="members"></span> 群成员</button>
+<button class="gm-item gm-owner" id="gmEditGroup" hidden><span class="gm-icon" data-icon="edit"></span> 编辑群信息</button>
+<button class="gm-item" id="gmPinned"><span class="gm-icon" data-icon="pin"></span> 置顶消息</button>
+<button class="gm-item" id="gmSearch"><span class="gm-icon" data-icon="search"></span> 搜索消息</button>
+<button class="gm-item" id="gmAnnouncement"><span class="gm-icon" data-icon="announcement"></span> 群公告</button>
+<button class="gm-item" id="gmQR"><span class="gm-icon" data-icon="qr"></span> 群二维码</button>
+<button class="gm-item" id="gmExport"><span class="gm-icon" data-icon="download"></span> 导出聊天</button>
+<button class="gm-item" id="gmPin"><span class="gm-icon" data-icon="pin"></span> 置顶群聊</button>
+<button class="gm-item" id="gmMute"><span class="gm-icon" data-icon="bellOff"></span> 消息免打扰</button>
+<button class="gm-item" id="gmLockChat"><span class="gm-icon" data-icon="lock"></span> 聊天锁</button>
+<button class="gm-item" id="gmCopyCode"><span class="gm-icon" data-icon="copy"></span> 复制邀请码</button>
+<button class="gm-item" id="gmDanmaku"><span class="gm-icon" data-icon="chat"></span> 弹幕模式</button>
+<button class="gm-item" id="gmMemories"><span class="gm-icon" data-icon="clock"></span> 去年今日</button>
+<button class="gm-item gm-leave" id="gmLeaveGroup"><span class="gm-icon" data-icon="leave"></span> 退出群聊</button>
+<button class="gm-item gm-dismiss" id="gmDismissGroup" hidden><span class="gm-icon" data-icon="dismiss"></span> 注销群聊</button>
+</div>
+<div id="pinnedBanner" class="pinned-banner glass" hidden>
+<span class="pb-icon" data-icon="pin"></span>
+<span class="pb-text" id="pinnedText"></span>
+<button class="pb-close" id="pinnedClose">✕</button>
+</div>
+<div id="announcementBanner" class="announcement-banner glass" hidden>
+<span class="ann-icon" data-icon="announcement"></span>
+<span class="ann-text" id="annText"></span>
+<button class="ann-close" id="annClose">✕</button>
+</div>
+<div id="callBanner" class="call-banner" hidden>
+<div class="call-banner-avatar" id="callBannerAvatar" data-icon="phone"></div>
+<div class="call-banner-info">
+<div class="call-banner-title" id="callBannerTitle">语音通话中</div>
+<div class="call-banner-sub" id="callBannerSub">点击加入</div>
+</div>
+<div class="call-banner-timer" id="callBannerTimer">00:00</div>
+<button class="call-banner-join" id="callBannerJoin">加入</button>
+</div>
+<div class="loc-share-banner glass" id="locShareBanner" hidden>
+<div class="lsb-avatars" id="lsbAvatars"></div>
+<button class="lsb-join-btn" id="lsbJoinBtn">正在共享实时位置，点击加入</button>
+<button class="lsb-close-btn" id="lsbCloseBtn" title="停止共享">✕</button>
+</div>
+<div class="loc-map-wrap" id="locMapWrap" hidden>
+<div id="locMap" class="loc-map"></div>
+</div>
+<div class="messages" id="messages"></div>
+<div class="typing-wrap" id="typingWrap" hidden>
+<div class="typing-bubble">
+<span class="typing-name" id="typingName"></span>
+<span class="typing-dots"><i></i><i></i><i></i></span>
+</div>
+</div>
+<div class="composer-wrap">
+<div class="emoji-panel glass" id="emojiPanel" hidden>
+<div class="emoji-grid" id="emojiGrid"></div>
+</div>
+<div class="recording-bar glass" id="recordingBar" hidden>
+<span class="rec-dot"></span>
+<span class="rec-text">正在录音 <span id="recTime">0"</span></span>
+<button class="rec-stop-btn" id="recStopBtn">停止发送</button>
+<button class="rec-cancel-btn" id="recCancelBtn">取消</button>
+</div>
+<div class="composer glass-pill">
+<button class="composer-btn" id="emojiBtn" title="表情"><span data-icon="smile"></span></button>
+<div class="multi-btn-wrap">
+<button class="composer-btn multi-plus-btn" id="multiPlusBtn" title="更多">+</button>
+</div>
+<input type="file" id="imgInput" accept="image/*" hidden>
+<input type="file" id="fileInput" hidden>
+<div class="composer-input" id="composerInput" contenteditable="true" data-placeholder="iMessage" spellcheck="false"></div>
+<button class="send-btn" id="sendBtn" disabled title="长按发送位置">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+</button>
+</div>
+<div class="multi-menu glass" id="multiMenu" hidden>
+<button class="multi-menu-item" id="mmImage" title="图片"><span class="mm-icon" data-icon="image"></span><span class="mm-label">图片</span></button>
+<button class="multi-menu-item" id="mmFile" title="文件"><span class="mm-icon" data-icon="file"></span><span class="mm-label">文件</span></button>
+<button class="multi-menu-item" id="mmVoice" title="语音信箱"><span class="mm-icon" data-icon="mic"></span><span class="mm-label">语音信箱</span></button>
+<button class="multi-menu-item" id="mmVoiceCall" title="语音通话"><span class="mm-icon" data-icon="phone"></span><span class="mm-label">语音通话</span></button>
+<button class="multi-menu-item" id="mmCheckin" title="位置打卡"><span class="mm-icon" data-icon="location"></span><span class="mm-label">打卡</span></button>
+<button class="multi-menu-item" id="mmBluetooth" title="蓝牙 / 低数据模式"><span class="mm-icon" data-icon="bluetooth"></span><span class="mm-label">蓝牙</span></button>
+<button class="multi-menu-item" id="mmHotspot" title="热点直连（离线 P2P）"><span class="mm-icon" data-icon="wifi"></span><span class="mm-label">热点</span></button>
+<button class="multi-menu-item" id="mmEphemeral" title="阅后即焚"><span class="mm-icon" data-icon="flame"></span><span class="mm-label">阅后即焚</span></button>
+<button class="multi-menu-item" id="mmCapsule" title="定时胶囊"><span class="mm-icon" data-icon="clock"></span><span class="mm-label">定时胶囊</span></button>
+<button class="multi-menu-item" id="mmWhisper" title="悄悄话"><span class="mm-icon" data-icon="lock"></span><span class="mm-label">悄悄话</span></button>
+<button class="multi-menu-item" id="mmBioSign" title="生物签名"><span class="mm-icon" data-icon="fingerprint"></span><span class="mm-label">生物签名</span></button>
+<button class="multi-menu-item" id="mmSchedule" title="定时发送"><span class="mm-icon" data-icon="clock"></span><span class="mm-label">定时发送</span></button>
+<button class="multi-menu-item" id="mmGroupMan" title="群管理"><span class="mm-icon" data-icon="gear"></span><span class="mm-label">群管理</span></button>
+</div>
+<div class="composer-mode-bar glass" id="composerModeBar" hidden>
+<span class="cmb-icon" id="cmbIcon"></span>
+<span class="cmb-text" id="cmbText"></span>
+<button class="cmb-cancel" id="cmbCancel">×</button>
+</div>
+<div class="ephemeral-picker glass" id="ephemeralPicker" hidden>
+<div class="ep-title">阅后即焚 · 查看后存活</div>
+<div class="ep-options">
+<button data-sec="5">5秒</button>
+<button data-sec="10">10秒</button>
+<button data-sec="30">30秒</button>
+<button data-sec="60">1分钟</button>
+</div>
+</div>
+<div class="capsule-picker glass" id="capsulePicker" hidden>
+<div class="cp-title">定时胶囊 · 解锁时间</div>
+<input type="datetime-local" id="capsuleTime" class="cp-time">
+<div class="cp-quick">
+<button data-min="1">1分钟后</button>
+<button data-min="60">1小时后</button>
+<button data-min="1440">明天此时</button>
+</div>
+<button class="cp-confirm" id="capsuleConfirm">封存</button>
+</div>
+<div class="loc-menu glass" id="locMenu" hidden>
+<button class="loc-menu-item" id="locSendOnce"><span data-icon="location"></span>发送当前位置</button>
+</div>
+<div class="mobile-online-bar" id="mobileOnlineBar" hidden>
+<span class="mob-online-label">在线</span>
+<div class="mob-online-list" id="mobileOnlineList"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="usersView" class="view">
+<div class="users-header glass">
+<h2>用户列表</h2>
+<p id="usersSubtitle">正在加载…</p>
+</div>
+<div class="users-list" id="usersList"></div>
+</section>
+<section id="profileView" class="view">
+<button type="button" class="profile-scan-btn glass-pill" id="openScannerBtn" title="扫一扫">
+<span data-icon="qr"></span>
+<span class="psb-label">扫一扫</span>
+</button>
+<div class="profile-card glass">
+<div class="profile-avatar" id="profileAvatar">😀</div>
+<h2 id="profileNickname">昵称</h2>
+<p id="profileId">ID: </p>
+<div id="adminBadge" class="admin-tag" hidden><span data-icon="crown"></span> 管理员</div>
+<div class="profile-list">
+<div class="profile-row">
+<span class="pr-label"><span data-icon="phone"></span> 电话</span>
+<span class="pr-value" id="profilePhone"></span>
+</div>
+<div class="profile-row">
+<span class="pr-label"><span data-icon="mail"></span> 邮箱</span>
+<span class="pr-value" id="profileEmail"></span>
+<button class="pr-edit-btn" id="editEmailBtn" title="修改邮箱"><span data-icon="edit"></span></button>
+</div>
+<div class="profile-row">
+<span class="pr-label"><span data-icon="edit"></span> 昵称</span>
+<span class="pr-value" id="profileNickRow"></span>
+<button class="pr-edit-btn" id="editNickBtn" title="修改昵称"><span data-icon="edit"></span></button>
+</div>
+<div class="profile-row">
+<span class="pr-label"><span data-icon="profile"></span> 头像</span>
+<span class="pr-value" id="profileAvatarRow"></span>
+<button class="pr-edit-btn" id="editAvatarBtn" title="修改头像"><span data-icon="edit"></span></button>
+</div>
+</div>
+<button class="btn-logout" id="logoutBtn"><span data-icon="logout"></span> 退出登录</button>
+<button class="btn-delete-account" id="deleteAccountBtn"><span data-icon="trash"></span> 注销账号</button>
+<button class="btn-wipe" id="wipeBtn"><span data-icon="dismiss"></span> 紧急擦除</button>
+<div class="dark-mode-row glass-pill">
+<span class="dm-label"><span data-icon="moon"></span> 深色模式</span>
+<label class="dm-switch">
+<input type="checkbox" id="darkModeToggle">
+<span class="dm-slider"></span>
+</label>
+</div>
+<div class="dark-mode-row glass-pill">
+<span class="dm-label"><span data-icon="bell"></span> 消息通知</span>
+<label class="dm-switch">
+<input type="checkbox" id="notifyToggle">
+<span class="dm-slider"></span>
+</label>
+</div>
+<button class="btn-sessions" id="sessionsBtn"><span data-icon="monitor"></span> 登录设备管理</button>
+<button class="btn-sessions" id="savedBtn"><span data-icon="star"></span> 我的收藏</button>
+<button class="btn-sessions" id="heatmapBtn"><span data-icon="chart"></span> 聊天热力图</button>
+<button class="btn-sessions" id="yearReportBtn"><span data-icon="calendar"></span> 年度聊天报告</button>
+<button class="btn-sessions" id="bioRoomBtn"><span data-icon="lock"></span> 双人生物房间</button>
+<button class="btn-sessions" id="bubbleBtn"><span data-icon="chat"></span> 气泡皮肤</button>
+<button class="btn-sessions" id="passkeyManageBtn"><span data-icon="key"></span> 安全中心 <span class="sec-count" id="passkeyCount"></span></button>
+<button class="btn-sessions" id="signToolBtn"><span data-icon="edit"></span> 签名验签工具</button>
+<button class="btn-sessions" id="secLogBtn"><span data-icon="monitor"></span> 安全日志</button>
+<div class="focus-mode-row glass-pill">
+<span class="dm-label"><span data-icon="moon"></span> 专注模式</span>
+<div class="focus-time-inputs">
+<input type="time" id="focusStart" class="focus-time" value="">
+<span style="color:var(--ink-3);">至</span>
+<input type="time" id="focusEnd" class="focus-time" value="">
+</div>
+</div>
+<div id="sessionsDialog" class="confirm-overlay" hidden>
+<div class="confirm-card glass">
+<h3>登录设备</h3>
+<div class="sessions-list" id="sessionsList"></div>
+<div class="confirm-btns">
+<button class="btn-primary" id="sessionsClose">关闭</button>
+</div>
+</div>
+</div>
+<div id="savedDialog" class="confirm-overlay" hidden>
+<div class="confirm-card glass" style="max-width:400px;">
+<h3>我的收藏</h3>
+<div class="saved-list" id="savedList"></div>
+<div class="confirm-btns">
+<button class="btn-primary" id="savedClose">关闭</button>
+</div>
+</div>
+</div>
+</div>
+<div class="my-groups glass" id="myGroupsCard">
+<h3>我的群聊</h3>
+<div class="my-groups-list" id="myGroupsList"></div>
+</div>
+</section>
+<section id="feedbackView" class="view">
+<div class="fb-header glass">
+<h2>博采众长</h2>
+<p>你的每一条建议都在塑造 Stating 的未来</p>
+</div>
+<div class="fb-content">
+<div class="fb-tiles">
+<div class="fb-tile glass">
+<div class="fb-tile-icon" data-icon="lightbulb"></div>
+<div class="fb-tile-text">
+<h4>征集新功能</h4>
+<p>告诉我们你想要什么功能，越具体越好</p>
+</div>
+</div>
+<div class="fb-tile glass">
+<div class="fb-tile-icon" data-icon="starFill"></div>
+<div class="fb-tile-text">
+<h4>评分反馈</h4>
+<p>为当前体验打分，满分5星，匿名提交</p>
+</div>
+</div>
+<div class="fb-tile glass">
+<div class="fb-tile-icon" data-icon="info"></div>
+<div class="fb-tile-text">
+<h4>透明公开</h4>
+<p>所有建议公开可见，管理员定期回复</p>
+</div>
+</div>
+</div>
+<div class="fb-submit glass">
+<h3>提交你的建议</h3>
+<textarea class="fb-input" id="fbInput" placeholder="描述你想要的功能或改进建议..." rows="3"></textarea>
+<div class="fb-submit-row">
+<div class="fb-stars" id="fbStars">
+<span class="fb-star" data-v="1">☆</span>
+<span class="fb-star" data-v="2">☆</span>
+<span class="fb-star" data-v="3">☆</span>
+<span class="fb-star" data-v="4">☆</span>
+<span class="fb-star" data-v="5">☆</span>
+</div>
+<button class="fb-submit-btn" id="fbSubmitBtn">提交</button>
+</div>
+</div>
+<div class="fb-list-wrap glass">
+<div class="fb-list-header">
+<h3>大家的建议</h3>
+<span class="fb-count" id="fbCount">0 条</span>
+</div>
+<div class="fb-list" id="fbList"></div>
+</div>
+<div class="fb-admin glass" id="fbAdminPanel" hidden>
+<h3>管理员面板</h3>
+<div class="fb-admin-stats">
+<div class="fb-stat">
+<div class="fb-stat-num" id="fbAvgRating">0.0</div>
+<div class="fb-stat-label">平均评分</div>
+</div>
+<div class="fb-stat">
+<div class="fb-stat-num" id="fbTotalCount">0</div>
+<div class="fb-stat-label">总建议数</div>
+</div>
+</div>
+<div class="fb-admin-list" id="fbAdminList"></div>
+</div>
+</div>
+</section>
+</main>
+<footer class="footer">@2026 WZY</footer>
 </div>
 <div id="adminPanel" class="admin-overlay" hidden>
-    <div class="admin-panel glass">
-        <div class="ap-header">
-            <button class="ap-back" id="apBack">‹</button>
-            <div class="ap-title">
-                <div class="ap-avatar" id="apAvatar"></div>
-                <div>
-                    <div class="ap-name" id="apName"></div>
-                    <div class="ap-phone" id="apPhone"></div>
-                </div>
-            </div>
-            <button class="ap-close" id="apClose">✕</button>
-        </div>
-        <div class="ap-body">
-            <div class="ap-info glass-pill">
-                <div class="ap-info-row"><span>邮箱</span><span id="apEmail"></span></div>
-                <div class="ap-info-row"><span>加入群聊</span><span id="apGroupCount"></span></div>
-                <div class="ap-info-row"><span>注册时间</span><span id="apCreated"></span></div>
-            </div>
-            <h4 class="ap-section-title">群聊管理</h4>
-            <div class="ap-groups" id="apGroups"></div>
-        </div>
-    </div>
+<div class="admin-panel glass">
+<div class="ap-header">
+<button class="ap-back" id="apBack">‹</button>
+<div class="ap-title">
+<div class="ap-avatar" id="apAvatar"></div>
+<div>
+<div class="ap-name" id="apName"></div>
+<div class="ap-phone" id="apPhone"></div>
+</div>
+</div>
+<button class="ap-close" id="apClose">✕</button>
+</div>
+<div class="ap-body">
+<div class="ap-info glass-pill">
+<div class="ap-info-row"><span>邮箱</span><span id="apEmail"></span></div>
+<div class="ap-info-row"><span>加入群聊</span><span id="apGroupCount"></span></div>
+<div class="ap-info-row"><span>注册时间</span><span id="apCreated"></span></div>
+</div>
+<h4 class="ap-section-title">群聊管理</h4>
+<div class="ap-groups" id="apGroups"></div>
+</div>
+</div>
 </div>
 <div id="adminMsgViewer" class="admin-overlay" hidden>
-    <div class="admin-msg-panel glass">
-        <div class="ap-header">
-            <button class="ap-back" id="amBack">‹</button>
-            <div class="ap-title">
-                <div class="ap-avatar" id="amAvatar"></div>
-                <div>
-                    <div class="ap-name" id="amName"></div>
-                    <div class="ap-phone" id="amCode"></div>
-                </div>
-            </div>
-            <button class="ap-close" id="amClose">✕</button>
-        </div>
-        <div class="admin-messages" id="adminMessages"></div>
-    </div>
+<div class="admin-msg-panel glass">
+<div class="ap-header">
+<button class="ap-back" id="amBack">‹</button>
+<div class="ap-title">
+<div class="ap-avatar" id="amAvatar"></div>
+<div>
+<div class="ap-name" id="amName"></div>
+<div class="ap-phone" id="amCode"></div>
+</div>
+</div>
+<button class="ap-close" id="amClose">✕</button>
+</div>
+<div class="admin-messages" id="adminMessages"></div>
+</div>
 </div>
 <div id="callModal" class="call-overlay" hidden>
-    <div class="call-panel" id="callPanel">
-        <button class="call-pip-btn" id="callPipBtn" title="小窗">⤢</button>
-        <div class="call-bg-gradient"></div>
-        <div class="call-group-tag">
-            <span class="call-group-avatar" id="callGroupAvatar">💬</span>
-            <span class="call-group-name" id="callGroupName">群聊</span>
-        </div>
-        <div class="call-avatar-ring">
-            <div class="call-avatar" id="callAvatar">👥</div>
-        </div>
-        <div class="call-name" id="callName">通话中</div>
-        <div class="call-status" id="callStatus">正在呼叫...</div>
-        <div class="call-members" id="callMembers"></div>
-        <video id="callRemoteVideo" autoplay playsinline></video>
-        <video id="callVideo" autoplay playsinline hidden></video>
-        <audio id="callRemoteAudio" autoplay></audio>
-        <div class="call-controls">
-            <button class="call-btn call-mute" id="callMuteBtn" title="麦克风"><span data-icon="mic"></span></button>
-            <button class="call-btn call-speaker" id="callSpeakerBtn" title="免提"><span data-icon="speaker"></span></button>
-            <button class="call-btn call-camera" id="callCameraBtn" title="摄像头"><span data-icon="video"></span></button>
-            <button class="call-btn call-flip" id="callFlipBtn" title="翻转摄像头"><span data-icon="refresh-cw"></span></button>
-            <button class="call-btn call-hangup" id="callHangupBtn" title="挂断"><span data-icon="phone"></span></button>
-        </div>
-    </div>
+<div class="call-panel" id="callPanel">
+<button class="call-pip-btn" id="callPipBtn" title="小窗">⤢</button>
+<div class="call-bg-gradient"></div>
+<div class="call-group-tag">
+<span class="call-group-avatar" id="callGroupAvatar">💬</span>
+<span class="call-group-name" id="callGroupName">群聊</span>
+</div>
+<div class="call-avatar-ring">
+<div class="call-avatar" id="callAvatar">👥</div>
+</div>
+<div class="call-name" id="callName">通话中</div>
+<div class="call-status" id="callStatus">正在呼叫...</div>
+<div class="call-members" id="callMembers"></div>
+<video id="callRemoteVideo" autoplay playsinline></video>
+<video id="callVideo" autoplay playsinline hidden></video>
+<audio id="callRemoteAudio" autoplay></audio>
+<div class="call-controls">
+<button class="call-btn call-mute" id="callMuteBtn" title="麦克风"><span data-icon="mic"></span></button>
+<button class="call-btn call-speaker" id="callSpeakerBtn" title="免提"><span data-icon="speaker"></span></button>
+<button class="call-btn call-camera" id="callCameraBtn" title="摄像头"><span data-icon="video"></span></button>
+<button class="call-btn call-flip" id="callFlipBtn" title="翻转摄像头"><span data-icon="refresh-cw"></span></button>
+<button class="call-btn call-hangup" id="callHangupBtn" title="挂断"><span data-icon="phone"></span></button>
+</div>
+</div>
 </div>
 <!-- 来电通知弹窗（FaceTime 风格） -->
 <div id="callIncoming" class="call-incoming" hidden>
-    <div class="call-incoming-panel glass">
-        <div class="call-incoming-ring"></div>
-        <div class="call-incoming-avatar" id="callIncomingAvatar">💬</div>
-        <div class="call-incoming-name" id="callIncomingName">正在呼叫...</div>
-        <div class="call-incoming-type" id="callIncomingType">语音通话</div>
-        <div class="call-incoming-actions">
-            <button class="call-incoming-btn decline" id="callIncomingDecline"><span class="cib-icon">✕</span><span class="cib-label">拒绝</span></button>
-            <button class="call-incoming-btn accept" id="callIncomingAccept"><span class="cib-icon" data-icon="phone"></span><span class="cib-label">接听</span></button>
-        </div>
-    </div>
+<div class="call-incoming-panel glass">
+<div class="call-incoming-ring"></div>
+<div class="call-incoming-avatar" id="callIncomingAvatar">💬</div>
+<div class="call-incoming-name" id="callIncomingName">正在呼叫...</div>
+<div class="call-incoming-type" id="callIncomingType">语音通话</div>
+<div class="call-incoming-actions">
+<button class="call-incoming-btn decline" id="callIncomingDecline"><span class="cib-icon">✕</span><span class="cib-label">拒绝</span></button>
+<button class="call-incoming-btn accept" id="callIncomingAccept"><span class="cib-icon" data-icon="phone"></span><span class="cib-label">接听</span></button>
+</div>
+</div>
 </div>
 <div id="confirmDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass">
-        <div class="confirm-icon" id="confirmIcon" data-icon="info"></div>
-        <h3 id="confirmTitle">确认操作</h3>
-        <p id="confirmMsg"></p>
-        <div class="confirm-btns">
-            <button class="btn-ghost" id="confirmCancel">取消</button>
-            <button class="btn-danger" id="confirmOk">确认</button>
-        </div>
-    </div>
+<div class="confirm-card glass">
+<div class="confirm-icon" id="confirmIcon" data-icon="info"></div>
+<h3 id="confirmTitle">确认操作</h3>
+<p id="confirmMsg"></p>
+<div class="confirm-btns">
+<button class="btn-ghost" id="confirmCancel">取消</button>
+<button class="btn-danger" id="confirmOk">确认</button>
+</div>
+</div>
 </div>
 <div id="fbReplyModal" class="confirm-overlay" hidden>
-    <div class="confirm-card glass">
-        <div class="confirm-icon" data-icon="chat"></div>
-        <h3>管理员回复</h3>
-        <textarea id="fbReplyInput" class="fb-reply-input" placeholder="输入回复内容..." rows="3"></textarea>
-        <div class="confirm-btns">
-            <button class="btn-ghost" id="fbReplyCancel">取消</button>
-            <button class="btn-primary" id="fbReplySubmit">发送回复</button>
-        </div>
-    </div>
+<div class="confirm-card glass">
+<div class="confirm-icon" data-icon="chat"></div>
+<h3>管理员回复</h3>
+<textarea id="fbReplyInput" class="fb-reply-input" placeholder="输入回复内容..." rows="3"></textarea>
+<div class="confirm-btns">
+<button class="btn-ghost" id="fbReplyCancel">取消</button>
+<button class="btn-primary" id="fbReplySubmit">发送回复</button>
+</div>
+</div>
 </div>
 <div class="lightbox" id="lightbox" hidden>
-    <img id="lightboxImg" src="" alt="图片">
-    <button class="lightbox-save-btn" id="lightboxSaveBtn" hidden><span data-icon="download"></span> 保存图片</button>
+<img id="lightboxImg" src="" alt="图片">
+<button class="lightbox-save-btn" id="lightboxSaveBtn" hidden><span data-icon="download"></span> 保存图片</button>
 </div>
 <input type="file" id="avatarUploadInput" accept="image/*" hidden>
 <div id="qrResultDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass">
-        <div class="confirm-icon" data-icon="qr"></div>
-        <h3>二维码识别结果</h3>
-        <p id="qrResultText" class="qr-result-text"></p>
-        <div class="confirm-btns">
-            <button class="btn-ghost" id="qrResultClose">关闭</button>
-            <button class="btn-primary" id="qrResultAction" hidden>打开链接</button>
-        </div>
-    </div>
+<div class="confirm-card glass">
+<div class="confirm-icon" data-icon="qr"></div>
+<h3>二维码识别结果</h3>
+<p id="qrResultText" class="qr-result-text"></p>
+<div class="confirm-btns">
+<button class="btn-ghost" id="qrResultClose">关闭</button>
+<button class="btn-primary" id="qrResultAction" hidden>打开链接</button>
+</div>
+</div>
 </div>
 <div id="checkinDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass" style="max-width:420px;">
-        <h3>位置打卡</h3>
-        <div id="checkinMap" style="width:100%;height:200px;border-radius:12px;background:#e8eef5;margin:12px 0;display:flex;align-items:center;justify-content:center;color:#999;">获取位置中...</div>
-        <div class="field glass-field" style="margin-bottom:12px;">
-            <input type="text" id="checkinAddress" placeholder="地点名称（可选）" maxlength="50">
-        </div>
-        <div class="confirm-btns">
-            <button class="btn-ghost" id="checkinCancel">取消</button>
-            <button class="btn-primary" id="checkinSubmit">打卡</button>
-        </div>
-    </div>
+<div class="confirm-card glass" style="max-width:420px;">
+<h3>位置打卡</h3>
+<div id="checkinMap" style="width:100%;height:200px;border-radius:12px;background:#e8eef5;margin:12px 0;display:flex;align-items:center;justify-content:center;color:#999;">获取位置中...</div>
+<div class="field glass-field" style="margin-bottom:12px;">
+<input type="text" id="checkinAddress" placeholder="地点名称（可选）" maxlength="50">
+</div>
+<div class="confirm-btns">
+<button class="btn-ghost" id="checkinCancel">取消</button>
+<button class="btn-primary" id="checkinSubmit">打卡</button>
+</div>
+</div>
 </div>
 <div id="bluetoothDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass bluetooth-card" style="max-width:440px;">
-        <div class="bt-hero">
-            <div class="bt-hero-text">
-                <h3>传输</h3>
-                <div class="bt-hero-sub" id="btHeroSub">跨设备文本 / 名片交换</div>
-            </div>
-            <div class="bt-metric" id="btMetric" hidden>
-                <div class="bt-metric-rtt" id="btMetricRtt">--ms</div>
-                <div class="bt-metric-loss">0 丢包</div>
-            </div>
-        </div>
-        <div class="bt-seg" id="btTabs">
-            <button class="bt-seg-btn active" id="btTabNear">📶 低数据模式</button>
-            <button class="bt-seg-btn" id="btTabBt">📡 蓝牙</button>
-            <div class="bt-seg-thumb" id="btSegThumb"></div>
-        </div>
-        <div id="btPanelNear">
-            <div class="bt-desc-box">
-                <div class="bt-desc-title">低数据模式</div>
-                <div class="bt-desc-body">两端都需要打开 Stating。通过服务器交换信令（约 10KB），之后点对点直连传输数据。<strong>仅需能打开网页的最低流量，距离不限</strong>。全浏览器兼容。</div>
-                <div class="bt-desc-steps">
-                    <span class="bt-step"><b>1</b> 一方创建会话获取 6 位配对码</span>
-                    <span class="bt-step"><b>2</b> 另一方输入配对码加入</span>
-                    <span class="bt-step"><b>3</b> 自动建立加密直连，互发文本和名片</span>
-                </div>
-            </div>
-            <div id="nearSupportNote" class="bt-note">全浏览器支持 · 需 HTTPS · 仅需最低流量打开页面</div>
-            <div class="bt-status-row"><span class="bt-chip" id="nearStatusChip">待机</span><span class="bt-status" id="nearStatus">创建会话或输入配对码开始</span></div>
-            <div class="near-code-row">
-                <button class="btn-primary" id="nearCreateBtn" style="flex:1.2;">创建会话</button>
-                <input type="text" id="nearCodeInput" class="near-code-input" placeholder="6 位码" maxlength="6" autocomplete="off">
-                <button class="btn-ghost" id="nearJoinBtn">加入</button>
-            </div>
-            <div id="nearConnected" hidden>
-                <div class="bt-rtt-panel" id="nearRttPanel">
-                    <span class="bt-rtt-item">延迟 <b id="nearRttVal">--</b>ms</span>
-                    <span class="bt-rtt-item">已发 <b id="nearSentCnt">0</b></span>
-                    <span class="bt-rtt-item">已送达 <b id="nearAckCnt">0</b></span>
-                    <span class="bt-rtt-item bt-rtt-ok">0丢包</span>
-                </div>
-                <div class="field glass-field bt-send-row">
-                    <input type="text" id="nearSendInput" placeholder="输入文本，回车发送…" maxlength="500">
-                </div>
-                <div class="bt-btn-row">
-                    <button class="btn-primary" id="nearSendTextBtn" style="flex:1;">发送</button>
-                    <button class="btn-ghost" id="nearSendCardBtn" style="flex:1;">📇 名片</button>
-                </div>
-                <div class="bt-rx-log" id="nearRxLog"><div class="bt-rx-title">消息记录</div></div>
-                <button class="btn-text bt-disconnect" id="nearDisconnectBtn">断开</button>
-            </div>
-        </div>
-        <div id="btPanelBt" hidden>
-            <div class="bt-desc-box">
-                <div class="bt-desc-title">蓝牙</div>
-                <div class="bt-desc-body">通过 Web Bluetooth 连接 BLE 外设（传感器、手环等）。<strong>仅 Chrome / Edge / Android 支持</strong>；iOS Safari 不可用。浏览器只能作为蓝牙主机，不支持手机间直连（手机间请用低数据模式）。</div>
-                <div class="bt-desc-steps">
-                    <span class="bt-step"><b>1</b> 点击扫描，在系统弹窗中选设备</span>
-                    <span class="bt-step"><b>2</b> 自动连接 GATT，匹配可读写特征</span>
-                    <span class="bt-step"><b>3</b> 收发文本数据，设备断开自动提示</span>
-                </div>
-            </div>
-            <div id="btSupportNote" class="bt-note">检测浏览器兼容性…</div>
-            <div class="bt-status-row"><span class="bt-chip" id="btStatusChip">待机</span><span class="bt-status" id="btStatus"></span></div>
-            <button class="btn-primary" id="btScanBtn" style="width:100%;margin:0 0 8px;">
-                <span id="btScanLabel">扫描附近设备</span>
-            </button>
-            <div id="btDeviceList" class="bt-device-list"></div>
-            <div id="btConnected" class="bt-connected" hidden>
-                <div class="bt-device-info" id="btDeviceInfo"></div>
-                <div class="field glass-field bt-send-row">
-                    <input type="text" id="btSendInput" placeholder="输入文本，回车发送…" maxlength="120">
-                </div>
-                <div class="bt-btn-row">
-                    <button class="btn-primary" id="btSendTextBtn" style="flex:1;">发送</button>
-                    <button class="btn-ghost" id="btSendCardBtn" style="flex:1;">📇 名片</button>
-                </div>
-                <div class="bt-rx-log" id="btRxLog"><div class="bt-rx-title">消息记录</div></div>
-                <button class="btn-text bt-disconnect" id="btDisconnectBtn">断开</button>
-            </div>
-        </div>
-        <div class="confirm-btns">
-            <button class="btn-ghost" id="btCloseBtn">关闭</button>
-        </div>
-    </div>
+<div class="confirm-card glass bluetooth-card" style="max-width:440px;">
+<div class="bt-hero">
+<div class="bt-hero-text">
+<h3>传输</h3>
+<div class="bt-hero-sub" id="btHeroSub">跨设备文本 / 名片交换</div>
+</div>
+<div class="bt-metric" id="btMetric" hidden>
+<div class="bt-metric-rtt" id="btMetricRtt">--ms</div>
+<div class="bt-metric-loss">0 丢包</div>
+</div>
+</div>
+<div class="bt-seg" id="btTabs">
+<button class="bt-seg-btn active" id="btTabNear">📶 低数据模式</button>
+<button class="bt-seg-btn" id="btTabBt">📡 蓝牙</button>
+<div class="bt-seg-thumb" id="btSegThumb"></div>
+</div>
+<div id="btPanelNear">
+<div class="bt-desc-box">
+<div class="bt-desc-title">低数据模式</div>
+<div class="bt-desc-body">两端都需要打开 Stating。通过服务器交换信令（约 10KB），之后点对点直连传输数据。<strong>仅需能打开网页的最低流量，距离不限</strong>。全浏览器兼容。</div>
+<div class="bt-desc-steps">
+<span class="bt-step"><b>1</b> 一方创建会话获取 6 位配对码</span>
+<span class="bt-step"><b>2</b> 另一方输入配对码加入</span>
+<span class="bt-step"><b>3</b> 自动建立加密直连，互发文本和名片</span>
+</div>
+</div>
+<div id="nearSupportNote" class="bt-note">全浏览器支持 · 需 HTTPS · 仅需最低流量打开页面</div>
+<div class="bt-status-row"><span class="bt-chip" id="nearStatusChip">待机</span><span class="bt-status" id="nearStatus">创建会话或输入配对码开始</span></div>
+<div class="near-code-row">
+<button class="btn-primary" id="nearCreateBtn" style="flex:1.2;">创建会话</button>
+<input type="text" id="nearCodeInput" class="near-code-input" placeholder="6 位码" maxlength="6" autocomplete="off">
+<button class="btn-ghost" id="nearJoinBtn">加入</button>
+</div>
+<div id="nearConnected" hidden>
+<div class="bt-rtt-panel" id="nearRttPanel">
+<span class="bt-rtt-item">延迟 <b id="nearRttVal">--</b>ms</span>
+<span class="bt-rtt-item">已发 <b id="nearSentCnt">0</b></span>
+<span class="bt-rtt-item">已送达 <b id="nearAckCnt">0</b></span>
+<span class="bt-rtt-item bt-rtt-ok">0丢包</span>
+</div>
+<div class="field glass-field bt-send-row">
+<input type="text" id="nearSendInput" placeholder="输入文本，回车发送…" maxlength="500">
+</div>
+<div class="bt-btn-row">
+<button class="btn-primary" id="nearSendTextBtn" style="flex:1;">发送</button>
+<button class="btn-ghost" id="nearSendCardBtn" style="flex:1;">📇 名片</button>
+</div>
+<div class="bt-rx-log" id="nearRxLog"><div class="bt-rx-title">消息记录</div></div>
+<button class="btn-text bt-disconnect" id="nearDisconnectBtn">断开</button>
+</div>
+</div>
+<div id="btPanelBt" hidden>
+<div class="bt-desc-box">
+<div class="bt-desc-title">蓝牙</div>
+<div class="bt-desc-body">通过 Web Bluetooth 连接 BLE 外设（传感器、手环等）。<strong>仅 Chrome / Edge / Android 支持</strong>；iOS Safari 不可用。浏览器只能作为蓝牙主机，不支持手机间直连（手机间请用低数据模式）。</div>
+<div class="bt-desc-steps">
+<span class="bt-step"><b>1</b> 点击扫描，在系统弹窗中选设备</span>
+<span class="bt-step"><b>2</b> 自动连接 GATT，匹配可读写特征</span>
+<span class="bt-step"><b>3</b> 收发文本数据，设备断开自动提示</span>
+</div>
+</div>
+<div id="btSupportNote" class="bt-note">检测浏览器兼容性…</div>
+<div class="bt-status-row"><span class="bt-chip" id="btStatusChip">待机</span><span class="bt-status" id="btStatus"></span></div>
+<button class="btn-primary" id="btScanBtn" style="width:100%;margin:0 0 8px;">
+<span id="btScanLabel">扫描附近设备</span>
+</button>
+<div id="btDeviceList" class="bt-device-list"></div>
+<div id="btConnected" class="bt-connected" hidden>
+<div class="bt-device-info" id="btDeviceInfo"></div>
+<div class="field glass-field bt-send-row">
+<input type="text" id="btSendInput" placeholder="输入文本，回车发送…" maxlength="120">
+</div>
+<div class="bt-btn-row">
+<button class="btn-primary" id="btSendTextBtn" style="flex:1;">发送</button>
+<button class="btn-ghost" id="btSendCardBtn" style="flex:1;">📇 名片</button>
+</div>
+<div class="bt-rx-log" id="btRxLog"><div class="bt-rx-title">消息记录</div></div>
+<button class="btn-text bt-disconnect" id="btDisconnectBtn">断开</button>
+</div>
+</div>
+<div class="confirm-btns">
+<button class="btn-ghost" id="btCloseBtn">关闭</button>
+</div>
+</div>
 </div>
 <div id="hotspotDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass" style="max-width:440px;">
-        <div class="bt-hero">
-            <div class="bt-hero-text">
-                <h3>热点直连</h3>
-                <div class="bt-hero-sub">离线局域网 P2P · 扫码配对</div>
-            </div>
-        </div>
-        <div class="bt-desc-box">
-            <div class="bt-desc-title">完全没网也能互发消息</div>
-            <div class="bt-desc-body">两台设备处于<b>同一 Wi-Fi / 热点</b>下，用二维码交换配对信息，<b>无需服务器</b>直接点对点直连。适合断网环境，全浏览器（含 iOS Safari）。</div>
-            <div class="bt-desc-steps">
-                <span class="bt-step"><b>1</b> 一方「生成直连码」</span>
-                <span class="bt-step"><b>2</b> 另一方「扫码连接」后显示应答码</span>
-                <span class="bt-step"><b>3</b> 发起方扫码应答码，自动建立直连</span>
-            </div>
-        </div>
-        <div class="bt-status-row"><span class="bt-chip" id="hotStatusChip">待机</span><span class="bt-status" id="hotStatus">生成直连码或扫码连接开始</span></div>
-        <div class="near-code-row">
-            <button class="btn-primary" id="hotCreateBtn" style="flex:1.2;">生成直连码</button>
-            <button class="btn-ghost" id="hotScanBtn" style="flex:1;">扫码连接</button>
-        </div>
-        <div id="hotQrWrap" class="hot-qr-wrap" hidden>
-            <div id="hotQrCanvas"></div>
-            <div class="hot-qr-tip" id="hotQrTip"></div>
-        </div>
-        <div id="hotConnected" hidden>
-            <div class="field glass-field bt-send-row">
-                <input type="text" id="hotSendInput" placeholder="输入文本，回车发送…" maxlength="500" autocomplete="off">
-            </div>
-            <div class="bt-btn-row">
-                <button class="btn-primary" id="hotSendBtn" style="flex:1;">发送</button>
-                <button class="btn-ghost" id="hotDisconnectBtn" style="flex:1;">断开</button>
-            </div>
-            <div class="bt-rx-log" id="hotRxLog"><div class="bt-rx-title">消息记录</div></div>
-        </div>
-        <div class="confirm-btns">
-            <button class="btn-ghost" id="hotCloseBtn">关闭</button>
-        </div>
-    </div>
+<div class="confirm-card glass" style="max-width:440px;">
+<div class="bt-hero">
+<div class="bt-hero-text">
+<h3>热点直连</h3>
+<div class="bt-hero-sub">离线局域网 P2P · 扫码配对</div>
+</div>
+</div>
+<div class="bt-desc-box">
+<div class="bt-desc-title">完全没网也能互发消息</div>
+<div class="bt-desc-body">两台设备处于<b>同一 Wi-Fi / 热点</b>下，用二维码交换配对信息，<b>无需服务器</b>直接点对点直连。适合断网环境，全浏览器（含 iOS Safari）。</div>
+<div class="bt-desc-steps">
+<span class="bt-step"><b>1</b> 一方「生成直连码」</span>
+<span class="bt-step"><b>2</b> 另一方「扫码连接」后显示应答码</span>
+<span class="bt-step"><b>3</b> 发起方扫码应答码，自动建立直连</span>
+</div>
+</div>
+<div class="bt-status-row"><span class="bt-chip" id="hotStatusChip">待机</span><span class="bt-status" id="hotStatus">生成直连码或扫码连接开始</span></div>
+<div class="near-code-row">
+<button class="btn-primary" id="hotCreateBtn" style="flex:1.2;">生成直连码</button>
+<button class="btn-ghost" id="hotScanBtn" style="flex:1;">扫码连接</button>
+</div>
+<div id="hotQrWrap" class="hot-qr-wrap" hidden>
+<div id="hotQrCanvas"></div>
+<div class="hot-qr-tip" id="hotQrTip"></div>
+</div>
+<div id="hotConnected" hidden>
+<div class="field glass-field bt-send-row">
+<input type="text" id="hotSendInput" placeholder="输入文本，回车发送…" maxlength="500" autocomplete="off">
+</div>
+<div class="bt-btn-row">
+<button class="btn-primary" id="hotSendBtn" style="flex:1;">发送</button>
+<button class="btn-ghost" id="hotDisconnectBtn" style="flex:1;">断开</button>
+</div>
+<div class="bt-rx-log" id="hotRxLog"><div class="bt-rx-title">消息记录</div></div>
+</div>
+<div class="confirm-btns">
+<button class="btn-ghost" id="hotCloseBtn">关闭</button>
+</div>
+</div>
 </div>
 <div id="bubbleDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass" style="max-width:420px;">
-        <h3>选择气泡皮肤</h3>
-        <div class="bubble-grid" id="bubbleGrid">
-            <div class="bubble-option" data-style="default"><div class="bubble-preview bubble-default">默认</div></div>
-            <div class="bubble-option" data-style="gradient"><div class="bubble-preview bubble-gradient">渐变</div></div>
-            <div class="bubble-option" data-style="neon"><div class="bubble-preview bubble-neon">霓虹</div></div>
-            <div class="bubble-option" data-style="paper"><div class="bubble-preview bubble-paper">纸质</div></div>
-            <div class="bubble-option" data-style="glass"><div class="bubble-preview bubble-glass">玻璃</div></div>
-            <div class="bubble-option" data-style="rainbow"><div class="bubble-preview bubble-rainbow">彩虹</div></div>
-        </div>
-        <div class="confirm-btns">
-            <button class="btn-ghost" id="bubbleCancel">关闭</button>
-        </div>
-    </div>
+<div class="confirm-card glass" style="max-width:420px;">
+<h3>选择气泡皮肤</h3>
+<div class="bubble-grid" id="bubbleGrid">
+<div class="bubble-option" data-style="default"><div class="bubble-preview bubble-default">默认</div></div>
+<div class="bubble-option" data-style="gradient"><div class="bubble-preview bubble-gradient">渐变</div></div>
+<div class="bubble-option" data-style="neon"><div class="bubble-preview bubble-neon">霓虹</div></div>
+<div class="bubble-option" data-style="paper"><div class="bubble-preview bubble-paper">纸质</div></div>
+<div class="bubble-option" data-style="glass"><div class="bubble-preview bubble-glass">玻璃</div></div>
+<div class="bubble-option" data-style="rainbow"><div class="bubble-preview bubble-rainbow">彩虹</div></div>
+</div>
+<div class="confirm-btns">
+<button class="btn-ghost" id="bubbleCancel">关闭</button>
+</div>
+</div>
 </div>
 <div id="memoriesDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass" style="max-width:480px;">
-        <h3>去年今日 <span id="memoriesDate" style="font-size:14px;color:var(--ink-3);"></span></h3>
-        <div class="memories-grid" id="memoriesGrid"></div>
-        <div class="confirm-btns">
-            <button class="btn-ghost" id="memoriesClose">关闭</button>
-        </div>
-    </div>
+<div class="confirm-card glass" style="max-width:480px;">
+<h3>去年今日 <span id="memoriesDate" style="font-size:14px;color:var(--ink-3);"></span></h3>
+<div class="memories-grid" id="memoriesGrid"></div>
+<div class="confirm-btns">
+<button class="btn-ghost" id="memoriesClose">关闭</button>
+</div>
+</div>
 </div>
 <div id="imsgInfoDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass imsg-info-card">
-        <div class="confirm-icon" data-icon="brain"></div>
-        <h3>iMessage 信息</h3>
-        <div class="imsg-info-content">
-            <div class="imsg-info-row">
-                <span class="imsg-label">运行时长</span>
-                <span class="imsg-value" id="imsgUptime">计算中...</span>
-            </div>
-            <div class="imsg-thanks">
-                <p>🙏 感谢 <strong>Cloudflare</strong> 提供网站域名与托管支持</p>
-                <p>🙏 感谢 <strong>GitHub</strong> 提供云端数据库支持</p>
-            </div>
-        </div>
-        <div class="confirm-btns">
-            <button class="btn-primary" id="imsgInfoClose">知道了</button>
-        </div>
-    </div>
+<div class="confirm-card glass imsg-info-card">
+<div class="confirm-icon" data-icon="brain"></div>
+<h3>iMessage 信息</h3>
+<div class="imsg-info-content">
+<div class="imsg-info-row">
+<span class="imsg-label">运行时长</span>
+<span class="imsg-value" id="imsgUptime">计算中...</span>
+</div>
+<div class="imsg-thanks">
+<p>🙏 感谢 <strong>Cloudflare</strong> 提供网站域名与托管支持</p>
+<p>🙏 感谢 <strong>GitHub</strong> 提供云端数据库支持</p>
+</div>
+</div>
+<div class="confirm-btns">
+<button class="btn-primary" id="imsgInfoClose">知道了</button>
+</div>
+</div>
 </div>
 <div id="msgContextMenu" class="msg-ctx-menu glass" hidden>
-    <button class="ctx-item" data-action="reply"><span data-icon="reply"></span>回复</button>
-    <button class="ctx-item" data-action="react"><span data-icon="smile"></span>表情</button>
-    <button class="ctx-item" data-action="forward"><span data-icon="forward"></span>转发</button>
-    <button class="ctx-item" data-action="save"><span data-icon="star"></span>收藏</button>
-    <button class="ctx-item" data-action="translate"><span data-icon="globe"></span>翻译</button>
-    <button class="ctx-item" data-action="select"><span data-icon="check"></span>多选</button>
-    <button class="ctx-item ctx-owner" data-action="pin"><span data-icon="pin"></span>置顶</button>
-    <button class="ctx-item ctx-own" data-action="edit"><span data-icon="edit"></span>编辑</button>
-    <button class="ctx-item ctx-own" data-action="recall"><span data-icon="recall"></span>撤回</button>
+<button class="ctx-item" data-action="reply"><span data-icon="reply"></span>回复</button>
+<button class="ctx-item" data-action="react"><span data-icon="smile"></span>表情</button>
+<button class="ctx-item" data-action="forward"><span data-icon="forward"></span>转发</button>
+<button class="ctx-item" data-action="save"><span data-icon="star"></span>收藏</button>
+<button class="ctx-item" data-action="translate"><span data-icon="globe"></span>翻译</button>
+<button class="ctx-item" data-action="select"><span data-icon="check"></span>多选</button>
+<button class="ctx-item ctx-owner" data-action="pin"><span data-icon="pin"></span>置顶</button>
+<button class="ctx-item ctx-own" data-action="edit"><span data-icon="edit"></span>编辑</button>
+<button class="ctx-item ctx-own" data-action="recall"><span data-icon="recall"></span>撤回</button>
 </div>
 <div id="multiSelectBar" class="multi-select-bar glass" hidden>
-    <span class="msb-count" id="msbCount">已选 0 条</span>
-    <div class="msb-actions">
-        <button class="msb-btn" id="msbForward"><span data-icon="forward"></span>转发</button>
-        <button class="msb-btn" id="msbSave"><span data-icon="star"></span>收藏</button>
-        <button class="msb-btn msb-danger" id="msbDelete"><span data-icon="trash"></span>删除</button>
-    </div>
-    <button class="msb-cancel" id="msbCancel">取消</button>
+<span class="msb-count" id="msbCount">已选 0 条</span>
+<div class="msb-actions">
+<button class="msb-btn" id="msbForward"><span data-icon="forward"></span>转发</button>
+<button class="msb-btn" id="msbSave"><span data-icon="star"></span>收藏</button>
+<button class="msb-btn msb-danger" id="msbDelete"><span data-icon="trash"></span>删除</button>
+</div>
+<button class="msb-cancel" id="msbCancel">取消</button>
 </div>
 <div id="textEffectLayer" class="text-effect-layer" hidden></div>
 <div id="reactionPicker" class="reaction-picker glass" hidden>
-    <button class="rp-emoji" data-emoji="👍">👍</button>
-    <button class="rp-emoji" data-emoji="❤️">❤️</button>
-    <button class="rp-emoji" data-emoji="😂">😂</button>
-    <button class="rp-emoji" data-emoji="😮">😮</button>
-    <button class="rp-emoji" data-emoji="😢">😢</button>
-    <button class="rp-emoji" data-emoji="🙏">🙏</button>
-    <button class="rp-emoji" data-emoji="🔥">🔥</button>
-    <button class="rp-emoji" data-emoji="🎉">🎉</button>
+<button class="rp-emoji" data-emoji="👍">👍</button>
+<button class="rp-emoji" data-emoji="❤️">❤️</button>
+<button class="rp-emoji" data-emoji="😂">😂</button>
+<button class="rp-emoji" data-emoji="😮">😮</button>
+<button class="rp-emoji" data-emoji="😢">😢</button>
+<button class="rp-emoji" data-emoji="🙏">🙏</button>
+<button class="rp-emoji" data-emoji="🔥">🔥</button>
+<button class="rp-emoji" data-emoji="🎉">🎉</button>
 </div>
 <div id="replyBar" class="reply-bar glass" hidden>
-    <div class="reply-info">
-        <span class="reply-label">回复</span>
-        <span class="reply-target" id="replyTargetName"></span>
-        <span class="reply-preview" id="replyPreview"></span>
-    </div>
-    <button class="reply-cancel" id="replyCancel">✕</button>
+<div class="reply-info">
+<span class="reply-label">回复</span>
+<span class="reply-target" id="replyTargetName"></span>
+<span class="reply-preview" id="replyPreview"></span>
+</div>
+<button class="reply-cancel" id="replyCancel">✕</button>
 </div>
 <div id="typingIndicator" class="typing-indicator" hidden>
-    <span class="typing-dots"><span></span><span></span><span></span></span>
-    <span id="typingText">有人正在输入...</span>
+<span class="typing-dots"><span></span><span></span><span></span></span>
+<span id="typingText">有人正在输入...</span>
 </div>
 <div id="profileCard" class="confirm-overlay" hidden>
-    <div class="confirm-card glass profile-card-modal">
-        <div class="pc-avatar" id="pcAvatar">😀</div>
-        <h3 id="pcNickname">用户</h3>
-        <div class="pc-info">
-            <div class="pc-row"><span>手机号</span><span id="pcPhone"></span></div>
-            <div class="pc-row"><span>邮箱</span><span id="pcEmail">未设置</span></div>
-            <div class="pc-row"><span>加入群聊</span><span id="pcGroupCount">0</span></div>
-            <div class="pc-row"><span>注册时间</span><span id="pcCreatedAt"></span></div>
-        </div>
-        <div class="pc-groups" id="pcGroups"></div>
-        <div class="confirm-btns">
-            <button class="btn-primary" id="pcClose">关闭</button>
-        </div>
-    </div>
+<div class="confirm-card glass profile-card-modal">
+<div class="pc-avatar" id="pcAvatar">😀</div>
+<h3 id="pcNickname">用户</h3>
+<div class="pc-info">
+<div class="pc-row"><span>手机号</span><span id="pcPhone"></span></div>
+<div class="pc-row"><span>邮箱</span><span id="pcEmail">未设置</span></div>
+<div class="pc-row"><span>加入群聊</span><span id="pcGroupCount">0</span></div>
+<div class="pc-row"><span>注册时间</span><span id="pcCreatedAt"></span></div>
+</div>
+<div class="pc-groups" id="pcGroups"></div>
+<div class="confirm-btns">
+<button class="btn-primary" id="pcClose">关闭</button>
+</div>
+</div>
 </div>
 <div id="searchPanel" class="search-panel glass" hidden>
-    <div class="sp-header">
-        <input type="text" id="searchInput" placeholder="搜索消息..." class="sp-input">
-        <button class="sp-close" id="searchClose">✕</button>
-    </div>
-    <div class="sp-results" id="searchResults"></div>
+<div class="sp-header">
+<input type="text" id="searchInput" placeholder="搜索消息..." class="sp-input">
+<button class="sp-close" id="searchClose">✕</button>
+</div>
+<div class="sp-results" id="searchResults"></div>
 </div>
 <div id="forwardDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass">
-        <h3>转发到</h3>
-        <div class="forward-list" id="forwardList"></div>
-        <div class="confirm-btns">
-            <button class="btn-ghost" id="forwardCancel">取消</button>
-        </div>
-    </div>
+<div class="confirm-card glass">
+<h3>转发到</h3>
+<div class="forward-list" id="forwardList"></div>
+<div class="confirm-btns">
+<button class="btn-ghost" id="forwardCancel">取消</button>
+</div>
+</div>
 </div>
 <div id="qrDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass">
-        <h3 id="qrGroupName">群聊邀请</h3>
-        <div class="qr-display" id="qrDisplay"></div>
-        <p class="qr-code-text">邀请码：<strong id="qrCodeText"></strong></p>
-        <div class="confirm-btns">
-            <button class="btn-primary" id="qrClose">关闭</button>
-        </div>
-    </div>
+<div class="confirm-card glass">
+<h3 id="qrGroupName">群聊邀请</h3>
+<div class="qr-display" id="qrDisplay"></div>
+<p class="qr-code-text">邀请码：<strong id="qrCodeText"></strong></p>
+<div class="confirm-btns">
+<button class="btn-primary" id="qrClose">关闭</button>
+</div>
+</div>
 </div>
 <div id="announcementDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass">
-        <h3>群公告</h3>
-        <textarea id="announcementInput" class="ann-input" placeholder="输入群公告内容..." rows="4"></textarea>
-        <div class="confirm-btns">
-            <button class="btn-ghost" id="annClear">清除公告</button>
-            <button class="btn-ghost" id="annCancel">取消</button>
-            <button class="btn-primary" id="annSave">保存</button>
-        </div>
-    </div>
+<div class="confirm-card glass">
+<h3>群公告</h3>
+<textarea id="announcementInput" class="ann-input" placeholder="输入群公告内容..." rows="4"></textarea>
+<div class="confirm-btns">
+<button class="btn-ghost" id="annClear">清除公告</button>
+<button class="btn-ghost" id="annCancel">取消</button>
+<button class="btn-primary" id="annSave">保存</button>
+</div>
+</div>
 </div>
 <div id="membersDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass" style="max-width:380px;">
-        <h3>群成员 <span id="membersCount" style="font-size:14px;color:var(--ink-3);"></span></h3>
-        <div class="members-list" id="membersList"></div>
-        <div class="confirm-btns">
-            <button class="btn-primary" id="membersClose">关闭</button>
-        </div>
-    </div>
+<div class="confirm-card glass" style="max-width:380px;">
+<h3>群成员 <span id="membersCount" style="font-size:14px;color:var(--ink-3);"></span></h3>
+<div class="members-list" id="membersList"></div>
+<div class="confirm-btns">
+<button class="btn-primary" id="membersClose">关闭</button>
+</div>
+</div>
 </div>
 <div id="editGroupDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass">
-        <h3>编辑群信息</h3>
-        <div style="margin:12px 0;">
-            <label style="font-size:13px;color:var(--ink-2);">群名称</label>
-            <input type="text" id="editGroupName" class="sp-input" style="width:100%;margin-top:6px;">
-        </div>
-        <div style="margin:12px 0;">
-            <label style="font-size:13px;color:var(--ink-2);">群头像 (emoji)</label>
-            <input type="text" id="editGroupAvatar" class="sp-input" style="width:100%;margin-top:6px;" maxlength="4">
-        </div>
-        <div class="confirm-btns">
-            <button class="btn-ghost" id="editGroupCancel">取消</button>
-            <button class="btn-primary" id="editGroupSave">保存</button>
-        </div>
-    </div>
+<div class="confirm-card glass">
+<h3>编辑群信息</h3>
+<div style="margin:12px 0;">
+<label style="font-size:13px;color:var(--ink-2);">群名称</label>
+<input type="text" id="editGroupName" class="sp-input" style="width:100%;margin-top:6px;">
+</div>
+<div style="margin:12px 0;">
+<label style="font-size:13px;color:var(--ink-2);">群头像 (emoji)</label>
+<input type="text" id="editGroupAvatar" class="sp-input" style="width:100%;margin-top:6px;" maxlength="4">
+</div>
+<div class="confirm-btns">
+<button class="btn-ghost" id="editGroupCancel">取消</button>
+<button class="btn-primary" id="editGroupSave">保存</button>
+</div>
+</div>
 </div>
 <div id="pinnedDialog" class="confirm-overlay" hidden>
-    <div class="confirm-card glass" style="max-width:400px;">
-        <h3>置顶消息</h3>
-        <div class="pinned-list" id="pinnedList"></div>
-        <div class="confirm-btns">
-            <button class="btn-primary" id="pinnedClose">关闭</button>
-        </div>
-    </div>
+<div class="confirm-card glass" style="max-width:400px;">
+<h3>置顶消息</h3>
+<div class="pinned-list" id="pinnedList"></div>
+<div class="confirm-btns">
+<button class="btn-primary" id="pinnedClose">关闭</button>
+</div>
+</div>
 </div>
 <div id="mentionPicker" class="mention-picker glass" hidden>
-    <div class="mp-list" id="mentionList"></div>
+<div class="mp-list" id="mentionList"></div>
 </div>
 <script src="icons.js" defer></script>
 <script src="script.js" defer></script>
