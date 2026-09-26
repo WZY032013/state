@@ -51,3 +51,17 @@ body.dark input::placeholder,body.dark textarea::placeholder{color:rgba(235,235,
 /* iOS 安全区适配补充（刘海屏） */
 .auth-screen{padding-top:env(safe-area-inset-top,0);padding-bottom:env(safe-area-inset-bottom,0)}
 #messages{padding-bottom:calc(20px + env(safe-area-inset-bottom,0))}
+
+/* ============ 覆盖层 6：登录页可滑动 + 多功能菜单 4×2 网格 + 通话音频 ============ */
+/* 登录页：flex 居中改为 margin:auto 居中，内容超高时可滚动（修复无法滑动） */
+.auth-screen{align-items:flex-start;justify-content:flex-start}
+.auth-card{margin:auto}
+/* 多功能 + 菜单：微信式 4 列网格（自适应屏幕），图标在上文字在下 */
+.multi-menu{left:12px !important;right:12px !important;width:auto !important;display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr)) !important;gap:5px !important;padding:10px !important;min-width:0 !important;max-width:480px !important}
+.multi-menu-item{flex-direction:column !important;gap:5px !important;padding:12px 2px 10px !important;border-radius:14px !important;background:rgba(127,127,127,.08) !important;white-space:normal !important;text-align:center !important;justify-content:center;transition:background .15s,transform .1s}
+body.dark .multi-menu-item{background:rgba(255,255,255,.07)}
+.multi-menu-item:active{background:rgba(127,127,127,.16) !important;transform:scale(.95)}
+.mm-icon{font-size:22px !important;line-height:1}
+.mm-label{font-size:11px !important;white-space:nowrap}
+/* 通话远程音频隐藏 */
+#callRemoteAudio{display:none}

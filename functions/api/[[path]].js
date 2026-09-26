@@ -949,8 +949,9 @@ async function handleStartCall(env, user, code, body) {
   const existing = call.participants.find(p => p.phone === user.phone);
   if (existing) {
     existing.lastSeen = Date.now();
+    if (body.signal !== undefined) existing.signal = body.signal;
   } else {
-    call.participants.push({ phone: user.phone, nickname: user.nickname, avatar: user.avatar, lastSeen: Date.now() });
+    call.participants.push({ phone: user.phone, nickname: user.nickname, avatar: user.avatar, lastSeen: Date.now(), signal: body.signal !== undefined ? body.signal : undefined });
   }
   await env.DB.prepare(
     'INSERT OR REPLACE INTO calls (groupCode, type, startedBy, startedAt, participants) VALUES (?,?,?,?,?)'
