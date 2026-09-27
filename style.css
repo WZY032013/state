@@ -29,42 +29,18 @@ input::placeholder,textarea::placeholder{color:rgba(60,60,67,.38)}body.dark inpu
 .offline-banner{position:fixed;top:0;left:0;right:0;z-index:260;display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 12px;padding-top:calc(8px + env(safe-area-inset-top,0));background:rgba(255,149,0,.14);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border-bottom:1px solid rgba(255,149,0,.25);color:var(--ink);font-size:12.5px;font-weight:600;letter-spacing:.2px}.offline-banner .ob-dot{width:8px;height:8px;border-radius:50%;background:#FF9500;animation:obPulse 1.2s ease-in-out infinite}@keyframes obPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.8)}}@media (prefers-reduced-motion:reduce){.offline-banner .ob-dot{animation:none}}/* ============ 覆盖层 9：热点直连（离线扫码 P2P） ============ */
 .hot-qr-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;margin:14px 0 6px;padding:14px;background:rgba(255,255,255,.6);border:1px solid var(--hairline,#00000014);border-radius:18px}.hot-qr-wrap canvas{max-width:100%;height:auto;border-radius:12px}.hot-qr-tip{font-size:12px;color:var(--sub,#8a8a8e);text-align:center;line-height:1.5}.hot-line{padding:7px 10px;font-size:14px;line-height:1.5;border-radius:10px;margin:3px 0;background:rgba(127,127,127,.08)}.hot-line .hot-who{font-weight:600;color:var(--tint,#007AFF)}@media (prefers-color-scheme:dark){.hot-qr-wrap{background:rgba(40,40,44,.55)}}
 
-/* 覆盖层 10：iMessage 风格精细打磨（仅改视觉，零功能删除；气泡皮肤系统保留） */
-/* 聊天区：纯色背景（iMessage 式），消息列表紧凑 */
-.chat-main{background:#fff}
+/* 覆盖层 11：iMessage 气泡精细优化（仅聊天区内部，不动全局样式） */
+/* 消息列表：更紧凑的 iMessage 节奏 */
 .messages{padding:12px 10px 8px;gap:2px}
-/* 导航栏：毛玻璃 + hairline 分割线（iMessage 顶栏） */
-.chat-header{border-bottom:0.5px solid rgba(0,0,0,.08);box-shadow:none;padding:6px 8px}
-.chat-header .back-btn{font-size:26px;font-weight:500;margin-right:2px;opacity:.9}
-.chat-header .ch-avatar{width:34px;height:34px;font-size:16px}
-.chat-header .ch-name{font-size:16.5px;font-weight:700;letter-spacing:-.2px}
-.chat-header .ch-status{font-size:11.5px;opacity:.7}
-/* 输入栏：iMessage 式（浅灰底 + hairline 顶线 + 白底圆角输入框） */
-.composer{border-top:0.5px solid rgba(0,0,0,.08);border-radius:0;background:rgba(242,242,247,.92);-webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);padding:8px 10px 10px;gap:8px;box-shadow:none}
-.composer-input{background:#fff;border:0.5px solid rgba(0,0,0,.06);border-radius:19px;padding:7px 16px;font-size:16px;line-height:1.4;box-shadow:0 1px 3px rgba(0,0,0,.04) inset;min-height:36px}
-.composer-btn{border-radius:50%;background:rgba(120,120,128,.14);width:34px;height:34px}
-.send-btn{background:linear-gradient(180deg,#2BA6FF,#0784F6);box-shadow:0 2px 8px rgba(11,110,220,.35)}
-/* 气泡：iMessage 大圆角 + 尾部小尖角（默认皮肤；bubble-* 皮肤不受影响） */
-.msg-row.me .msg-bubble:not(.bubble-gradient):not(.bubble-neon):not(.bubble-paper):not(.bubble-glass):not(.bubble-rainbow){border-radius:18px 18px 8px 18px;box-shadow:0 1px 3px rgba(0,0,0,.12);padding:9px 14px;font-size:15.5px;line-height:1.42;letter-spacing:-.1px;position:relative}
-.msg-row.me .msg-bubble:not(.bubble-gradient):not(.bubble-neon):not(.bubble-paper):not(.bubble-glass):not(.bubble-rainbow)::after{content:"";position:absolute;bottom:0;right:-5px;width:10px;height:10px;background:inherit;clip-path:polygon(0 0,100% 0,100% 100%);border-bottom-right-radius:3px}
-.msg-row.other .msg-bubble{border-radius:18px 18px 18px 8px;background:rgba(229,229,234,.96);color:#1c1c1e;box-shadow:0 1px 2px rgba(0,0,0,.05);padding:9px 14px;font-size:15.5px;line-height:1.42;letter-spacing:-.1px;position:relative}
-.msg-row.other .msg-bubble::after{content:"";position:absolute;bottom:0;left:-5px;width:10px;height:10px;background:rgba(229,229,234,.96);clip-path:polygon(0 0,100% 0,0 100%);border-bottom-left-radius:3px}
-/* 群聊对方昵称（iMessage 式小字） */
-.msg-row.other .msg-sender{visibility:visible;font-size:11.5px;font-weight:600;color:rgba(60,60,67,.55);margin:0 0 2px 6px}
-/* 时间戳：气泡内右下，更轻 */
+/* 自己气泡：大圆角 + 右下小角 + 尾巴尖角（默认皮肤；皮肤系统不受影响） */
+.msg-row.me .msg-bubble:not(.bubble-gradient):not(.bubble-neon):not(.bubble-paper):not(.bubble-glass):not(.bubble-rainbow){border-radius:18px 18px 8px 18px;padding:9px 14px;font-size:15.5px;line-height:1.42;letter-spacing:-.1px;position:relative}
+.msg-row.me .msg-bubble:not(.bubble-gradient):not(.bubble-neon):not(.bubble-paper):not(.bubble-glass):not(.bubble-rainbow)::after{content:"";position:absolute;bottom:0;right:-5px;width:10px;height:10px;background:inherit;clip-path:polygon(0 0,100% 0,100% 100%);border-bottom-right-radius:3px;pointer-events:none}
+/* 对方气泡：浅灰 + 左下小角 + 尾巴尖角 */
+.msg-row.other .msg-bubble{border-radius:18px 18px 18px 8px;background:rgba(229,229,234,.96);color:#1c1c1e;padding:9px 14px;font-size:15.5px;line-height:1.42;letter-spacing:-.1px;position:relative}
+.msg-row.other .msg-bubble::after{content:"";position:absolute;bottom:0;left:-5px;width:10px;height:10px;background:rgba(229,229,234,.96);clip-path:polygon(0 0,100% 0,0 100%);border-bottom-left-radius:3px;pointer-events:none}
+/* 气泡内文字与时间戳：更 iOS 的排版 */
 .msg-bubble .msg-time{font-size:10px;opacity:.62;margin-top:3px}
-/* 头像：iMessage 紧凑 30px */
-.msg-avatar{width:30px;height:30px;font-size:15px}
-/* 输入栏内 + 菜单与表情面板（保持玻璃但更收敛） */
-.emoji-panel,.multi-menu{border-radius:16px;border:0.5px solid rgba(0,0,0,.06)}
 @media(prefers-color-scheme:dark){
-.chat-main{background:#000}
-.composer{background:rgba(28,28,30,.9);border-top:0.5px solid rgba(255,255,255,.12)}
-.composer-input{background:#1c1c1e;border:0.5px solid rgba(255,255,255,.12);color:#fff}
-.composer-btn{background:rgba(120,120,128,.28)}
 .msg-row.other .msg-bubble{background:rgba(58,58,60,.92);color:#fff}
 .msg-row.other .msg-bubble::after{background:rgba(58,58,60,.92)}
-.msg-row.other .msg-sender{color:rgba(235,235,245,.5)}
-.chat-header{border-bottom:0.5px solid rgba(255,255,255,.12)}
-.msg-avatar{background:rgba(255,255,255,.12)}
 }
