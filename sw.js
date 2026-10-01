@@ -1,5 +1,5 @@
-/* Stating Service Worker v4: 预缓存关键资源 + 动态库（扫码/热点/地图）+ 静态资源 SWR + 网络优先 HTML + Push */
-const CACHE_NAME = 'stating-cache-v4';
+/* Stating Service Worker v5: 预缓存关键资源 + 动态库（扫码/热点/地图）+ 静态资源 SWR + 网络优先 HTML + Push */
+const CACHE_NAME = 'stating-cache-v5';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
