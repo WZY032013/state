@@ -26,7 +26,7 @@ async function sendText() {
   } catch (err) { toast(err.message, 'error'); }
 }
 
-async function uploadFile() {
+async function uploadFile(file) {
   const dataUrl = await new Promise((res, rej) => {
     const r = new FileReader();
     r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file);
