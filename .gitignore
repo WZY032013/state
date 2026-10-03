@@ -1,0 +1,21 @@
+# Cloudflare / Wrangler generated state
+.wrangler/
+node_modules/
+dist/
+
+# IDE / editor
+.trae/
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# logs, previews and temporary probes
+*.log
+.preview/
+_*test.html
+_probe.html
+audit*.mjs
+audit_out.txt
