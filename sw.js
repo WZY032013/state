@@ -1,10 +1,17 @@
-/* Stating Service Worker v6 — 极简：仅预缓存应用外壳，静态资源 SWR，HTML 网络优先 */
-const CACHE_NAME = 'stating-shell-v6';
+/* Stating Service Worker v7 — 极简：仅预缓存应用外壳，静态资源 SWR，HTML 网络优先 */
+const CACHE_NAME = 'stating-shell-v7';
 const SHELL = [
   '/',
   '/index.html',
   '/style.css',
-  '/script.js',
+  '/js/icons.js',
+  '/js/core.js',
+  '/js/auth.js',
+  '/js/room.js',
+  '/js/send.js',
+  '/js/groups.js',
+  '/js/social.js',
+  '/js/main.js',
   '/manifest.webmanifest',
   '/icons/icon-192.png',
   '/icons/icon-512.png',

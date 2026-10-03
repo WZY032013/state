@@ -150,42 +150,6 @@
             <div class="group-rows" id="gateGroups"></div>
           </div>
         </div>
-
-        <!-- 群房间 -->
-        <div class="room" id="room" hidden>
-          <div class="announce-bar" id="announceBar" hidden>
-            <span data-icon="megaphone" class="announce-icon"></span>
-            <p class="announce-text" id="announceText"></p>
-            <button class="announce-close" id="announceClose" aria-label="关闭公告"><span data-icon="xmark"></span></button>
-          </div>
-          <div class="pinned-bar" id="pinnedBar" hidden>
-            <span data-icon="pin" class="pinned-icon"></span>
-            <button class="pinned-text" id="pinnedJump"><span class="pinned-label">置顶消息</span><span class="pinned-content" id="pinnedContent"></span></button>
-            <button class="announce-close" id="pinnedClose" aria-label="取消置顶"><span data-icon="xmark"></span></button>
-          </div>
-          <div class="messages" id="messages" aria-live="polite"></div>
-          <div class="typing" id="typing" hidden></div>
-
-          <!-- 输入区 -->
-          <div class="composer">
-            <div class="composer-sheet glass glass-pill" id="composerSheet">
-              <button class="icon-btn" id="plusBtn" aria-label="更多" aria-expanded="false"><span data-icon="plus"></span></button>
-              <div class="composer-input">
-                <textarea id="msgInput" rows="1" placeholder="iMessage" enterkeyhint="send"></textarea>
-              </div>
-              <button class="icon-btn mic-btn" id="micBtn" aria-label="语音"><span data-icon="mic"></span></button>
-              <button class="icon-btn send-btn" id="sendBtn" hidden aria-label="发送"><span data-icon="send"></span></button>
-            </div>
-            <!-- 极简 + 菜单 -->
-            <div class="plus-menu glass glass-menu" id="plusMenu" hidden>
-              <button class="pm-item" id="pmImage"><span class="pm-icon" data-icon="photo"></span><span class="pm-label">照片</span></button>
-              <button class="pm-item" id="pmCamera"><span class="pm-icon" data-icon="camera"></span><span class="pm-label">拍摄</span></button>
-              <button class="pm-item" id="pmVoice"><span class="pm-icon" data-icon="waveform"></span><span class="pm-label">语音</span></button>
-            </div>
-            <input type="file" id="fileImage" accept="image/*" hidden>
-            <input type="file" id="fileCamera" accept="image/*" capture="environment" hidden>
-          </div>
-        </div>
       </section>
 
       <!-- 用户 -->
@@ -274,6 +238,42 @@
       </section>
     </main>
 
+    <!-- 群房间（独立于标签视图，任意页面/深链均可全屏打开） -->
+    <div class="room" id="room" hidden>
+      <div class="announce-bar" id="announceBar" hidden>
+        <span data-icon="megaphone" class="announce-icon"></span>
+        <p class="announce-text" id="announceText"></p>
+        <button class="announce-close" id="announceClose" aria-label="关闭公告"><span data-icon="xmark"></span></button>
+      </div>
+      <div class="pinned-bar" id="pinnedBar" hidden>
+        <span data-icon="pin" class="pinned-icon"></span>
+        <button class="pinned-text" id="pinnedJump"><span class="pinned-label">置顶消息</span><span class="pinned-content" id="pinnedContent"></span></button>
+        <button class="announce-close" id="pinnedClose" aria-label="取消置顶"><span data-icon="xmark"></span></button>
+      </div>
+      <div class="messages" id="messages" aria-live="polite"></div>
+      <div class="typing" id="typing" hidden></div>
+
+      <!-- 输入区 -->
+      <div class="composer">
+        <div class="composer-sheet glass glass-pill" id="composerSheet">
+          <button class="icon-btn" id="plusBtn" aria-label="更多" aria-expanded="false"><span data-icon="plus"></span></button>
+          <div class="composer-input">
+            <textarea id="msgInput" rows="1" placeholder="iMessage" enterkeyhint="send"></textarea>
+          </div>
+          <button class="icon-btn mic-btn" id="micBtn" aria-label="语音"><span data-icon="mic"></span></button>
+          <button class="icon-btn send-btn" id="sendBtn" hidden aria-label="发送"><span data-icon="send"></span></button>
+        </div>
+        <!-- 极简 + 菜单 -->
+        <div class="plus-menu glass glass-menu" id="plusMenu" hidden>
+          <button class="pm-item" id="pmImage"><span class="pm-icon" data-icon="photo"></span><span class="pm-label">照片</span></button>
+          <button class="pm-item" id="pmCamera"><span class="pm-icon" data-icon="camera"></span><span class="pm-label">拍摄</span></button>
+          <button class="pm-item" id="pmVoice"><span class="pm-icon" data-icon="waveform"></span><span class="pm-label">语音</span></button>
+        </div>
+        <input type="file" id="fileImage" accept="image/*" hidden>
+        <input type="file" id="fileCamera" accept="image/*" capture="environment" hidden>
+      </div>
+    </div>
+
     <!-- 底部玻璃标签栏 -->
     <nav class="tabbar glass glass-pill" aria-label="主导航">
       <button class="tab is-active" data-nav="home"><span data-icon="house"></span><span class="tab-label">首页</span></button>
@@ -287,6 +287,14 @@
   <div class="overlay-root" id="overlayRoot"></div>
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
 
-  <script src="script.js" defer></script>
+  <!-- 应用逻辑：按依赖顺序加载的多个经典脚本 -->
+  <script src="js/icons.js" defer></script>
+  <script src="js/core.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/room.js" defer></script>
+  <script src="js/send.js" defer></script>
+  <script src="js/groups.js" defer></script>
+  <script src="js/social.js" defer></script>
+  <script src="js/main.js" defer></script>
 </body>
 </html>
