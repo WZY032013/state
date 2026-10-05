@@ -14,8 +14,11 @@
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const saveData = !!(navigator.connection && navigator.connection.saveData);
   const mem = navigator.deviceMemory || 4;
-  // 移动端默认降级（plus 镜头只给桌面/平板）；低内存/省流/减弱动效同降
-  const plusAllowed = !coarse && !narrow && !reduce && !saveData && mem >= 4;
+  // 默认关闭 WebGL 真折射（性能优先走 CSS 玻璃）；仅 URL 显式 ?lens=1 且桌面 + 8 核以上才启用
+  const lensOptIn = /[?&]lens=1/.test(location.search);
+  const cores = navigator.hardwareConcurrency || 1;
+  const plusAllowed = lensOptIn && !coarse && !narrow && !reduce && !saveData && mem >= 4 && cores >= 8;
+  console.info('[liquid-glass lens] ' + (plusAllowed ? 'enabled (opt-in via ?lens=1)' : 'disabled → CSS glass fallback'));
 
   // 多源兜底：仅 esm 分发（项目内无 liquidGL 本地副本、禁止 npm install），
   // 依次回退 jsDelivr → unpkg → fastly，任一失败自动落 CSS 档（lg-no-lens）

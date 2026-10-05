@@ -1,7 +1,7 @@
 /* Stating Service Worker v8 — Liquid Plus
    外壳/核心脚本：网络优先回退缓存（更新即时可见，免清缓存）
    静态资源：SWR（秒开 + 后台更新）；liquidGL 不预缓存（懒加载） */
-const CACHE_NAME = 'stating-liquid-v9';
+const CACHE_NAME = 'stating-liquid-v10';
 const SHELL = [
   '/',
   '/index.html',

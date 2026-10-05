@@ -62,16 +62,14 @@ body.dark #auth {
   box-shadow:
     inset 0 1px 1px rgba(255,255,255,.7),
     0 18px 50px rgba(14,20,44,.18),
-    0 4px 16px rgba(70,100,190,.16),
-    0 0 0 1px var(--lg-edge);
+    0 4px 16px rgba(70,100,190,.16);
   isolation: isolate;
 }
 body.dark .lg-auth-card {
   box-shadow:
     inset 0 1px 1px rgba(255,255,255,.12),
     0 20px 54px rgba(0,0,0,.55),
-    0 4px 18px rgba(0,0,0,.4),
-    0 0 0 1px var(--lg-edge);
+    0 4px 18px rgba(0,0,0,.4);
 }
 
 /* 登录卡接入 plus 版高光层（与 .glass 一致：::before 静态高光+环境光斑+棱镜色散，::after 动态镜面） */
@@ -221,7 +219,7 @@ body.dark .lg-field {
   padding: 22px; border-radius: 30px;
   background: var(--lg-face-strong);
   -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
-  box-shadow: 0 20px 54px rgba(14,20,44,.25), 0 0 0 1px var(--lg-edge);
+  box-shadow: 0 20px 54px rgba(14,20,44,.25);
   animation: lg-sheet-in .28s var(--lg-ease) both;
 }
 .lg-overlay.closing .lg-scrim { animation: lg-fade .18s ease reverse both; }
@@ -248,7 +246,7 @@ body.dark .lg-field {
   color: var(--lg-ink);
   background: var(--lg-face-strong);
   -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
-  box-shadow: 0 10px 30px rgba(14,20,44,.18), 0 0 0 1px var(--lg-edge);
+  box-shadow: 0 10px 30px rgba(14,20,44,.18);
   animation: lg-toast-in .26s var(--lg-ease) both;
   transition: opacity .2s, transform .2s;
 }
@@ -289,12 +287,12 @@ body.dark .bio-gate { background: rgba(10, 12, 18, .72); }
   padding: 34px 26px 28px;
   border-radius: 30px;
   background: var(--lg-face-strong, rgba(255,255,255,.72));
-  box-shadow: 0 24px 60px rgba(14,20,44,.22), 0 0 0 1px rgba(255,255,255,.8);
+  box-shadow: 0 24px 60px rgba(14,20,44,.22);
   animation: lg-sheet-in .35s cubic-bezier(.25,.85,.25,1) both;
 }
 body.dark .bio-card {
   background: rgba(20,23,30,.72);
-  box-shadow: 0 24px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.14);
+  box-shadow: 0 24px 60px rgba(0,0,0,.6);
   color: #f2f5fa;
 }
 .bio-glyph {
@@ -606,35 +604,17 @@ body.dark #profileView .profile-row {
   /* 要素5 高光：顶部高光带强度 0.72、下延至 24%；动态镜面高光 */
   --lg2-spec: linear-gradient(115deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.14) 24%, transparent 46%);
   --lg2-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 15%), rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 58%);
-  /* 要素5 高光色散：顶部纯白主线 + 暖红/青绿/冷蓝三色线（1px / 2px 单侧压线，发丝棱镜不移位） */
-  --lg2-prism:
-    inset 0 1px 0 rgba(255,255,255,.95),
-    inset 0 1px 0 1px rgba(255,150,160,.5),
-    inset 0 2px 0 2px rgba(120,235,210,.45),
-    inset 0 4px 0 2px rgba(120,160,255,.48);
-  /* 要素6 环境色：青→蓝→紫→粉+暖红平衡（暖化，避免整体过冷） */
-  --lg2-ambient:
-    radial-gradient(130% 95% at 12% -6%, rgba(96,190,255,.22) 0%, rgba(96,190,255,0) 42%),
-    radial-gradient(125% 90% at 94% 4%, rgba(120,90,255,.18) 0%, rgba(120,90,255,0) 44%),
-    radial-gradient(130% 100% at 98% 92%, rgba(255,110,190,.18) 0%, rgba(255,110,190,0) 46%),
-    radial-gradient(120% 95% at 4% 72%, rgba(255,110,130,.16) 0%, rgba(255,110,130,0) 44%);
-  /* 折射内光：上缘蓝紫、左内缘、下缘粉调 + 底部折射（增强实体感） */
+  /* 要素5 高光：仅顶部 1px 白高光内缘线（删彩色棱镜色散，清爽化） */
+  --lg2-prism: inset 0 1px 0 rgba(255,255,255,.85);
+  /* 要素6 环境色：极淡单一冷调（大幅削弱彩光斑） */
+  --lg2-ambient: radial-gradient(120% 60% at 22% -8%, rgba(130,150,220,.08) 0%, rgba(130,150,220,0) 50%);
+  /* 折射内光：内缘白线 + 极淡底缘 */
   --lg2-bevel:
-    inset 0 1px 1px rgba(255,255,255,.6),
-    inset 1px 0 1px rgba(255,255,255,.35),
-    inset 0 -1px 2px rgba(150,120,255,.06),
-    inset 0 -2px 3px rgba(120,90,200,.10),
-    inset 0 -1px 0 rgba(20,35,70,.06);
-  /* 要素7 阴影三层：接触 + 环境 + 键光（加深、环境改紫调、键光紫蓝粉混合） */
-  --lg2-shot:
-    0 1px 2px rgba(20,36,80,.13),
-    0 8px 24px rgba(70,60,140,.16),
-    0 24px 60px rgba(120,75,180,.25);
-  --lg2-shot-deep:
-    0 1px 2px rgba(20,36,80,.14),
-    0 10px 30px rgba(80,65,155,.19),
-    0 40px 90px rgba(135,85,195,.26),
-    0 26px 64px rgba(240,105,165,.15);
+    inset 0 1px 1px rgba(255,255,255,.55),
+    inset 0 -1px 0 rgba(20,35,70,.05);
+  /* 要素7 阴影：单层柔和（去键光彩色大阴影） */
+  --lg2-shot: 0 2px 8px rgba(15,20,45,.10);
+  --lg2-shot-deep: 0 2px 10px rgba(15,20,45,.12);
   /* 要素8 融合动画曲线 */
   --lg2-fuse: cubic-bezier(.34,1.56,.64,1);
   /* 玻璃面取值带蓝紫倾向（提饱和、避免死白） */
@@ -648,30 +628,13 @@ body.dark {
   --glass-border: rgba(255,255,255,.15);
   --lg2-spec: linear-gradient(115deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.09) 18%, transparent 42%);
   --lg2-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 15%), rgba(255,255,255,.20) 0%, rgba(255,255,255,0) 58%);
-  --lg2-prism:
-    inset 0 1px 0 rgba(255,255,255,.5),
-    inset 0 1px 0 1px rgba(255,150,160,.5),
-    inset 0 2px 0 2px rgba(110,235,210,.45),
-    inset 0 4px 0 2px rgba(130,165,255,.48);
-  --lg2-ambient:
-    radial-gradient(130% 95% at 12% -6%, rgba(70,120,255,.18) 0%, rgba(70,120,255,0) 42%),
-    radial-gradient(125% 90% at 100% 8%, rgba(140,80,255,.14) 0%, rgba(140,80,255,0) 44%),
-    radial-gradient(130% 100% at 92% 108%, rgba(255,90,190,.12) 0%, rgba(255,90,190,0) 46%);
+  --lg2-prism: inset 0 1px 0 rgba(255,255,255,.25);
+  --lg2-ambient: radial-gradient(120% 60% at 22% -8%, rgba(100,130,210,.10) 0%, rgba(100,130,210,0) 50%);
   --lg2-bevel:
     inset 0 1px 1px rgba(255,255,255,.08),
-    inset 1px 0 1px rgba(255,255,255,.05),
-    inset 0 -1px 2px rgba(60,40,140,.12),
-    inset 0 -2px 3px rgba(70,60,170,.14),
     inset 0 -1px 0 rgba(0,0,0,.4);
-  --lg2-shot:
-    0 1px 2px rgba(0,0,0,.6),
-    0 8px 24px rgba(0,0,0,.5),
-    0 24px 60px rgba(0,0,0,.58);
-  --lg2-shot-deep:
-    0 1px 2px rgba(0,0,0,.65),
-    0 10px 28px rgba(0,0,0,.58),
-    0 28px 70px rgba(0,0,0,.6),
-    0 18px 42px rgba(30,60,140,.18);
+  --lg2-shot: 0 2px 10px rgba(0,0,0,.45);
+  --lg2-shot-deep: 0 2px 12px rgba(0,0,0,.5);
   --glass-bg: rgba(24,27,40,.56);
   --glass-bg-strong: rgba(22,26,40,.70);
 }
@@ -833,3 +796,117 @@ body.dark.theme-home {
 .auth-more-btn, .scanner-close, .scanner-album, button.glass-pill, .bubble-option {
   touch-action: manipulation;
 }
+
+/* ============================================================
+   Part 8：仿 exe 清爽化整改（去外环 / 主题光斑 / 统一按钮 / 菜单栏 / 输入框）
+   ============================================================ */
+
+/* A. 登录卡去描边外环，改真实 border 承担描边（内外不产生平行弧） */
+.lg-auth-card { border: 1px solid rgba(255,255,255,.9); }
+body.dark .lg-auth-card { border: 1px solid rgba(255,255,255,.16); }
+.lg-sheet, .lg-toast, .bio-card { border: 1px solid rgba(255,255,255,.85); }
+body.dark .lg-sheet, body.dark .lg-toast, body.dark .bio-card { border: 1px solid rgba(255,255,255,.15); }
+
+/* B. 每页主题色光斑：body::before 按 theme-* 切换（浅色淡彩，暗色低明度深底） */
+body:not(.dark).theme-feedback::before {
+  background:
+    radial-gradient(70vw 70vh at 16% 8%, rgba(255,231,168,.55) 0%, rgba(255,231,168,0) 60%),
+    radial-gradient(60vw 60vh at 88% 72%, rgba(255,246,214,.5) 0%, rgba(255,246,214,0) 58%),
+    linear-gradient(160deg, rgba(255,253,242,.9) 0%, rgba(255,248,225,.88) 100%);
+}
+body:not(.dark).theme-profile::before {
+  background:
+    radial-gradient(70vw 70vh at 14% 10%, rgba(228,214,255,.5) 0%, rgba(228,214,255,0) 60%),
+    radial-gradient(60vw 60vh at 86% 78%, rgba(243,236,255,.5) 0%, rgba(243,236,255,0) 58%),
+    linear-gradient(160deg, rgba(250,247,255,.9) 0%, rgba(244,238,255,.88) 100%);
+}
+body:not(.dark).theme-users::before {
+  background:
+    radial-gradient(70vw 70vh at 14% 8%, rgba(207,240,218,.5) 0%, rgba(207,240,218,0) 60%),
+    radial-gradient(60vw 60vh at 86% 76%, rgba(233,248,236,.5) 0%, rgba(233,248,236,0) 58%),
+    linear-gradient(160deg, rgba(246,252,247,.9) 0%, rgba(238,249,241,.88) 100%);
+}
+body:not(.dark).theme-chat::before {
+  background:
+    radial-gradient(70vw 70vh at 14% 8%, rgba(205,229,255,.5) 0%, rgba(205,229,255,0) 60%),
+    radial-gradient(60vw 60vh at 86% 76%, rgba(233,242,255,.5) 0%, rgba(233,242,255,0) 58%),
+    linear-gradient(160deg, rgba(246,250,255,.9) 0%, rgba(238,246,255,.88) 100%);
+}
+body:not(.dark).theme-home::before {
+  background:
+    radial-gradient(55vw 55vh at 12% 8%, rgba(255,231,168,.42) 0%, rgba(255,231,168,0) 56%),
+    radial-gradient(50vw 50vh at 88% 14%, rgba(228,214,255,.4) 0%, rgba(228,214,255,0) 56%),
+    radial-gradient(52vw 52vh at 86% 82%, rgba(207,240,218,.4) 0%, rgba(207,240,218,0) 56%),
+    radial-gradient(50vw 50vh at 10% 82%, rgba(205,229,255,.42) 0%, rgba(205,229,255,0) 56%),
+    linear-gradient(160deg, rgba(248,248,255,.9) 0%, rgba(244,244,252,.88) 100%);
+}
+/* 暗色主题深底光斑层 */
+body.dark::before {
+  background: linear-gradient(160deg, #0c0d12 0%, #0e1016 100%);
+}
+body.dark.theme-feedback::before { background: radial-gradient(70vw 70vh at 16% 8%, rgba(64,56,20,.6) 0%, rgba(64,56,20,0) 60%), #0c0d12; }
+body.dark.theme-profile::before { background: radial-gradient(70vw 70vh at 14% 10%, rgba(44,36,68,.6) 0%, rgba(44,36,68,0) 60%), #0c0d12; }
+body.dark.theme-users::before { background: radial-gradient(70vw 70vh at 14% 8%, rgba(20,52,32,.6) 0%, rgba(20,52,32,0) 60%), #0c0d12; }
+body.dark.theme-chat::before { background: radial-gradient(70vw 70vh at 14% 8%, rgba(18,40,72,.6) 0%, rgba(18,40,72,0) 60%), #0c0d12; }
+
+/* C. 我的页文字按钮统一为等宽大药丸 */
+#profileView .btn-sessions, #profileView .btn-logout, #profileView .btn-delete-account {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  justify-content: center;
+  gap: 8px;
+  color: var(--ink);
+  background: rgba(255,255,255,.55);
+  border: 1px solid rgba(120,130,155,.16);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+  box-shadow: 0 1px 0 rgba(255,255,255,.5) inset;
+  transition: transform .2s var(--lg-ease), background .2s var(--lg-ease);
+}
+body.dark #profileView .btn-sessions, body.dark #profileView .btn-logout, body.dark #profileView .btn-delete-account {
+  background: rgba(40,44,54,.5);
+  border-color: rgba(255,255,255,.08);
+  color: var(--ink);
+}
+
+/* D. 菜单栏 exe 化：导航按钮文字+线条图标，激活态浅灰胶囊，去阴影光晕/扫光 */
+.nav-item {
+  background: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  color: var(--ink-2);
+  transition: background .18s var(--lg-ease), color .18s var(--lg-ease);
+}
+.nav-item:hover { background: rgba(125,135,155,.10) !important; box-shadow: none !important; transform: none !important; }
+.nav-item.active { background: rgba(118,128,150,.16) !important; color: var(--ink) !important; box-shadow: none !important; }
+.nav-item.active::before, .nav-item.active::after, .nav-item:hover::after { display: none !important; }
+body.dark .nav-item.active { background: rgba(255,255,255,.12) !important; color: #fff !important; }
+body.dark .nav-item:hover { background: rgba(255,255,255,.08) !important; }
+/* 右上纯图标小按钮 */
+.topbar-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.topbar-actions button {
+  width: 34px; height: 34px; border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; color: var(--ink-2); cursor: pointer;
+  transition: background .18s var(--lg-ease), color .18s var(--lg-ease);
+}
+.topbar-actions button:hover { background: rgba(125,135,155,.12); color: var(--ink); }
+.topbar-actions button svg { width: 19px; height: 19px; }
+
+/* F. 聊天输入框 iMessage 化：蓝实线框 + 纯白/近黑内容底，无重阴影光斑棱镜 */
+.composer {
+  background: #fff !important;
+  border: 1.5px solid #0A84FF !important;
+  border-radius: 24px;
+  box-shadow: none !important;
+}
+body.dark .composer { background: #1b1d25 !important; border-color: #3d8dff !important; }
+.composer::before, .composer::after { display: none !important; }
+.composer input, .composer textarea { background: transparent; }
+
+/* G c. 大型非交互容器不加 ::after 动态镜面层（省合成） */
+.sec-card::after, .sign-card::after, .confirm-card::after, .admin-panel::after { display: none !important; }

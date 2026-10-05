@@ -6,8 +6,9 @@ function applyLazyImages(e){const t=e||document;t.querySelectorAll&&t.querySelec
   if (!window.matchMedia) return;
   if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  var SEL = '.glass, .glass-pill, .lg-auth-card, .sec-card, .sign-card';
-  var cur = null, raf = 0, pend = false;
+  if (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) return;
+  var SEL = '.glass, .glass-pill, .lg-auth-card';
+  var cur = null, raf = 0, pend = false, lastT = 0;
   var tx = 50, ty = 20, cx = 50, cy = 20;
 
   function clearEl(el) {
@@ -37,9 +38,12 @@ function applyLazyImages(e){const t=e||document;t.querySelectorAll&&t.querySelec
     if (!cur) return;
     var r = cur.getBoundingClientRect();
     if (r.width < 4 || r.height < 4) return;
+    var now = Date.now();
+    if (now - lastT < 50) return;
+    lastT = now;
     var nx = Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100));
     var ny = Math.max(0, Math.min(100, (e.clientY - r.top) / r.height * 100));
-    if (Math.abs(nx - tx) < 0.5 && Math.abs(ny - ty) < 0.5) return;
+    if (Math.abs(nx - tx) < 1 && Math.abs(ny - ty) < 1) return;
     tx = nx; ty = ny;
     schedule();
   }
