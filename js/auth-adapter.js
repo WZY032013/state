@@ -45,6 +45,16 @@
     return data;
   }
 
+  function b64uEnc(buf) {
+    const bytes = new Uint8Array(buf);
+    let s = ''; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function b64uDec(s) {
+    s = String(s).replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    return new Uint8Array(atob(s).split('').map(c => c.charCodeAt(0))).buffer;
+  }
   /* 老版业务逻辑封在 IIFE 闭包内（外部不可达），登录成功写 token 后刷新，
      由老脚本自身的 token 引导完成 /me 校验并进应用（无效则回到登录页） */
   async function enterApp(token) {
@@ -134,30 +144,53 @@
   /* ---------- 忘记密码 ---------- */
   function forgotSheet() {
     openSheet({
-      title: '重置密码',
+      title: '刷脸重置密码',
       bodyHtml: `
         <label class="lg-field"><span class="lg-field-ic" data-lgicon="phone"></span><input type="tel" id="lgFpPhone" placeholder="手机号" maxlength="15"></label>
-        <label class="lg-field"><span class="lg-field-ic" data-lgicon="key"></span><input type="password" id="lgFpKey" placeholder="管理员密钥"></label>
         <label class="lg-field"><span class="lg-field-ic" data-lgicon="lock"></span><input type="password" id="lgFpNew" placeholder="新密码（≥8位，含字母和数字）" maxlength="64"></label>
-        <p class="lg-form-hint">密码重置需管理员密钥；重置后所有设备需重新登录。</p>`,
-      actionsHtml: '<button type="button" class="lg-btn lg-btn-ghost" data-c>取消</button><button type="button" class="lg-btn lg-btn-primary" data-ok>重置</button>',
+        <p class="lg-form-hint">通过本机面容/指纹验证身份后重置密码；所有设备需重新登录。</p>`,
+      actionsHtml: '<button type="button" class="lg-btn lg-btn-ghost" data-c>取消</button><button type="button" class="lg-btn lg-btn-primary" data-ok>刷脸并重置</button>',
       onMount: (ov, close) => {
         ov.querySelector('[data-c]').addEventListener('click', close);
         ov.querySelector('[data-ok]').addEventListener('click', async () => {
           const phone = ov.querySelector('#lgFpPhone').value.trim();
-          const adminKey = ov.querySelector('#lgFpKey').value;
           const newPassword = ov.querySelector('#lgFpNew').value;
+          if (!/^\d{6,15}$/.test(phone)) return toast('请输入正确的手机号', 'error');
+          if (!newPassword || newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/\d/.test(newPassword)) return toast('新密码至少8位且含字母和数字', 'error');
+          const btn = ov.querySelector('[data-ok]'); const old = btn.textContent; btn.classList.add('is-loading'); btn.textContent = '';
           try {
-            const a = await api('recover/admin', { method: 'POST', body: { phone, adminKey } });
-            await api('recover/confirm', { method: 'POST', body: { resetToken: a.resetToken, newPassword } });
-            close(); toast('密码已重置，请登录', 'success');
-          } catch (err) { toast(err.message, 'error'); }
+            const opt = await api('passkey/options', { method: 'POST', body: { mode: 'recover', phone } });
+            if (!opt.ok) throw new Error(opt.error || '无法开始验证');
+            const cred = await navigator.credentials.get({ mediation: 'required', publicKey: {
+              challenge: b64uDec(opt.publicKey.challenge),
+              rpId: opt.publicKey.rpId,
+              timeout: opt.publicKey.timeout || 60000,
+              userVerification: opt.publicKey.userVerification || 'preferred',
+              allowCredentials: (opt.publicKey.allowCredentials || []).map(c => ({ type: c.type, id: b64uDec(c.id) })),
+            } });
+            if (!cred) throw new Error('已取消');
+            const v = await api('passkey/verify', {
+              method: 'POST',
+              body: {
+                challengeId: opt.challengeId, mode: 'recover', id: cred.id, type: cred.type,
+                response: {
+                  clientDataJSON: b64uEnc(cred.response.clientDataJSON),
+                  authenticatorData: b64uEnc(cred.response.authenticatorData),
+                  signature: b64uEnc(cred.response.signature),
+                  userHandle: cred.response.userHandle ? b64uEnc(cred.response.userHandle) : '',
+                },
+              },
+            });
+            if (!v.ok || !v.resetToken) throw new Error(v.error || '面容验证失败');
+            await api('recover/confirm', { method: 'POST', body: { resetToken: v.resetToken, newPassword } });
+            close(); toast('密码已重置，请用新密码登录', 'success');
+          } catch (err) { toast(err.message || '重置失败', 'error'); }
+          finally { btn.classList.remove('is-loading'); btn.textContent = old; }
         });
       },
     });
   }
-
-  /* ---------- 表单 ---------- */
+/* ---------- 表单 ---------- */
   function setMode(mode) {
     const login = mode === 'login';
     $('#lgTabLogin').classList.toggle('is-active', login);
