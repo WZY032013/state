@@ -609,15 +609,15 @@ body.dark #profileView .profile-row {
   --lg2-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 15%), rgba(255,255,255,.36) 0%, rgba(255,255,255,0) 58%);
   /* 要素5 高光色散：顶部白线相邻处 1~2px 暖红/青绿/冷蓝色相线 */
   --lg2-prism:
-    inset 0 1px 0 rgba(255,140,150,.14),
-    inset 0 2px 0 rgba(130,255,220,.11),
-    inset 0 3px 0 rgba(120,160,255,.13);
+    inset 0 1px 0 rgba(255,140,150,.34),
+    inset 0 2px 0 rgba(130,255,220,.30),
+    inset 0 3px 0 rgba(120,160,255,.32);
   /* 要素6 环境色：青→蓝→紫→粉+暖红平衡（暖化，避免整体过冷） */
   --lg2-ambient:
-    radial-gradient(130% 95% at 12% -6%, rgba(96,190,255,.15) 0%, rgba(96,190,255,0) 42%),
-    radial-gradient(125% 90% at 94% 4%, rgba(120,90,255,.12) 0%, rgba(120,90,255,0) 44%),
-    radial-gradient(130% 100% at 98% 92%, rgba(255,110,190,.12) 0%, rgba(255,110,190,0) 46%),
-    radial-gradient(120% 95% at 4% 72%, rgba(255,110,130,.10) 0%, rgba(255,110,130,0) 44%);
+    radial-gradient(130% 95% at 12% -6%, rgba(96,190,255,.22) 0%, rgba(96,190,255,0) 42%),
+    radial-gradient(125% 90% at 94% 4%, rgba(120,90,255,.18) 0%, rgba(120,90,255,0) 44%),
+    radial-gradient(130% 100% at 98% 92%, rgba(255,110,190,.18) 0%, rgba(255,110,190,0) 46%),
+    radial-gradient(120% 95% at 4% 72%, rgba(255,110,130,.16) 0%, rgba(255,110,130,0) 44%);
   /* 折射内光：上缘蓝紫、下缘粉调环境折射 */
   --lg2-bevel:
     inset 0 1px 1px rgba(255,255,255,.6),
@@ -795,9 +795,9 @@ body:not(.dark) .lg-auth-wrap,
 body:not(.dark) .main-app {
   background-color: rgba(236, 238, 252, .75);
   background-image:
-    radial-gradient(72vw 72vh at 14% 6%, rgba(146, 92, 255, .32) 0%, rgba(146, 92, 255, 0) 58%),
-    radial-gradient(68vw 68vh at 88% 14%, rgba(92, 148, 255, .28) 0%, rgba(92, 148, 255, 0) 58%),
-    radial-gradient(70vw 70vh at 84% 86%, rgba(255, 108, 180, .24) 0%, rgba(255, 108, 180, 0) 58%),
-    radial-gradient(64vw 64vh at 8% 84%, rgba(110, 215, 255, .26) 0%, rgba(110, 215, 255, 0) 58%);
+    radial-gradient(72vw 72vh at 14% 6%, rgba(146, 92, 255, .42) 0%, rgba(146, 92, 255, 0) 58%),
+    radial-gradient(68vw 68vh at 88% 14%, rgba(92, 148, 255, .38) 0%, rgba(92, 148, 255, 0) 58%),
+    radial-gradient(70vw 70vh at 84% 86%, rgba(255, 108, 180, .34) 0%, rgba(255, 108, 180, 0) 58%),
+    radial-gradient(64vw 64vh at 8% 84%, rgba(110, 215, 255, .36) 0%, rgba(110, 215, 255, 0) 58%);
   background-repeat: no-repeat;
 }
