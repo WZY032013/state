@@ -1,4 +1,14 @@
-# Stating — Cache-Control
+# Stating — Cache-Control + Security Headers
+
+# 安全 headers (全站生效)
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  X-Frame-Options: SAMEORIGIN
+  Permissions-Policy: geolocation=(self), microphone=(self), camera=(self), fullscreen=(self), picture-in-picture=*, web-share=(self)
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https: wss:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self' blob:; manifest-src 'self'
+
 # 核心文件每次回源验证（ETag/304），更新即时可见，无需手动清缓存
 /
   Cache-Control: public, max-age=0, must-revalidate
