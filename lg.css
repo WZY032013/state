@@ -1,0 +1,496 @@
+/* ============================================================
+   Stating · 新增设计层 lg.css（在 style.css 之后加载）
+   Part 1：新版登录页 #auth（lg- 隔离命名空间）+ 老认证屏隐藏
+   ============================================================ */
+
+/* ---------- 老认证相关容器永久隐藏（功能由 #auth 接管） ---------- */
+#authScreen,
+#adminKeyScreen,
+#deviceCodeModal,
+#passkeyModal,
+#smsModal,
+#wxModal,
+#bioOnboardModal,
+#recoverModal { display: none !important; }
+/* #qrConfirmScreen / #secLogModal 保留（扫码确认 PC 登录、安全日志为登录后功能） */
+
+/* ---------- #auth 元素一律 border-box（老 reset 未保证） ---------- */
+#auth, #auth *, #lgSheetRoot, #lgSheetRoot * { box-sizing: border-box; }
+
+/* ---------- #auth 设计 token（仅登录层，不污染老界面） ---------- */
+#auth {
+  --lg-ink: #15181f;
+  --lg-ink-2: #3a404c;
+  --lg-ink-3: #77808e;
+  --lg-ink-4: #a6adba;
+  --lg-primary: #0a84ff;
+  --lg-primary-grad: linear-gradient(160deg, #5aa6ff 0%, #0a84ff 55%, #0a64e8 100%);
+  --lg-face: rgba(255, 255, 255, .55);
+  --lg-face-strong: rgba(255, 255, 255, .72);
+  --lg-edge: rgba(255, 255, 255, .8);
+  --lg-blur: blur(26px) saturate(176%);
+  --lg-ease: cubic-bezier(.25, .85, .25, 1);
+  color: var(--lg-ink);
+}
+body.dark #auth {
+  --lg-ink: #f2f5fa;
+  --lg-ink-2: #dde3ec;
+  --lg-ink-3: #959eac;
+  --lg-ink-4: #666e7c;
+  --lg-primary: #2f92ff;
+  --lg-primary-grad: linear-gradient(160deg, #3a93ff 0%, #147bf5 55%, #0a5fd0 100%);
+  --lg-face: rgba(24, 27, 34, .56);
+  --lg-face-strong: rgba(20, 23, 30, .72);
+  --lg-edge: rgba(255, 255, 255, .14);
+  --lg-blur: blur(28px) saturate(155%);
+}
+
+.lg-auth-wrap {
+  position: fixed; inset: 0; z-index: 120;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; overflow-y: auto;
+}
+.lg-auth-card {
+  position: relative;
+  width: 100%; max-width: 420px;
+  padding: 26px 24px 24px;
+  border-radius: 30px;
+  background: var(--lg-face-strong);
+  -webkit-backdrop-filter: var(--lg-blur);
+  backdrop-filter: var(--lg-blur);
+  border: .5px solid transparent;
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,.7),
+    0 18px 50px rgba(14,20,44,.18),
+    0 4px 16px rgba(70,100,190,.16),
+    0 0 0 .5px var(--lg-edge);
+  isolation: isolate;
+}
+body.dark .lg-auth-card {
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,.12),
+    0 20px 54px rgba(0,0,0,.55),
+    0 4px 18px rgba(0,0,0,.4),
+    0 0 0 .5px var(--lg-edge);
+}
+
+/* 品牌 */
+.lg-brand { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 20px; }
+.lg-brand-mark {
+  width: 64px; height: 64px; border-radius: 18px;
+  display: block; object-fit: cover;
+  box-shadow: 0 10px 26px rgba(10,110,235,.38);
+}
+.lg-brand-name {
+  font-size: 28px; font-weight: 800; letter-spacing: -.5px;
+  background: linear-gradient(120deg, #2f8bff, #5e7cf0);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* 分段控件 */
+.lg-segment {
+  position: relative; display: flex; padding: 4px; margin-bottom: 18px;
+  border-radius: 999px; background: rgba(120,130,155,.14);
+}
+.lg-seg-item {
+  position: relative; z-index: 2; flex: 1; height: 38px;
+  border-radius: 999px; border: 0; background: none;
+  font-size: 15px; font-weight: 600; color: var(--lg-ink-2);
+  transition: color .2s;
+}
+.lg-seg-item.is-active { color: var(--lg-ink); }
+.lg-seg-thumb {
+  position: absolute; z-index: 1; top: 4px; bottom: 4px; left: 4px;
+  width: calc(50% - 4px); border-radius: 999px;
+  background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  transition: transform .24s var(--lg-ease);
+}
+body.dark .lg-seg-thumb { background: #2a2e38; }
+#lgTabRegister.is-active ~ .lg-seg-thumb { transform: translateX(100%); }
+
+/* 表单 */
+.lg-auth-form { display: flex; flex-direction: column; gap: 12px; }
+.lg-field {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 52px; padding: 0 16px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,.42));
+  box-shadow: inset 0 0 0 .5px rgba(255,255,255,.75), inset 0 -1px 2px rgba(20,30,60,.05);
+  transition: box-shadow .16s;
+}
+body.dark .lg-field {
+  background: linear-gradient(180deg, rgba(40,44,54,.6), rgba(32,36,44,.45));
+  box-shadow: inset 0 0 0 .5px rgba(255,255,255,.1);
+}
+.lg-field:focus-within { box-shadow: 0 0 0 4px rgba(10,132,255,.16), inset 0 0 0 .5px var(--lg-primary); }
+.lg-field-ic { width: 20px; height: 20px; display: inline-flex; color: var(--lg-ink-3); flex: none; }
+.lg-field-ic svg { width: 20px; height: 20px; }
+.lg-field input { flex: 1; min-width: 0; font-size: 16px; color: var(--lg-ink); background: none; border: 0; outline: 0; }
+.lg-field input::placeholder { color: var(--lg-ink-4); }
+
+/* 按钮 */
+.lg-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 12px 22px;
+  border-radius: 999px; border: 0;
+  font-size: 16px; font-weight: 600; letter-spacing: .2px;
+  transition: transform .12s cubic-bezier(.3,.8,.4,1), filter .12s, background .12s;
+  user-select: none; -webkit-tap-highlight-color: transparent; cursor: pointer;
+}
+.lg-btn:active { transform: scale(.95); }
+.lg-btn-primary { background: var(--lg-primary-grad); color: #fff; box-shadow: 0 6px 18px rgba(10,110,235,.32), inset 0 1px 0 rgba(255,255,255,.5); }
+.lg-btn-primary:active { filter: brightness(.96); }
+.lg-btn-ghost {
+  background: var(--lg-face); color: var(--lg-ink);
+  box-shadow: inset 0 0 0 .5px rgba(18,24,40,.08);
+  -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
+}
+.lg-btn-block { width: 100%; }
+.lg-btn[disabled] { opacity: .6; pointer-events: none; }
+.lg-btn.is-loading { position: relative; color: transparent; pointer-events: none; }
+.lg-btn.is-loading::after {
+  content: ""; position: absolute; width: 20px; height: 20px; border-radius: 50%;
+  border: 2.5px solid rgba(255,255,255,.45); border-top-color: #fff;
+  animation: lg-spin .7s linear infinite;
+}
+@keyframes lg-spin { to { transform: rotate(360deg); } }
+
+.lg-btn-text {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 0; background: none; cursor: pointer;
+  color: var(--lg-primary); font-weight: 600; font-size: 13.5px;
+  padding: 6px 8px; border-radius: 10px; white-space: nowrap;
+  transition: transform .12s, background .12s;
+}
+.lg-btn-text:active { transform: scale(.96); }
+.lg-btn-text svg { width: 15px; height: 15px; }
+.lg-auth-alt { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 2px; flex-wrap: wrap; }
+.lg-form-hint { font-size: 12px; color: var(--lg-ink-3); text-align: center; line-height: 1.4; }
+
+/* 头像选择 */
+.lg-avatar-pick { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 4px; }
+.lg-avatar-opt {
+  width: 42px; height: 42px; border-radius: 50%; font-size: 22px;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; cursor: pointer;
+  background: rgba(255,255,255,.55);
+  box-shadow: inset 0 0 0 .5px rgba(18,24,40,.08);
+  transition: transform .12s, box-shadow .12s;
+}
+.lg-avatar-opt:active { transform: scale(.9); }
+.lg-avatar-opt.is-active { box-shadow: 0 0 0 2.5px var(--lg-primary); }
+
+/* ---------- Sheet / QR / Toast（#lgSheetRoot） ---------- */
+#lgSheetRoot { position: fixed; inset: 0; z-index: 130; pointer-events: none; }
+.lg-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; pointer-events: auto; }
+.lg-scrim { position: absolute; inset: 0; background: rgba(10,14,24,.3); animation: lg-fade .2s ease both; }
+.lg-sheet {
+  position: relative; width: 100%; max-width: 420px;
+  max-height: 86vh; max-height: 86dvh; overflow-y: auto;
+  padding: 22px; border-radius: 30px;
+  background: var(--lg-face-strong);
+  -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
+  box-shadow: 0 20px 54px rgba(14,20,44,.25), 0 0 0 .5px var(--lg-edge);
+  animation: lg-sheet-in .28s var(--lg-ease) both;
+}
+.lg-overlay.closing .lg-scrim { animation: lg-fade .18s ease reverse both; }
+.lg-overlay.closing .lg-sheet { animation: lg-sheet-out .18s ease both; }
+@keyframes lg-fade { from { opacity: 0; } }
+@keyframes lg-sheet-in { from { opacity: 0; transform: translateY(18px) scale(.98); } }
+@keyframes lg-sheet-out { to { opacity: 0; transform: translateY(14px) scale(.98); } }
+.lg-grabber { width: 38px; height: 5px; border-radius: 999px; background: var(--lg-ink-4); opacity: .5; margin: -6px auto 14px; }
+.lg-sheet-title { font-size: 19px; font-weight: 800; margin-bottom: 14px; }
+.lg-sheet-body { display: flex; flex-direction: column; gap: 12px; }
+.lg-sheet-actions { display: flex; gap: 10px; margin-top: 6px; }
+.lg-sheet-actions .lg-btn { flex: 1; }
+.lg-qr-stage { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 8px 0; }
+.lg-qr-box { background: #fff; padding: 14px; border-radius: 18px; box-shadow: 0 8px 24px rgba(0,0,0,.12); display: flex; }
+.lg-qr-box svg, .lg-qr-box canvas { display: block; width: 200px; height: 200px; }
+.lg-qr-status { font-size: 14px; color: var(--lg-ink-2); }
+.lg-hint { font-size: 14px; color: var(--lg-ink-3); padding: 40px 10px; }
+
+.lg-toast {
+  align-self: center;
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 18px; margin-top: 8px;
+  border-radius: 999px; font-size: 14px; font-weight: 600;
+  color: var(--lg-ink);
+  background: var(--lg-face-strong);
+  -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
+  box-shadow: 0 10px 30px rgba(14,20,44,.18), 0 0 0 .5px var(--lg-edge);
+  animation: lg-toast-in .26s var(--lg-ease) both;
+  transition: opacity .2s, transform .2s;
+}
+.lg-toast.success { color: #22a850; }
+.lg-toast.error { color: #ff3b30; }
+.lg-toast.out { opacity: 0; transform: translateY(8px); }
+@keyframes lg-toast-in { from { opacity: 0; transform: translateY(12px); } }
+
+@media (max-width: 639px) {
+  .lg-overlay { align-items: flex-end; padding: 0; }
+  .lg-sheet { max-width: 100%; border-radius: 30px 30px 0 0; padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 460px) {
+  .lg-auth-wrap { padding: 14px; }
+  .lg-auth-card { padding: 22px 18px 20px; border-radius: 26px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #auth *, #auth *::before, #auth *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* ============================================================
+   Part 2：每次进入生物门禁 #bioGate
+   ============================================================ */
+.bio-gate {
+  position: fixed; inset: 0; z-index: 500;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(238, 242, 249, .72);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  transition: opacity .4s ease;
+}
+body.dark .bio-gate { background: rgba(10, 12, 18, .72); }
+.bio-gate.bio-hide { opacity: 0; pointer-events: none; }
+.bio-card {
+  width: 100%; max-width: 360px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 34px 26px 28px;
+  border-radius: 30px;
+  background: var(--lg-face-strong, rgba(255,255,255,.72));
+  box-shadow: 0 24px 60px rgba(14,20,44,.22), 0 0 0 .5px rgba(255,255,255,.8);
+  animation: lg-sheet-in .35s cubic-bezier(.25,.85,.25,1) both;
+}
+body.dark .bio-card {
+  background: rgba(20,23,30,.72);
+  box-shadow: 0 24px 60px rgba(0,0,0,.6), 0 0 0 .5px rgba(255,255,255,.14);
+  color: #f2f5fa;
+}
+.bio-glyph {
+  width: 76px; height: 76px; border-radius: 22px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; margin-bottom: 6px;
+  background: var(--lg-primary-grad, linear-gradient(160deg,#5aa6ff,#0a84ff));
+  box-shadow: 0 12px 30px rgba(10,110,235,.4), inset 0 1px 0 rgba(255,255,255,.55);
+}
+.bio-glyph svg { width: 42px; height: 42px; }
+#bioTitle { font-size: 21px; font-weight: 800; margin: 0; }
+#bioSub { font-size: 13.5px; color: #77808e; margin: 0 0 8px; text-align: center; }
+body.dark #bioSub { color: #959eac; }
+.bio-spinner {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 3px solid rgba(10,132,255,.2); border-top-color: #0a84ff;
+  animation: lg-spin .8s linear infinite;
+  margin: 4px 0 10px;
+}
+#bioRetry, #bioSwitch { margin-top: 2px; }
+.bio-foot { font-size: 12px; color: #ff3b30; margin: 6px 0 0; min-height: 14px; text-align: center; }
+@media (prefers-reduced-motion: reduce) {
+  .bio-gate, .bio-card, .bio-spinner { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* ============================================================
+   Part 3：七条提示词物理层（覆写老 token + 统一玻璃模型）
+   REFRACT → SHADOW → TINT → LIGHT
+   ============================================================ */
+:root {
+  --primary: #0a84ff;
+  --primary-2: #0a64e8;
+  --primary-grad: linear-gradient(160deg, #5aa6ff 0%, #0a84ff 55%, #0a64e8 100%);
+  --primary-soft: rgba(10, 132, 255, .14);
+  --success: #30d158;
+  --warning: #ff9f0a;
+  --danger: #ff3b30;
+  /* Face 三分区 */
+  --glass-bg: rgba(255, 255, 255, .50);
+  --glass-bg-strong: rgba(255, 255, 255, .68);
+  --glass-border: rgba(255, 255, 255, .82);
+  --glass-border-soft: rgba(255, 255, 255, .42);
+  /* SHADOW：接触 + bokeh + .5px 高光线 */
+  --lg-contact: 0 1px 2px rgba(14, 22, 48, .06);
+  --lg-bokeh: 0 10px 28px rgba(14, 22, 48, .10), 0 24px 60px rgba(60, 90, 170, .08);
+  --lg-edge-line: inset 0 0 0 .5px rgba(255, 255, 255, .62);
+  --lg-inner-bevel: inset 0 1px 1px rgba(255, 255, 255, .75), inset 0 -1px 2px rgba(20, 35, 70, .05);
+  --glass-shadow: var(--lg-contact), var(--lg-bokeh), var(--lg-edge-line), var(--lg-inner-bevel);
+  --glass-shadow-deep: 0 2px 6px rgba(14, 22, 48, .08), 0 18px 50px rgba(14, 22, 48, .18), 0 40px 90px rgba(60, 90, 170, .12), var(--lg-edge-line), var(--lg-inner-bevel);
+  /* 折射（CSS 降级档；plus 透镜由 lens-manager 注入真折射） */
+  --lg-refract: blur(22px) saturate(170%);
+  --lg-refract-strong: blur(26px) saturate(180%);
+  --lg-ease-spring: cubic-bezier(.22, 1, .36, 1);
+  --lg-ease-press: cubic-bezier(.3, .8, .4, 1);
+}
+body.dark {
+  --glass-bg: rgba(22, 24, 32, .50);
+  --glass-bg-strong: rgba(20, 22, 30, .70);
+  --glass-border: rgba(255, 255, 255, .14);
+  --glass-border-soft: rgba(255, 255, 255, .08);
+  --lg-contact: 0 1px 2px rgba(0, 0, 0, .4);
+  --lg-bokeh: 0 10px 28px rgba(0, 0, 0, .45), 0 24px 60px rgba(0, 0, 0, .35);
+  --lg-edge-line: inset 0 0 0 .5px rgba(255, 255, 255, .12);
+  --lg-inner-bevel: inset 0 1px 1px rgba(255, 255, 255, .10);
+  --lg-refract: blur(22px) saturate(150%);
+  --lg-refract-strong: blur(26px) saturate(160%);
+}
+
+/* ---------- 统一透镜基底（提示词 1/3/4/7） ---------- */
+.glass,
+.glass-pill,
+.glass-field,
+.sec-card,
+.admin-panel,
+.call-panel,
+.confirm-card {
+  -webkit-backdrop-filter: var(--lg-refract);
+  backdrop-filter: var(--lg-refract);
+  border-color: transparent;
+}
+.glass-strong,
+.topbar,
+.composer,
+.sec-card,
+.confirm-card {
+  -webkit-backdrop-filter: var(--lg-refract-strong);
+  backdrop-filter: var(--lg-refract-strong);
+}
+/* 注意：不显式覆写 .glass/.glass-pill 的 background——
+   .home-hero 等内容卡自带品牌渐变，仅靠 :root 变量更新玻璃面取值 */
+
+/* 提示词 2：squircle 连续曲率（Edge/Chrome 139+ 渐进增强，老浏览器自动退回圆角） */
+.glass, .glass-strong, .sec-card, .admin-panel, .confirm-card,
+.home-hero, .group-card, .setting-card, .feed-card {
+  corner-shape: squircle;
+}
+
+/* ---------- 顶部导航 / 输入条：胶囊透镜 + Inner Rim 斜面光（4/5） ---------- */
+.topbar,
+.composer {
+  background: var(--glass-bg-strong) !important;
+  box-shadow: var(--glass-shadow-deep) !important;
+  border: .5px solid transparent;
+  isolation: isolate;
+}
+.topbar::after,
+.composer::after {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 60% at 16% -8%, rgba(255, 255, 255, .5), rgba(255, 255, 255, 0) 46%),
+    radial-gradient(120% 70% at 96% 108%, rgba(94, 160, 255, .22), rgba(94, 160, 255, 0) 52%);
+  opacity: .9;
+}
+/* 边缘色散（5）：极克制，仅左右 .5-1px 彩边 */
+.topbar::before,
+.composer::before {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  padding: .5px 1px;
+  background: linear-gradient(90deg, rgba(255, 90, 110, .16), rgba(255, 255, 255, 0) 18%, rgba(255, 255, 255, 0) 82%, rgba(80, 150, 255, .22));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+body.dark .topbar::before,
+body.dark .composer::before {
+  background: linear-gradient(90deg, rgba(255, 90, 110, .22), rgba(255, 255, 255, 0) 18%, rgba(255, 255, 255, 0) 82%, rgba(90, 170, 255, .3));
+}
+
+/* 导航激活项 */
+.nav-item { transition: transform .18s var(--lg-ease-press), color .2s, background .2s; }
+.nav-item:active { transform: scale(.92); }
+
+/* ---------- 卡片/弹层面板 ---------- */
+.sec-card,
+.admin-panel,
+.confirm-card {
+  background: var(--glass-bg-strong) !important;
+  box-shadow: var(--glass-shadow-deep) !important;
+  border: .5px solid transparent;
+}
+.glass-field,
+.search-input,
+input.glass, textarea.glass {
+  background: var(--glass-bg);
+  box-shadow: var(--glass-shadow);
+}
+
+/* ---------- 气泡：玻璃气泡边缘高光（仅玻璃款） ---------- */
+.bubble-glass {
+  box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .5), 0 6px 18px rgba(14, 22, 48, .12);
+}
+
+/* ---------- 可点控件交互（Apple：interactive 只给控件） ---------- */
+.btn-primary, .btn-ghost, .btn-logout, .btn-sessions, .btn-delete-account,
+.composer-btn, .call-btn, .icon-btn, .quick-btn, .group-menu-btn,
+button.glass-pill, .qr-btn {
+  transition: transform .16s var(--lg-ease-press), filter .16s, box-shadow .2s, background .2s, opacity .2s;
+}
+.btn-primary:active, .btn-ghost:active, .btn-logout:active, .btn-sessions:active,
+.composer-btn:active, .call-btn:active, .icon-btn:active, .quick-btn:active,
+.group-menu-btn:active, button.glass-pill:active, .qr-btn:active { transform: scale(.94); }
+.btn-primary { box-shadow: 0 6px 18px rgba(10, 110, 235, .32), inset 0 1px 0 rgba(255, 255, 255, .45); }
+
+/* 开关/分段在交互时强调（老类名复用） */
+.dm-slider, .auth-tab, .auth-tabs { transition: all .28s var(--lg-ease-spring); }
+
+/* ---------- 性能：移动端降低降级档模糊 ---------- */
+@media (max-width: 700px) {
+  .glass, .glass-pill, .glass-field,
+  .sec-card, .admin-panel, .call-panel, .confirm-card,
+  .glass-strong, .topbar, .composer {
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    backdrop-filter: blur(14px) saturate(150%);
+  }
+}
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass, .glass-pill, .glass-strong, .glass-field,
+  .topbar, .composer, .sec-card, .admin-panel, .confirm-card { background: var(--glass-bg-strong); }
+}
+
+/* ============================================================
+   Part 4：动效重构 —— 删环境循环，留功能反馈，统一弹性
+   ============================================================ */
+/* 去掉装饰性/循环动画（壁纸静态、光斑漂浮、扫光、闪烁） */
+.blob, .b2, .b3, .b4,
+.home-hero::after,
+.call-overlay::after,
+.call-bg-gradient,
+.bt-title-icon,
+.bt-chip::before,
+.dc-code,
+.auth-card,
+.logo-badge, .logo-badge::after,
+.btn-primary:hover::after,
+.capsule-orb-inner, .yr-orb,
+.te-particle,
+.lg-float { animation: none !important; }
+/* 弹幕滚动属于环境装饰，关闭循环（保留节点，不影响通话功能） */
+.danmaku-item { animation: none !important; opacity: 0 !important; }
+/* whisper 揭示统一为一次性淡入，不做特殊循环 */
+.whisper-revealed { animation: lg-fade-reveal .35s var(--lg-ease-spring) both; }
+@keyframes lg-fade-reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* 保留的功能性动画（不动）：spin/pulse/recPulse/callRingPulse/typingBounce/qrScanX/
+   shake/msgIn/panelIn/menuIn/toastIn/secPop —— 均为状态反馈或一次性转场 */
+
+/* 转场统一弹性曲线（玻璃物理形变，不跳变） */
+.panel, .sec-card, .admin-panel, .confirm-card,
+.msg-ctx-menu, .search-panel, .multi-menu, .group-menu,
+.call-panel, .call-banner { transition-timing-function: var(--lg-ease-spring); }
+
+/* 一次性入场（替换老页面可能存在的渐上浮循环观感） */
+.view { animation: none; }
+
+/* 全局 reduced-motion 兜底 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

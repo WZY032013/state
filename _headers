@@ -1,0 +1,28 @@
+# Stating — Cache-Control
+# 核心文件每次回源验证（ETag/304），更新即时可见，无需手动清缓存
+/
+  Cache-Control: public, max-age=0, must-revalidate
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+/style.css
+  Cache-Control: public, max-age=0, must-revalidate
+/lg.css
+  Cache-Control: public, max-age=0, must-revalidate
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+/script.js
+  Cache-Control: public, max-age=0, must-revalidate
+/js/*
+  Cache-Control: public, max-age=0, must-revalidate
+/manifest.webmanifest
+  Cache-Control: public, max-age=0, must-revalidate
+
+# 第三方库（版本锁定，长缓存不可变）
+/lib/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 图标（内容指纹固定，长缓存）
+/icons/*
+  Cache-Control: public, max-age=31536000, immutable
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
