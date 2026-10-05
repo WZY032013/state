@@ -564,13 +564,13 @@ button.glass-pill, .qr-btn {
 .glass::before { padding: 2px !important; }
 .glass::after  { padding: 2px !important; }
 
-/* ---------- 我的页面无圆角元素补圆角，让 UI 协调 ---------- */
+/* ---------- 我的页面无圆角元素补圆角，收敛到 18px（就近取整统一，勿动 30px 登录卡 / 999px 胶囊） ---------- */
 #profileView .profile-row,
 #profileView .focus-time,
 #profileView .focus-mode-row,
 #profileView .dark-mode-row,
 #profileView .focus-time-inputs {
-  border-radius: 16px;
+  border-radius: 18px;
 }
 #profileView .pr-edit-btn { border-radius: 999px; }
 #profileView .profile-row {
@@ -612,25 +612,27 @@ body.dark #profileView .profile-row {
     inset 0 1px 0 rgba(255,140,150,.14),
     inset 0 2px 0 rgba(130,255,220,.11),
     inset 0 3px 0 rgba(120,160,255,.13);
-  /* 要素6 环境色：蓝/紫/粉低透明光斑（青→蓝→紫果味倾向） */
+  /* 要素6 环境色：青→蓝→紫→粉+暖红平衡（暖化，避免整体过冷） */
   --lg2-ambient:
-    radial-gradient(130% 95% at 12% -6%, rgba(96,150,255,.16) 0%, rgba(96,150,255,0) 42%),
-    radial-gradient(125% 90% at 100% 8%, rgba(150,90,255,.11) 0%, rgba(150,90,255,0) 44%),
-    radial-gradient(130% 100% at 92% 108%, rgba(255,110,190,.09) 0%, rgba(255,110,190,0) 46%);
+    radial-gradient(130% 95% at 12% -6%, rgba(96,190,255,.15) 0%, rgba(96,190,255,0) 42%),
+    radial-gradient(125% 90% at 94% 4%, rgba(120,90,255,.12) 0%, rgba(120,90,255,0) 44%),
+    radial-gradient(130% 100% at 98% 92%, rgba(255,110,190,.12) 0%, rgba(255,110,190,0) 46%),
+    radial-gradient(120% 95% at 4% 72%, rgba(255,110,130,.10) 0%, rgba(255,110,130,0) 44%);
   /* 折射内光：上缘蓝紫、下缘粉调环境折射 */
   --lg2-bevel:
     inset 0 1px 1px rgba(255,255,255,.6),
     inset 0 -1px 2px rgba(150,120,255,.06),
     inset 0 -1px 0 rgba(20,35,70,.06);
-  /* 要素7 阴影三层：接触 + 环境 + 键光（蓝调彩色） */
+  /* 要素7 阴影三层：接触 + 环境 + 键光（键光由纯蓝调调暖为蓝紫粉混合，提升果味） */
   --lg2-shot:
     0 1px 2px rgba(20,36,80,.08),
-    0 8px 24px rgba(20,40,100,.13),
-    0 24px 60px rgba(20,40,120,.18);
+    0 8px 24px rgba(85,70,150,.12),
+    0 24px 60px rgba(120,70,180,.16);
   --lg2-shot-deep:
     0 1px 2px rgba(20,36,80,.10),
-    0 10px 30px rgba(20,40,100,.17),
-    0 40px 90px rgba(20,40,120,.22);
+    0 10px 30px rgba(90,70,160,.16),
+    0 40px 90px rgba(130,80,190,.20),
+    0 26px 64px rgba(240,100,160,.10);
   /* 要素8 融合动画曲线 */
   --lg2-fuse: cubic-bezier(.34,1.56,.64,1);
   /* 玻璃面取值微调更果味 */
@@ -641,12 +643,12 @@ body.dark {
   --lg2-face: linear-gradient(163deg, rgba(28,32,44,.70) 0%, rgba(22,26,36,.62) 56%, rgba(18,22,32,.58) 100%);
   --lg2-blur: blur(28px) saturate(165%);
   --glass-border: rgba(255,255,255,.15);
-  --lg2-spec: linear-gradient(115deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.06) 18%, transparent 42%);
-  --lg2-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 15%), rgba(255,255,255,.14) 0%, rgba(255,255,255,0) 58%);
+  --lg2-spec: linear-gradient(115deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.09) 18%, transparent 42%);
+  --lg2-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 15%), rgba(255,255,255,.20) 0%, rgba(255,255,255,0) 58%);
   --lg2-prism:
-    inset 0 1px 0 rgba(255,130,150,.18),
-    inset 0 2px 0 rgba(110,255,210,.14),
-    inset 0 3px 0 rgba(130,160,255,.16);
+    inset 0 1px 0 rgba(255,130,150,.26),
+    inset 0 2px 0 rgba(110,255,210,.22),
+    inset 0 3px 0 rgba(130,160,255,.24);
   --lg2-ambient:
     radial-gradient(130% 95% at 12% -6%, rgba(70,120,255,.18) 0%, rgba(70,120,255,0) 42%),
     radial-gradient(125% 90% at 100% 8%, rgba(140,80,255,.14) 0%, rgba(140,80,255,0) 44%),
@@ -666,6 +668,18 @@ body.dark {
     0 18px 42px rgba(20,50,130,.16);
   --glass-bg: rgba(22,24,32,.56);
   --glass-bg-strong: rgba(20,22,30,.70);
+}
+
+/* ---------- 1b. 浅色根背景：叠加果味彩色环境光斑（固定、大而柔、alpha 0.12~0.15）
+   修复浅色整体过白、backdrop blur 无可折射内容的问题；叠加在 --bg 颜色之上，不遮挡文字 */
+body:not(.dark) {
+  background-image:
+    radial-gradient(52vw 52vh at 12% 6%, rgba(120,80,255,.15) 0%, rgba(120,80,255,0) 62%),
+    radial-gradient(46vw 46vh at 86% 14%, rgba(96,150,255,.14) 0%, rgba(96,150,255,0) 62%),
+    radial-gradient(50vw 50vh at 92% 76%, rgba(255,108,180,.12) 0%, rgba(255,108,180,0) 62%),
+    radial-gradient(44vw 44vh at 8% 84%, rgba(120,220,255,.13) 0%, rgba(120,220,255,0) 62%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 }
 
 /* ---------- 2. 统一定毛玻璃强度（升级全部玻璃面） ---------- */
