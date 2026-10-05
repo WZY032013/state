@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    Stating · 新增设计层 lg.css（在 style.css 之后加载）
    Part 1：新版登录页 #auth（lg- 隔离命名空间）+ 老认证屏隐藏
    ============================================================ */
@@ -73,6 +73,29 @@ body.dark .lg-auth-card {
     0 4px 18px rgba(0,0,0,.4),
     0 0 0 .5px var(--lg-edge);
 }
+
+/* 登录卡接入 plus 版高光层（与 .glass 一致：::before 静态高光+环境光斑+棱镜色散，::after 动态镜面） */
+.lg-auth-card::before,
+.lg-auth-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.lg-auth-card::before {
+  z-index: 2;
+  background: var(--lg2-spec), var(--lg2-ambient);
+  box-shadow: var(--lg2-prism);
+}
+.lg-auth-card::after {
+  z-index: 3;
+  background: var(--lg2-spec-live);
+  mix-blend-mode: screen;
+  opacity: .7;
+  transition: opacity .32s var(--lg2-fuse);
+}
+.lg-auth-card:hover::after { opacity: 1; }
 
 /* 品牌 */
 .lg-brand { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 20px; }
@@ -565,4 +588,184 @@ body.dark #profileView .profile-row {
   background: rgba(40,44,54,.55);
   border-color: rgba(255,255,255,.08);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+/* ============================================================
+   Part 5：果味 Liquid Glass plus 版统一玻璃（抖音视频 8 要素）
+   分层 · 塑造形状 · 折射 · 划分区域 · 高光+高光色散 · 环境色 · 阴影 · 融合动画
+   覆盖式实现：变量 token 明暗双模式 + 复用统一表面段，不改 style.css
+   说明：严禁伪元素 padding 描边（曾致圆角变形），内缘一律用 inset box-shadow
+   ============================================================ */
+
+/* ---------- 1. 设计 token（明） ---------- */
+:root {
+  /* 要素1 分层：基层半透明渐变面 + 毛玻璃（高饱和） */
+  --lg2-face: linear-gradient(163deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.52) 56%, rgba(255,255,255,.46) 100%);
+  --lg2-blur: blur(28px) saturate(182%);
+  /* 要素3 折射：1px 内缘白线（微调老 token） */
+  --glass-border: rgba(255,255,255,.86);
+  /* 要素5 高光：静态顶部高光带 + 动态镜面高光 */
+  --lg2-spec: linear-gradient(115deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.12) 18%, transparent 42%);
+  --lg2-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 15%), rgba(255,255,255,.36) 0%, rgba(255,255,255,0) 58%);
+  /* 要素5 高光色散：顶部白线相邻处 1~2px 暖红/青绿/冷蓝色相线 */
+  --lg2-prism:
+    inset 0 1px 0 rgba(255,140,150,.14),
+    inset 0 2px 0 rgba(130,255,220,.11),
+    inset 0 3px 0 rgba(120,160,255,.13);
+  /* 要素6 环境色：蓝/紫/粉低透明光斑（青→蓝→紫果味倾向） */
+  --lg2-ambient:
+    radial-gradient(130% 95% at 12% -6%, rgba(96,150,255,.16) 0%, rgba(96,150,255,0) 42%),
+    radial-gradient(125% 90% at 100% 8%, rgba(150,90,255,.11) 0%, rgba(150,90,255,0) 44%),
+    radial-gradient(130% 100% at 92% 108%, rgba(255,110,190,.09) 0%, rgba(255,110,190,0) 46%);
+  /* 折射内光：上缘蓝紫、下缘粉调环境折射 */
+  --lg2-bevel:
+    inset 0 1px 1px rgba(255,255,255,.6),
+    inset 0 -1px 2px rgba(150,120,255,.06),
+    inset 0 -1px 0 rgba(20,35,70,.06);
+  /* 要素7 阴影三层：接触 + 环境 + 键光（蓝调彩色） */
+  --lg2-shot:
+    0 1px 2px rgba(20,36,80,.08),
+    0 8px 24px rgba(20,40,100,.13),
+    0 24px 60px rgba(20,40,120,.18);
+  --lg2-shot-deep:
+    0 1px 2px rgba(20,36,80,.10),
+    0 10px 30px rgba(20,40,100,.17),
+    0 40px 90px rgba(20,40,120,.22);
+  /* 要素8 融合动画曲线 */
+  --lg2-fuse: cubic-bezier(.34,1.56,.64,1);
+  /* 玻璃面取值微调更果味 */
+  --glass-bg: rgba(255,255,255,.56);
+  --glass-bg-strong: rgba(255,255,255,.66);
+}
+body.dark {
+  --lg2-face: linear-gradient(163deg, rgba(28,32,44,.70) 0%, rgba(22,26,36,.62) 56%, rgba(18,22,32,.58) 100%);
+  --lg2-blur: blur(28px) saturate(165%);
+  --glass-border: rgba(255,255,255,.15);
+  --lg2-spec: linear-gradient(115deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.06) 18%, transparent 42%);
+  --lg2-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 15%), rgba(255,255,255,.14) 0%, rgba(255,255,255,0) 58%);
+  --lg2-prism:
+    inset 0 1px 0 rgba(255,130,150,.18),
+    inset 0 2px 0 rgba(110,255,210,.14),
+    inset 0 3px 0 rgba(130,160,255,.16);
+  --lg2-ambient:
+    radial-gradient(130% 95% at 12% -6%, rgba(70,120,255,.18) 0%, rgba(70,120,255,0) 42%),
+    radial-gradient(125% 90% at 100% 8%, rgba(140,80,255,.14) 0%, rgba(140,80,255,0) 44%),
+    radial-gradient(130% 100% at 92% 108%, rgba(255,90,190,.12) 0%, rgba(255,90,190,0) 46%);
+  --lg2-bevel:
+    inset 0 1px 1px rgba(255,255,255,.08),
+    inset 0 -1px 2px rgba(60,40,140,.12),
+    inset 0 -1px 0 rgba(0,0,0,.4);
+  --lg2-shot:
+    0 1px 2px rgba(0,0,0,.5),
+    0 8px 24px rgba(0,0,0,.42),
+    0 24px 60px rgba(0,0,0,.5);
+  --lg2-shot-deep:
+    0 1px 2px rgba(0,0,0,.55),
+    0 10px 28px rgba(0,0,0,.5),
+    0 28px 70px rgba(0,0,0,.55),
+    0 18px 42px rgba(20,50,130,.16);
+  --glass-bg: rgba(22,24,32,.56);
+  --glass-bg-strong: rgba(20,22,30,.70);
+}
+
+/* ---------- 2. 统一定毛玻璃强度（升级全部玻璃面） ---------- */
+.glass, .glass-pill, .glass-field, .glass-strong,
+.sec-card, .topbar, .composer,
+.admin-panel, .call-panel, .confirm-card {
+  -webkit-backdrop-filter: var(--lg2-blur);
+  backdrop-filter: var(--lg2-blur);
+}
+
+/* ---------- 3. 阴影 + 内缘折射光（基层卡片 / 弹层用深档） ---------- */
+.glass, .sec-card, .admin-panel, .call-panel, .confirm-card, .glass-strong {
+  box-shadow: var(--lg2-shot-deep), var(--lg2-bevel);
+}
+/* 胶囊 / 小控件用轻档，避免过度晕影；基层给果味渐变面（topbar/composer 由 !important 保留强面） */
+.glass-pill {
+  background: var(--lg2-face);
+  box-shadow: var(--lg2-shot), var(--lg2-bevel);
+}
+
+/* ---------- 4. 高光层：静态高光带 + 环境色 + 高光色散（复用伪元素，无 padding 描边） ---------- */
+.glass::before, .glass::after,
+.glass-pill::before, .glass-pill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 0 !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+  pointer-events: none;
+}
+.glass::before, .glass-pill::before {
+  z-index: 2;
+  background: var(--lg2-spec), var(--lg2-ambient);
+  box-shadow: var(--lg2-prism);
+  opacity: 1;
+}
+/* 动态镜面高光（--lg-shx / --lg-shy 由 script.js 更新） */
+.glass::after, .glass-pill::after {
+  z-index: 3;
+  background: var(--lg2-spec-live);
+  mix-blend-mode: screen;
+  opacity: .7;
+  transition: opacity .32s var(--lg2-fuse);
+}
+.glass:hover::after, .glass-pill:hover::after { opacity: 1; }
+
+/* ---------- 5. 划分区域：聊天气泡更亮更圆润 ---------- */
+.bubble-glass {
+  background: rgba(255,255,255,.42);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  backdrop-filter: blur(20px) saturate(170%);
+  border-radius: 18px;
+  border-color: rgba(255,255,255,.62);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.75), 0 4px 14px rgba(20,40,100,.12);
+}
+body.dark .bubble-glass {
+  background: rgba(30,34,44,.5);
+  border-color: rgba(255,255,255,.12);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.08), 0 4px 14px rgba(0,0,0,.4);
+}
+
+/* ---------- 6. 融合动画：交互控件 spring 微放大 + 高光增强 ---------- */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .feature-card, .nav-item, .quick-btn, .icon-btn, .composer-btn, .qr-btn,
+  .btn-primary, .btn-ghost, .auth-more-btn, .profile-scan-btn,
+  .scanner-close, .scanner-album, .lg-btn {
+    transition: transform .32s var(--lg2-fuse), filter .32s var(--lg2-fuse),
+      box-shadow .32s var(--lg2-fuse), background .32s var(--lg2-fuse);
+  }
+  .feature-card:hover { transform: translateY(-3px) scale(1.02); filter: brightness(1.05); }
+  .nav-item:hover { transform: scale(1.05); }
+  .icon-btn:hover, .quick-btn:hover, .composer-btn:hover, .qr-btn:hover,
+  .btn-primary:hover, .btn-ghost:hover, .lg-btn:hover { transform: scale(1.03); filter: brightness(1.06); }
+}
+
+/* ---------- 7. Sheet / 卡片入场：lg-fuse（透明度 + 缩放 + 模糊 一次性 spring） ---------- */
+.lg-sheet, .sec-card, .sign-card {
+  animation: lg-fuse .45s var(--lg2-fuse) both;
+}
+@keyframes lg-fuse {
+  from { opacity: 0; transform: scale(.96) translateY(10px); filter: blur(8px); }
+  to   { opacity: 1; transform: none; filter: blur(0); }
+}
+
+/* ---------- 8. 性能与回退 ---------- */
+/* 移动端：模糊降至 18px（约束 16~20px） */
+@media (max-width: 768px) {
+  .glass, .glass-pill, .glass-field, .glass-strong,
+  .sec-card, .topbar, .composer,
+  .admin-panel, .call-panel, .confirm-card {
+    -webkit-backdrop-filter: blur(18px) saturate(170%);
+    backdrop-filter: blur(18px) saturate(170%);
+  }
+}
+/* 不支持 backdrop-filter：回退为更高不透明度背景 */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass, .glass-pill, .glass-strong, .glass-field,
+  .topbar, .composer, .sec-card, .admin-panel, .confirm-card {
+    background: var(--glass-bg-strong);
+  }
 }
