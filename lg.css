@@ -503,3 +503,88 @@ button.glass-pill, .qr-btn {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- Fix: [hidden] 必须强制隐藏 ----------
+   修复 .multi-menu / .emoji-panel / .composer-mode-bar / .ephemeral-picker /
+   .capsule-picker / .loc-menu / .group-menu 等 [hidden] 元素被自身 display
+   覆盖导致"没点击就浮出"的 bug */
+[hidden] { display: none !important; }
+
+/* ---------- Squircle 圆角（iOS26 真正的连续曲率圆角） ---------- */
+/* 用 SVG superellipse 作为 mask 让所有圆角元素呈 squircle 形态 */
+.sq,
+.glass,
+.glass-pill,
+.lg-auth-card,
+.multi-menu,
+.emoji-panel,
+.composer-mode-bar,
+.ephemeral-picker,
+.capsule-picker,
+.loc-menu,
+.group-menu,
+.msg-ctx-menu,
+.search-panel,
+.call-panel,
+.call-banner,
+.recording-bar,
+.admin-panel,
+.confirm-card,
+.fb-tile,
+.mg-item,
+.feature-card,
+.profile-card,
+.auth-card,
+.invite-card,
+.home-hero,
+.my-groups,
+.online-panel,
+.composer,
+.chat-header,
+.topbar,
+.cs-add,
+button.lg-btn-text,
+.lg-btn,
+.lg-segment,
+.lg-seg-item,
+.lg-input,
+.lg-card,
+.lg-toast {
+  /* iOS26 squircle：corner-shape 是实验性提案，仅 Safari Technology Preview 支持。
+     兼容方案：用 clip-path 的 superellipse 近似实现 iOS26 真圆角。 */
+  corner-shape: squircle;
+  -webkit-corner-shape: squircle;
+}
+
+/* iOS26 superellipse mask：用 SVG path 把矩形圆角变成连续曲率圆角 */
+@supports (mask: url("#sq")) {
+  .sq-shape {
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M 30 0 H 70 Q 100 0 100 30 Q 100 30 100 70 Q 100 100 70 100 Q 30 100 30 100 Q 0 100 0 70 Q 0 30 0 30 Q 0 0 30 0 Z' fill='black'/></svg>") 0 0 / 100% 100% no-repeat;
+    mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M 30 0 H 70 Q 100 0 100 30 Q 100 30 100 70 Q 100 100 70 100 Q 30 100 30 100 Q 0 100 0 70 Q 0 30 0 30 Q 0 0 30 0 Z' fill='black'/></svg>") 0 0 / 100% 100% no-repeat;
+  }
+}
+
+/* ---------- 我的页面：把"登录设备管理/我的收藏/热力图/年度报告/生物房间/气泡皮肤/安全中心/签名工具/安全日志"
+   等文字按钮改成与"退出登录"同尺寸的大药丸按钮 ---------- */
+#profileView .btn-sessions,
+#profileView .btn-wipe {
+  margin-top: 10px;
+  padding: 12px 32px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  box-shadow: 0 1px 0 rgba(255,255,255,.45) inset, 0 4px 14px rgba(14,20,44,.06);
+  transition: all .25s var(--lg-ease);
+}
+#profileView .btn-sessions:hover,
+#profileView .btn-wipe:hover { transform: translateY(-1px); }
+#profileView .btn-sessions:active,
+#profileView .btn-wipe:active { transform: scale(.97); transition-duration:.12s; }
+#profileView .btn-sessions [data-icon],
+#profileView .btn-wipe [data-icon] { font-size: 17px; }
