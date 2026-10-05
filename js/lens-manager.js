@@ -17,15 +17,27 @@
   // 移动端默认降级（plus 镜头只给桌面/平板）；低内存/省流/减弱动效同降
   const plusAllowed = !coarse && !narrow && !reduce && !saveData && mem >= 4;
 
+  // 多源兜底：仅 esm 分发（项目内无 liquidGL 本地副本、禁止 npm install），
+  // 依次回退 jsDelivr → unpkg → fastly，任一失败自动落 CSS 档（lg-no-lens）
+  const SOURCES = [
+    'https://cdn.jsdelivr.net/npm/liquid-gl@2.2.2/liquidGL.js',
+    'https://unpkg.com/liquid-gl@2.2.2/liquidGL.js',
+    'https://fastly.jsdelivr.net/npm/liquid-gl@2.2.2/liquidGL.js'
+  ];
   function loadLib() {
     if (window.liquidGL) return Promise.resolve();
-    return new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.type = 'module';
-      s.src = 'https://cdn.jsdelivr.net/npm/liquid-gl@2.2.2/liquidGL.js'; s.async = true;
-      s.onload = () => res(); s.onerror = () => rej(new Error('liquidGL load fail'));
-      document.body.appendChild(s);
-    });
+    function trySrc(i) {
+      if (i >= SOURCES.length) return Promise.reject(new Error('liquidGL load fail'));
+      return new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.type = 'module';
+        s.src = SOURCES[i]; s.async = true;
+        s.onload = () => res();
+        s.onerror = () => { s.remove(); trySrc(i + 1).then(res, rej); };
+        document.body.appendChild(s);
+      });
+    }
+    return trySrc(0);
   }
 
   function baseOpts(extra) {
@@ -79,6 +91,10 @@
     loadLib().then(() => {
       // 1) 顶部胶囊（常驻，仅一个顶栏镜头，玻璃不叠玻璃）
       attachSelector('nav.topbar.glass-pill');
+
+      // 1b) 主页 hero + 功能卡玻璃面（评审要求扩展折射覆盖；hero 为品牌渐变，镜头叠加折射高光）
+      attachSelector('.home-hero.glass');
+      attachSelector('.feature-card.glass');
 
       // 2) 登录卡（可见时）
       const authCard = document.getElementById('lgAuthCard');

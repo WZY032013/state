@@ -30,3 +30,32 @@ function applyLazyImages(e){const t=e||document;t.querySelectorAll&&t.querySelec
   }
   window.addEventListener('pointermove', onMove, { passive: true });
 })();
+/* 无障碍：为"纯图标 / 无可见文本"的可点控件补 aria-label。
+   遍历 [data-icon]（SF Symbols）与 [data-lgicon]（新登录层），取最近可点祖先，
+   若其无 aria-label 且 textContent 为空，则用图标 key 作为可读名称。
+   已有 aria-label 或含可见文本的元素一律跳过。 */
+(function () {
+  function nameOf(ic) {
+    return ic.getAttribute('data-icon') || ic.getAttribute('data-lgicon') || '';
+  }
+  function apply(root) {
+    if (!root || root.querySelectorAll === undefined) return;
+    root.querySelectorAll('[data-icon], [data-lgicon]').forEach(function (ic) {
+      var host = ic.closest('button, [role="button"], a, [onclick]') || ic;
+      if (host.hasAttribute('aria-label')) return;           // 已有可读名称，跳过
+      if ((host.textContent || '').trim() !== '') return;    // 有可见文本，跳过
+      var n = nameOf(ic);
+      if (n) host.setAttribute('aria-label', n);
+    });
+  }
+  apply(document);
+  if (window.MutationObserver) {
+    new MutationObserver(function (ms) {
+      ms.forEach(function (m) {
+        for (var i = 0; i < m.addedNodes.length; i++) {
+          if (m.addedNodes[i].nodeType === 1) apply(m.addedNodes[i]);
+        }
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+})();

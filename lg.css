@@ -467,7 +467,7 @@ button.glass-pill, .qr-btn {
 .btn-primary { box-shadow: 0 6px 18px rgba(10, 110, 235, .32), inset 0 1px 0 rgba(255, 255, 255, .45); }
 
 /* 开关/分段在交互时强调（老类名复用） */
-.dm-slider, .auth-tab, .auth-tabs { transition: all .28s var(--lg-ease-spring); }
+.dm-slider, .auth-tab, .auth-tabs { transition: transform .28s var(--lg-ease-spring), background .28s var(--lg-ease-spring), box-shadow .28s var(--lg-ease-spring), color .28s var(--lg-ease-spring); }
 
 /* ---------- 性能：移动端降低降级档模糊 ---------- */
 @media (max-width: 700px) {
@@ -549,7 +549,7 @@ button.glass-pill, .qr-btn {
   -webkit-backdrop-filter: blur(18px) saturate(180%);
   backdrop-filter: blur(18px) saturate(180%);
   box-shadow: 0 1px 0 rgba(255,255,255,.45) inset, 0 4px 14px rgba(14,20,44,.06);
-  transition: all .25s var(--lg-ease);
+  transition: transform .25s var(--lg-ease), background .25s var(--lg-ease), box-shadow .25s var(--lg-ease), color .25s var(--lg-ease);
 }
 #profileView .btn-sessions:hover,
 #profileView .btn-wipe:hover { transform: translateY(-1px); }
@@ -599,75 +599,82 @@ body.dark #profileView .profile-row {
 
 /* ---------- 1. 设计 token（明） ---------- */
 :root {
-  /* 要素1 分层：基层半透明渐变面 + 毛玻璃（高饱和） */
-  --lg2-face: linear-gradient(163deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.52) 56%, rgba(255,255,255,.46) 100%);
+  /* 要素1 分层：果味虹彩渐变面（暖/蓝紫/粉倾向，避免纯白无折射内容） */
+  --lg2-face: linear-gradient(163deg, rgba(255,255,255,.68) 0%, rgba(240,242,255,.60) 40%, rgba(255,239,249,.54) 78%, rgba(238,247,255,.55) 100%);
   --lg2-blur: blur(28px) saturate(182%);
   /* 要素3 折射：1px 内缘白线（微调老 token） */
   --glass-border: rgba(255,255,255,.86);
-  /* 要素5 高光：静态顶部高光带 + 动态镜面高光 */
-  --lg2-spec: linear-gradient(115deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.12) 18%, transparent 42%);
+  /* 要素5 高光：顶部高光带强度 0.72、下延至 24%；动态镜面高光 */
+  --lg2-spec: linear-gradient(115deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.14) 24%, transparent 46%);
   --lg2-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 15%), rgba(255,255,255,.36) 0%, rgba(255,255,255,0) 58%);
-  /* 要素5 高光色散：顶部白线相邻处 1~2px 暖红/青绿/冷蓝色相线 */
+  /* 要素5 高光色散：顶部纯白主线 + 暖红/青绿/冷蓝三色线（1px / 2px 单侧压线，发丝棱镜不移位） */
   --lg2-prism:
-    inset 0 1px 0 rgba(255,140,150,.34),
-    inset 0 2px 0 rgba(130,255,220,.30),
-    inset 0 3px 0 rgba(120,160,255,.32);
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 1px 0 1px rgba(255,150,160,.5),
+    inset 0 2px 0 2px rgba(120,235,210,.45),
+    inset 0 4px 0 2px rgba(120,160,255,.48);
   /* 要素6 环境色：青→蓝→紫→粉+暖红平衡（暖化，避免整体过冷） */
   --lg2-ambient:
     radial-gradient(130% 95% at 12% -6%, rgba(96,190,255,.22) 0%, rgba(96,190,255,0) 42%),
     radial-gradient(125% 90% at 94% 4%, rgba(120,90,255,.18) 0%, rgba(120,90,255,0) 44%),
     radial-gradient(130% 100% at 98% 92%, rgba(255,110,190,.18) 0%, rgba(255,110,190,0) 46%),
     radial-gradient(120% 95% at 4% 72%, rgba(255,110,130,.16) 0%, rgba(255,110,130,0) 44%);
-  /* 折射内光：上缘蓝紫、下缘粉调环境折射 */
+  /* 折射内光：上缘蓝紫、左内缘、下缘粉调 + 底部折射（增强实体感） */
   --lg2-bevel:
     inset 0 1px 1px rgba(255,255,255,.6),
+    inset 1px 0 1px rgba(255,255,255,.35),
     inset 0 -1px 2px rgba(150,120,255,.06),
+    inset 0 -2px 3px rgba(120,90,200,.10),
     inset 0 -1px 0 rgba(20,35,70,.06);
-  /* 要素7 阴影三层：接触 + 环境 + 键光（键光由纯蓝调调暖为蓝紫粉混合，提升果味） */
+  /* 要素7 阴影三层：接触 + 环境 + 键光（加深、环境改紫调、键光紫蓝粉混合） */
   --lg2-shot:
-    0 1px 2px rgba(20,36,80,.08),
-    0 8px 24px rgba(85,70,150,.12),
-    0 24px 60px rgba(120,70,180,.16);
+    0 1px 2px rgba(20,36,80,.13),
+    0 8px 24px rgba(70,60,140,.16),
+    0 24px 60px rgba(120,75,180,.25);
   --lg2-shot-deep:
-    0 1px 2px rgba(20,36,80,.10),
-    0 10px 30px rgba(90,70,160,.16),
-    0 40px 90px rgba(130,80,190,.20),
-    0 26px 64px rgba(240,100,160,.10);
+    0 1px 2px rgba(20,36,80,.14),
+    0 10px 30px rgba(80,65,155,.19),
+    0 40px 90px rgba(135,85,195,.26),
+    0 26px 64px rgba(240,105,165,.15);
   /* 要素8 融合动画曲线 */
   --lg2-fuse: cubic-bezier(.34,1.56,.64,1);
-  /* 玻璃面取值微调更果味 */
-  --glass-bg: rgba(255,255,255,.56);
-  --glass-bg-strong: rgba(255,255,255,.66);
+  /* 玻璃面取值带蓝紫倾向（提饱和、避免死白） */
+  --glass-bg: rgba(248,248,255,.56);
+  --glass-bg-strong: rgba(248,246,255,.66);
 }
 body.dark {
-  --lg2-face: linear-gradient(163deg, rgba(28,32,44,.70) 0%, rgba(22,26,36,.62) 56%, rgba(18,22,32,.58) 100%);
+  /* 暗色面加微蓝紫倾向（避免死黑、保留果味折射） */
+  --lg2-face: linear-gradient(163deg, rgba(32,36,52,.72) 0%, rgba(26,30,46,.64) 56%, rgba(24,32,52,.60) 100%);
   --lg2-blur: blur(28px) saturate(165%);
   --glass-border: rgba(255,255,255,.15);
   --lg2-spec: linear-gradient(115deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.09) 18%, transparent 42%);
   --lg2-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 15%), rgba(255,255,255,.20) 0%, rgba(255,255,255,0) 58%);
   --lg2-prism:
-    inset 0 1px 0 rgba(255,130,150,.26),
-    inset 0 2px 0 rgba(110,255,210,.22),
-    inset 0 3px 0 rgba(130,160,255,.24);
+    inset 0 1px 0 rgba(255,255,255,.5),
+    inset 0 1px 0 1px rgba(255,150,160,.5),
+    inset 0 2px 0 2px rgba(110,235,210,.45),
+    inset 0 4px 0 2px rgba(130,165,255,.48);
   --lg2-ambient:
     radial-gradient(130% 95% at 12% -6%, rgba(70,120,255,.18) 0%, rgba(70,120,255,0) 42%),
     radial-gradient(125% 90% at 100% 8%, rgba(140,80,255,.14) 0%, rgba(140,80,255,0) 44%),
     radial-gradient(130% 100% at 92% 108%, rgba(255,90,190,.12) 0%, rgba(255,90,190,0) 46%);
   --lg2-bevel:
     inset 0 1px 1px rgba(255,255,255,.08),
+    inset 1px 0 1px rgba(255,255,255,.05),
     inset 0 -1px 2px rgba(60,40,140,.12),
+    inset 0 -2px 3px rgba(70,60,170,.14),
     inset 0 -1px 0 rgba(0,0,0,.4);
   --lg2-shot:
-    0 1px 2px rgba(0,0,0,.5),
-    0 8px 24px rgba(0,0,0,.42),
-    0 24px 60px rgba(0,0,0,.5);
+    0 1px 2px rgba(0,0,0,.6),
+    0 8px 24px rgba(0,0,0,.5),
+    0 24px 60px rgba(0,0,0,.58);
   --lg2-shot-deep:
-    0 1px 2px rgba(0,0,0,.55),
-    0 10px 28px rgba(0,0,0,.5),
-    0 28px 70px rgba(0,0,0,.55),
-    0 18px 42px rgba(20,50,130,.16);
-  --glass-bg: rgba(22,24,32,.56);
-  --glass-bg-strong: rgba(20,22,30,.70);
+    0 1px 2px rgba(0,0,0,.65),
+    0 10px 28px rgba(0,0,0,.58),
+    0 28px 70px rgba(0,0,0,.6),
+    0 18px 42px rgba(30,60,140,.18);
+  --glass-bg: rgba(24,27,40,.56);
+  --glass-bg-strong: rgba(22,26,40,.70);
 }
 
 /* ---------- 1b. 浅色根背景：叠加果味彩色环境光斑（固定、大而柔、alpha 0.12~0.15）
@@ -800,4 +807,44 @@ body:not(.dark) .main-app {
     radial-gradient(70vw 70vh at 84% 86%, rgba(255, 108, 180, .34) 0%, rgba(255, 108, 180, 0) 58%),
     radial-gradient(64vw 64vh at 8% 84%, rgba(110, 215, 255, .36) 0%, rgba(110, 215, 255, 0) 58%);
   background-repeat: no-repeat;
+}
+
+/* ============================================================
+   Part 7：审美冲刺补充——暗色冷金、安全区、触控延迟
+   ============================================================ */
+
+/* 5. 暗色模式 home 主题金黄 → 冷金（浅色保持原样） */
+body.dark.theme-home {
+  --primary: #d8c07a;
+  --primary-2: #c2a968;
+  --primary-grad: linear-gradient(135deg, #e8d7a6 0%, #d8c07a 55%, #bd9f5f 100%);
+  --primary-soft: rgba(216,192,122,.16);
+  --nav-grad: linear-gradient(135deg, rgba(232,215,166,.62) 0%, rgba(216,192,122,.62) 55%, rgba(189,159,95,.65) 100%);
+  --nav-shadow: 0 6px 20px rgba(176,148,92,.42);
+}
+
+/* 6a. 安全区适配（calc 相加保留原 padding，零安全区时无副作用） */
+.main-app {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.topbar-wrap {
+  padding-top: calc(14px + env(safe-area-inset-top));
+}
+.lg-auth-wrap {
+  padding-top: calc(20px + env(safe-area-inset-top));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+}
+@media (max-width: 460px) {
+  .lg-auth-wrap {
+    padding-top: calc(14px + env(safe-area-inset-top));
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+}
+
+/* 6c. 交互控件禁用双击缩放延迟（提升触控响应） */
+.btn-primary, .btn-ghost, .btn-logout, .btn-sessions, .nav-item, .feature-card,
+.icon-btn, .quick-btn, .composer-btn, .qr-btn, .lg-btn, .lg-seg-item,
+.auth-more-btn, .scanner-close, .scanner-album, button.glass-pill, .bubble-option {
+  touch-action: manipulation;
 }
