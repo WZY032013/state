@@ -44,6 +44,8 @@
     return Object.assign({
       snapshot: 'body',
       resolution: 1.6,
+      devicePixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
+      powerPreference: 'high-performance',
       engine: 'auto',
       refraction: 0.012,
       aberration: 0.14,

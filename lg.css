@@ -28,7 +28,7 @@
   --lg-face: rgba(255, 255, 255, .55);
   --lg-face-strong: rgba(255, 255, 255, .72);
   --lg-edge: rgba(255, 255, 255, .8);
-  --lg-blur: blur(26px) saturate(176%);
+  --lg-blur: blur(22px) saturate(170%);
   --lg-ease: cubic-bezier(.25, .85, .25, 1);
   color: var(--lg-ink);
 }
@@ -42,7 +42,7 @@ body.dark #auth {
   --lg-face: rgba(24, 27, 34, .56);
   --lg-face-strong: rgba(20, 23, 30, .72);
   --lg-edge: rgba(255, 255, 255, .14);
-  --lg-blur: blur(28px) saturate(155%);
+  --lg-blur: blur(22px) saturate(155%);
 }
 
 .lg-auth-wrap {
@@ -58,12 +58,12 @@ body.dark #auth {
   background: var(--lg-face-strong);
   -webkit-backdrop-filter: var(--lg-blur);
   backdrop-filter: var(--lg-blur);
-  border: .5px solid transparent;
+  border: 1px solid transparent;
   box-shadow:
     inset 0 1px 1px rgba(255,255,255,.7),
     0 18px 50px rgba(14,20,44,.18),
     0 4px 16px rgba(70,100,190,.16),
-    0 0 0 .5px var(--lg-edge);
+    0 0 0 1px var(--lg-edge);
   isolation: isolate;
 }
 body.dark .lg-auth-card {
@@ -71,7 +71,7 @@ body.dark .lg-auth-card {
     inset 0 1px 1px rgba(255,255,255,.12),
     0 20px 54px rgba(0,0,0,.55),
     0 4px 18px rgba(0,0,0,.4),
-    0 0 0 .5px var(--lg-edge);
+    0 0 0 1px var(--lg-edge);
 }
 
 /* 登录卡接入 plus 版高光层（与 .glass 一致：::before 静态高光+环境光斑+棱镜色散，::after 动态镜面） */
@@ -91,7 +91,6 @@ body.dark .lg-auth-card {
 .lg-auth-card::after {
   z-index: 3;
   background: var(--lg2-spec-live);
-  mix-blend-mode: screen;
   opacity: .7;
   transition: opacity .32s var(--lg2-fuse);
 }
@@ -138,14 +137,14 @@ body.dark .lg-seg-thumb { background: #2a2e38; }
   min-height: 52px; padding: 0 16px;
   border-radius: 14px;
   background: linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,.42));
-  box-shadow: inset 0 0 0 .5px rgba(255,255,255,.75), inset 0 -1px 2px rgba(20,30,60,.05);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.75), inset 0 -1px 2px rgba(20,30,60,.05);
   transition: box-shadow .16s;
 }
 body.dark .lg-field {
   background: linear-gradient(180deg, rgba(40,44,54,.6), rgba(32,36,44,.45));
-  box-shadow: inset 0 0 0 .5px rgba(255,255,255,.1);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.1);
 }
-.lg-field:focus-within { box-shadow: 0 0 0 4px rgba(10,132,255,.16), inset 0 0 0 .5px var(--lg-primary); }
+.lg-field:focus-within { box-shadow: 0 0 0 4px rgba(10,132,255,.16), inset 0 0 0 1px var(--lg-primary); }
 .lg-field-ic { width: 20px; height: 20px; display: inline-flex; color: var(--lg-ink-3); flex: none; }
 .lg-field-ic svg { width: 20px; height: 20px; }
 .lg-field input { flex: 1; min-width: 0; font-size: 16px; color: var(--lg-ink); background: none; border: 0; outline: 0; }
@@ -165,7 +164,7 @@ body.dark .lg-field {
 .lg-btn-primary:active { filter: brightness(.96); }
 .lg-btn-ghost {
   background: var(--lg-face); color: var(--lg-ink);
-  box-shadow: inset 0 0 0 .5px rgba(18,24,40,.08);
+  box-shadow: inset 0 0 0 1px rgba(18,24,40,.08);
   -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
 }
 .lg-btn-block { width: 100%; }
@@ -191,7 +190,7 @@ body.dark .lg-field {
 .lg-auth-alt .lg-btn-text {
   min-height: 52px; padding: 0 16px; border-radius: 14px;
   background: linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,.42));
-  box-shadow: inset 0 0 0 .5px rgba(255,255,255,.75), inset 0 -1px 2px rgba(20,30,60,.05);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.75), inset 0 -1px 2px rgba(20,30,60,.05);
   color: var(--lg-ink); font-size: 16px; font-weight: 600;
   width: 100%; justify-content: flex-start;
 }
@@ -206,7 +205,7 @@ body.dark .lg-field {
   display: flex; align-items: center; justify-content: center;
   border: 0; cursor: pointer;
   background: rgba(255,255,255,.55);
-  box-shadow: inset 0 0 0 .5px rgba(18,24,40,.08);
+  box-shadow: inset 0 0 0 1px rgba(18,24,40,.08);
   transition: transform .12s, box-shadow .12s;
 }
 .lg-avatar-opt:active { transform: scale(.9); }
@@ -222,7 +221,7 @@ body.dark .lg-field {
   padding: 22px; border-radius: 30px;
   background: var(--lg-face-strong);
   -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
-  box-shadow: 0 20px 54px rgba(14,20,44,.25), 0 0 0 .5px var(--lg-edge);
+  box-shadow: 0 20px 54px rgba(14,20,44,.25), 0 0 0 1px var(--lg-edge);
   animation: lg-sheet-in .28s var(--lg-ease) both;
 }
 .lg-overlay.closing .lg-scrim { animation: lg-fade .18s ease reverse both; }
@@ -249,7 +248,7 @@ body.dark .lg-field {
   color: var(--lg-ink);
   background: var(--lg-face-strong);
   -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
-  box-shadow: 0 10px 30px rgba(14,20,44,.18), 0 0 0 .5px var(--lg-edge);
+  box-shadow: 0 10px 30px rgba(14,20,44,.18), 0 0 0 1px var(--lg-edge);
   animation: lg-toast-in .26s var(--lg-ease) both;
   transition: opacity .2s, transform .2s;
 }
@@ -290,12 +289,12 @@ body.dark .bio-gate { background: rgba(10, 12, 18, .72); }
   padding: 34px 26px 28px;
   border-radius: 30px;
   background: var(--lg-face-strong, rgba(255,255,255,.72));
-  box-shadow: 0 24px 60px rgba(14,20,44,.22), 0 0 0 .5px rgba(255,255,255,.8);
+  box-shadow: 0 24px 60px rgba(14,20,44,.22), 0 0 0 1px rgba(255,255,255,.8);
   animation: lg-sheet-in .35s cubic-bezier(.25,.85,.25,1) both;
 }
 body.dark .bio-card {
   background: rgba(20,23,30,.72);
-  box-shadow: 0 24px 60px rgba(0,0,0,.6), 0 0 0 .5px rgba(255,255,255,.14);
+  box-shadow: 0 24px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.14);
   color: #f2f5fa;
 }
 .bio-glyph {
@@ -341,7 +340,7 @@ body.dark #bioSub { color: #959eac; }
   /* SHADOW：接触 + bokeh + .5px 高光线 */
   --lg-contact: 0 1px 2px rgba(14, 22, 48, .06);
   --lg-bokeh: 0 10px 28px rgba(14, 22, 48, .10), 0 24px 60px rgba(60, 90, 170, .08);
-  --lg-edge-line: inset 0 0 0 .5px rgba(255, 255, 255, .62);
+  --lg-edge-line: inset 0 0 0 1px rgba(255, 255, 255, .62);
   --lg-inner-bevel: inset 0 1px 1px rgba(255, 255, 255, .75), inset 0 -1px 2px rgba(20, 35, 70, .05);
   --glass-shadow: var(--lg-contact), var(--lg-bokeh), var(--lg-edge-line), var(--lg-inner-bevel);
   --glass-shadow-deep: 0 2px 6px rgba(14, 22, 48, .08), 0 18px 50px rgba(14, 22, 48, .18), 0 40px 90px rgba(60, 90, 170, .12), var(--lg-edge-line), var(--lg-inner-bevel);
@@ -358,7 +357,7 @@ body.dark {
   --glass-border-soft: rgba(255, 255, 255, .08);
   --lg-contact: 0 1px 2px rgba(0, 0, 0, .4);
   --lg-bokeh: 0 10px 28px rgba(0, 0, 0, .45), 0 24px 60px rgba(0, 0, 0, .35);
-  --lg-edge-line: inset 0 0 0 .5px rgba(255, 255, 255, .12);
+  --lg-edge-line: inset 0 0 0 1px rgba(255, 255, 255, .12);
   --lg-inner-bevel: inset 0 1px 1px rgba(255, 255, 255, .10);
   --lg-refract: blur(22px) saturate(150%);
   --lg-refract-strong: blur(26px) saturate(160%);
@@ -398,7 +397,7 @@ body.dark {
 .composer {
   background: var(--glass-bg-strong) !important;
   box-shadow: var(--glass-shadow-deep) !important;
-  border: .5px solid transparent;
+  border: 1px solid transparent;
   isolation: isolate;
 }
 .topbar::after,
@@ -441,7 +440,7 @@ body.dark .composer::before {
 .confirm-card {
   background: var(--glass-bg-strong) !important;
   box-shadow: var(--glass-shadow-deep) !important;
-  border: .5px solid transparent;
+  border: 1px solid transparent;
 }
 .glass-field,
 .search-input,
@@ -452,7 +451,7 @@ input.glass, textarea.glass {
 
 /* ---------- 气泡：玻璃气泡边缘高光（仅玻璃款） ---------- */
 .bubble-glass {
-  box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .5), 0 6px 18px rgba(14, 22, 48, .12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5), 0 6px 18px rgba(14, 22, 48, .12);
 }
 
 /* ---------- 可点控件交互（Apple：interactive 只给控件） ---------- */
@@ -576,7 +575,7 @@ button.glass-pill, .qr-btn {
 #profileView .profile-row {
   padding: 12px 14px;
   background: rgba(255,255,255,.55);
-  border: .5px solid rgba(255,255,255,.65);
+  border: 1px solid rgba(255,255,255,.65);
   -webkit-backdrop-filter: blur(14px) saturate(160%);
   backdrop-filter: blur(14px) saturate(160%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 1px 2px rgba(31,45,80,.04);
@@ -601,12 +600,12 @@ body.dark #profileView .profile-row {
 :root {
   /* 要素1 分层：果味虹彩渐变面（暖/蓝紫/粉倾向，避免纯白无折射内容） */
   --lg2-face: linear-gradient(163deg, rgba(255,255,255,.68) 0%, rgba(240,242,255,.60) 40%, rgba(255,239,249,.54) 78%, rgba(238,247,255,.55) 100%);
-  --lg2-blur: blur(28px) saturate(182%);
+  --lg2-blur: blur(20px) saturate(170%);
   /* 要素3 折射：1px 内缘白线（微调老 token） */
   --glass-border: rgba(255,255,255,.86);
   /* 要素5 高光：顶部高光带强度 0.72、下延至 24%；动态镜面高光 */
   --lg2-spec: linear-gradient(115deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.14) 24%, transparent 46%);
-  --lg2-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 15%), rgba(255,255,255,.36) 0%, rgba(255,255,255,0) 58%);
+  --lg2-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 15%), rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 58%);
   /* 要素5 高光色散：顶部纯白主线 + 暖红/青绿/冷蓝三色线（1px / 2px 单侧压线，发丝棱镜不移位） */
   --lg2-prism:
     inset 0 1px 0 rgba(255,255,255,.95),
@@ -645,7 +644,7 @@ body.dark #profileView .profile-row {
 body.dark {
   /* 暗色面加微蓝紫倾向（避免死黑、保留果味折射） */
   --lg2-face: linear-gradient(163deg, rgba(32,36,52,.72) 0%, rgba(26,30,46,.64) 56%, rgba(24,32,52,.60) 100%);
-  --lg2-blur: blur(28px) saturate(165%);
+  --lg2-blur: blur(20px) saturate(160%);
   --glass-border: rgba(255,255,255,.15);
   --lg2-spec: linear-gradient(115deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.09) 18%, transparent 42%);
   --lg2-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 15%), rgba(255,255,255,.20) 0%, rgba(255,255,255,0) 58%);
@@ -677,16 +676,20 @@ body.dark {
   --glass-bg-strong: rgba(22,26,40,.70);
 }
 
-/* ---------- 1b. 浅色根背景：叠加果味彩色环境光斑（固定、大而柔、alpha 0.12~0.15）
-   修复浅色整体过白、backdrop blur 无可折射内容的问题；叠加在 --bg 颜色之上，不遮挡文字 */
-body:not(.dark) {
-  background-image:
-    radial-gradient(52vw 52vh at 12% 6%, rgba(120,80,255,.15) 0%, rgba(120,80,255,0) 62%),
-    radial-gradient(46vw 46vh at 86% 14%, rgba(96,150,255,.14) 0%, rgba(96,150,255,0) 62%),
-    radial-gradient(50vw 50vh at 92% 76%, rgba(255,108,180,.12) 0%, rgba(255,108,180,0) 62%),
-    radial-gradient(44vw 44vh at 8% 84%, rgba(120,220,255,.13) 0%, rgba(120,220,255,0) 62%);
-  background-attachment: fixed;
-  background-repeat: no-repeat;
+/* ---------- 1b. 浅色根背景果味环境光斑：由 z:0 固定伪层承载（只画一次、滚动零重绘，
+   玻璃在下层折射着色；暗色不渲染该层） ---------- */
+body:not(.dark)::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(72vw 72vh at 14% 6%, rgba(146,92,255,.40) 0%, rgba(146,92,255,0) 58%),
+    radial-gradient(68vw 68vh at 88% 14%, rgba(92,148,255,.36) 0%, rgba(92,148,255,0) 58%),
+    radial-gradient(70vw 70vh at 84% 86%, rgba(255,108,180,.32) 0%, rgba(255,108,180,0) 58%),
+    radial-gradient(64vw 64vh at 8% 84%, rgba(110,215,255,.34) 0%, rgba(110,215,255,0) 58%),
+    linear-gradient(160deg, rgba(246,244,255,.88) 0%, rgba(240,246,255,.88) 100%);
 }
 
 /* ---------- 2. 统一定毛玻璃强度（升级全部玻璃面） ---------- */
@@ -704,7 +707,7 @@ body:not(.dark) {
 /* 胶囊 / 小控件用轻档，避免过度晕影；基层给果味渐变面（topbar/composer 由 !important 保留强面） */
 .glass-pill {
   background: var(--lg2-face);
-  box-shadow: var(--lg2-shot), var(--lg2-bevel);
+  box-shadow: 0 1px 2px rgba(20,36,80,.10), 0 6px 16px rgba(90,70,150,.12), var(--lg2-bevel);
 }
 
 /* ---------- 4. 高光层：静态高光带 + 环境色 + 高光色散（复用伪元素，无 padding 描边） ---------- */
@@ -725,29 +728,26 @@ body:not(.dark) {
   box-shadow: var(--lg2-prism);
   opacity: 1;
 }
-/* 动态镜面高光（--lg-shx / --lg-shy 由 script.js 更新） */
+/* 动态镜面高光（--lg-shx / --lg-shy 由 script.js 更新；普通 alpha 渐变，无混合层） */
 .glass::after, .glass-pill::after {
   z-index: 3;
   background: var(--lg2-spec-live);
-  mix-blend-mode: screen;
   opacity: .7;
   transition: opacity .32s var(--lg2-fuse);
 }
 .glass:hover::after, .glass-pill:hover::after { opacity: 1; }
 
-/* ---------- 5. 划分区域：聊天气泡更亮更圆润 ---------- */
+/* ---------- 5. 划分区域：聊天气泡更亮更圆润（无 backdrop-filter，水晶感通透+高光） ---------- */
 .bubble-glass {
-  background: rgba(255,255,255,.42);
-  -webkit-backdrop-filter: blur(20px) saturate(170%);
-  backdrop-filter: blur(20px) saturate(170%);
+  background: rgba(255,255,255,.5);
   border-radius: 18px;
   border-color: rgba(255,255,255,.62);
-  box-shadow: inset 0 1px 1px rgba(255,255,255,.75), 0 4px 14px rgba(20,40,100,.12);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.75), inset 0 1px 1px rgba(255,255,255,.6), 0 4px 12px rgba(20,40,100,.10);
 }
 body.dark .bubble-glass {
-  background: rgba(30,34,44,.5);
+  background: rgba(30,34,44,.55);
   border-color: rgba(255,255,255,.12);
-  box-shadow: inset 0 1px 1px rgba(255,255,255,.08), 0 4px 14px rgba(0,0,0,.4);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 4px 12px rgba(0,0,0,.28);
 }
 
 /* ---------- 6. 融合动画：交互控件 spring 微放大 + 高光增强 ---------- */
@@ -791,23 +791,8 @@ body.dark .bubble-glass {
   }
 }
 
-/* ============================================================
-   Part 6：浅色页面可视背景的果味柔雾（login/chat/profile 统一）
-   修复：home 之外三页近乎惨白——给全屏外壳（登录层 / 主应用层）叠柔雾光斑，
-   位于玻璃之下的底层，供 backdrop-filter 折射着色；色相与 body 光斑一致（紫/蓝/粉/青）。
-   实测 alpha .11~.14 过弱（饱和度仅 0.04~0.08），提升到 .22~.32、尺寸加大，
-   目标浅色背景饱和度 ≥0.15、亮度 ~200（果味淡彩），深色文字对比度仍充足；暗色不命中。
-   ============================================================ */
-body:not(.dark) .lg-auth-wrap,
-body:not(.dark) .main-app {
-  background-color: rgba(236, 238, 252, .75);
-  background-image:
-    radial-gradient(72vw 72vh at 14% 6%, rgba(146, 92, 255, .42) 0%, rgba(146, 92, 255, 0) 58%),
-    radial-gradient(68vw 68vh at 88% 14%, rgba(92, 148, 255, .38) 0%, rgba(92, 148, 255, 0) 58%),
-    radial-gradient(70vw 70vh at 84% 86%, rgba(255, 108, 180, .34) 0%, rgba(255, 108, 180, 0) 58%),
-    radial-gradient(64vw 64vh at 8% 84%, rgba(110, 215, 255, .36) 0%, rgba(110, 215, 255, 0) 58%);
-  background-repeat: no-repeat;
-}
+/* ---------- 6. 背景光斑已并入 body::before（见 1b），此处不再重复绘制，
+   避免 .main-app/.lg-auth-wrap 各自铺一层 background 造成多次合成 ---------- */
 
 /* ============================================================
    Part 7：审美冲刺补充——暗色冷金、安全区、触控延迟
