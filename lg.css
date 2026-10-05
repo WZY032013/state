@@ -787,15 +787,17 @@ body.dark .bubble-glass {
 /* ============================================================
    Part 6：浅色页面可视背景的果味柔雾（login/chat/profile 统一）
    修复：home 之外三页近乎惨白——给全屏外壳（登录层 / 主应用层）叠柔雾光斑，
-   位于玻璃之下的底层，供 backdrop-filter 折射着色；色相与 body 光斑一致（紫/蓝/粉/青），
-   alpha 温和（.11~.14）保证背景亮度仍 ≥230、深色文字对比度不下降；暗色不命中。
+   位于玻璃之下的底层，供 backdrop-filter 折射着色；色相与 body 光斑一致（紫/蓝/粉/青）。
+   实测 alpha .11~.14 过弱（饱和度仅 0.04~0.08），提升到 .22~.32、尺寸加大，
+   目标浅色背景饱和度 ≥0.15、亮度 ~200（果味淡彩），深色文字对比度仍充足；暗色不命中。
    ============================================================ */
 body:not(.dark) .lg-auth-wrap,
 body:not(.dark) .main-app {
+  background-color: rgba(236, 238, 252, .75);
   background-image:
-    radial-gradient(58vw 58vh at 16% 8%, rgba(120,80,255,.14) 0%, rgba(120,80,255,0) 60%),
-    radial-gradient(54vw 54vh at 86% 18%, rgba(96,150,255,.13) 0%, rgba(96,150,255,0) 60%),
-    radial-gradient(56vw 56vh at 82% 82%, rgba(255,108,180,.11) 0%, rgba(255,108,180,0) 60%),
-    radial-gradient(50vw 50vh at 10% 80%, rgba(120,220,255,.12) 0%, rgba(120,220,255,0) 60%);
+    radial-gradient(72vw 72vh at 14% 6%, rgba(146, 92, 255, .32) 0%, rgba(146, 92, 255, 0) 58%),
+    radial-gradient(68vw 68vh at 88% 14%, rgba(92, 148, 255, .28) 0%, rgba(92, 148, 255, 0) 58%),
+    radial-gradient(70vw 70vh at 84% 86%, rgba(255, 108, 180, .24) 0%, rgba(255, 108, 180, 0) 58%),
+    radial-gradient(64vw 64vh at 8% 84%, rgba(110, 215, 255, .26) 0%, rgba(110, 215, 255, 0) 58%);
   background-repeat: no-repeat;
 }
