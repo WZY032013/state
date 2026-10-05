@@ -83,7 +83,7 @@
   function init() {
     const btn = $('lgFaceBtn');
     if (btn && !btn.dataset.bound) { btn.dataset.bound = '1'; btn.addEventListener('click', faceLogin); }
-    supported().then(ok => { if (btn) btn.style.display = ok ? '' : 'none'; });
+    supported().then(ok => { if (btn) btn.hidden = !ok; });
     if (window.ICONS) injectIcon();
     else document.addEventListener('DOMContentLoaded', injectIcon);
   }
