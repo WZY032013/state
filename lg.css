@@ -60,14 +60,12 @@ body.dark #auth {
   backdrop-filter: var(--lg-blur);
   border: 1px solid transparent;
   box-shadow:
-    inset 0 1px 1px rgba(255,255,255,.7),
     0 18px 50px rgba(14,20,44,.18),
     0 4px 16px rgba(70,100,190,.16);
   isolation: isolate;
 }
 body.dark .lg-auth-card {
   box-shadow:
-    inset 0 1px 1px rgba(255,255,255,.12),
     0 20px 54px rgba(0,0,0,.55),
     0 4px 18px rgba(0,0,0,.4);
 }
@@ -84,7 +82,6 @@ body.dark .lg-auth-card {
 .lg-auth-card::before {
   z-index: 2;
   background: var(--lg2-spec), var(--lg2-ambient);
-  box-shadow: var(--lg2-prism);
 }
 .lg-auth-card::after {
   z-index: 3;
@@ -665,7 +662,7 @@ body:not(.dark)::before {
 
 /* ---------- 3. 阴影 + 内缘折射光（基层卡片 / 弹层用深档） ---------- */
 .glass, .sec-card, .admin-panel, .call-panel, .confirm-card, .glass-strong {
-  box-shadow: var(--lg2-shot-deep), var(--lg2-bevel);
+  box-shadow: var(--lg2-shot-deep);
 }
 /* 胶囊 / 小控件用轻档，避免过度晕影；基层给果味渐变面（topbar/composer 由 !important 保留强面） */
 .glass-pill {
@@ -688,9 +685,10 @@ body:not(.dark)::before {
 .glass::before, .glass-pill::before {
   z-index: 2;
   background: var(--lg2-spec), var(--lg2-ambient);
-  box-shadow: var(--lg2-prism);
   opacity: 1;
 }
+/* 交互胶囊保留单条内缘高光（按钮类允许） */
+.glass-pill::before { box-shadow: var(--lg2-prism); }
 /* 动态镜面高光（--lg-shx / --lg-shy 由 script.js 更新；普通 alpha 渐变，无混合层） */
 .glass::after, .glass-pill::after {
   z-index: 3;
@@ -705,12 +703,12 @@ body:not(.dark)::before {
   background: rgba(255,255,255,.5);
   border-radius: 18px;
   border-color: rgba(255,255,255,.62);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.75), inset 0 1px 1px rgba(255,255,255,.6), 0 4px 12px rgba(20,40,100,.10);
+  box-shadow: 0 4px 12px rgba(20,40,100,.10);
 }
 body.dark .bubble-glass {
   background: rgba(30,34,44,.55);
   border-color: rgba(255,255,255,.12);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 4px 12px rgba(0,0,0,.28);
+  box-shadow: 0 4px 12px rgba(0,0,0,.28);
 }
 
 /* ---------- 6. 融合动画：交互控件 spring 微放大 + 高光增强 ---------- */
@@ -910,3 +908,38 @@ body.dark .composer { background: #1b1d25 !important; border-color: #3d8dff !imp
 
 /* G c. 大型非交互容器不加 ::after 动态镜面层（省合成） */
 .sec-card::after, .sign-card::after, .confirm-card::after, .admin-panel::after { display: none !important; }
+
+/* ============================================================
+   Part 9：纯白内容+细线包裹（静态面）/ 交互保留 glass / topbar 布局
+   ============================================================ */
+
+/* B. 静态容器纯白化：近不透明纯白底 + 1px hairline（顶边提亮）+ 单一轻影，无 blur/多阴影
+      排除 .home-hero / .feature-card（品牌与交互玻璃）与 .glass-pill（交互胶囊） */
+.glass:not(.home-hero):not(.feature-card):not(.glass-pill),
+.sec-card, .confirm-card, .admin-panel, .sign-card, .lg-sheet, .lg-auth-card, .call-panel, .glass-strong {
+  background: rgba(255,255,255,.97) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  border: 1px solid rgba(20,45,90,.16) !important;
+  border-top-color: rgba(30,60,120,.32) !important;
+  box-shadow: 0 1px 4px rgba(15,20,45,.06) !important;
+}
+body.dark .glass:not(.home-hero):not(.feature-card):not(.glass-pill),
+body.dark .sec-card, body.dark .confirm-card, body.dark .admin-panel,
+body.dark .sign-card, body.dark .lg-sheet, body.dark .lg-auth-card,
+body.dark .call-panel, body.dark .glass-strong {
+  background: rgba(20,23,31,.97) !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  border-top-color: rgba(255,255,255,.22) !important;
+  box-shadow: 0 1px 5px rgba(0,0,0,.35) !important;
+}
+
+/* 气泡删 inset 第二弧：只留 hairline border + 轻影 */
+.bubble-glass { box-shadow: none !important; border: 1px solid rgba(20,45,90,.14); }
+body.dark .bubble-glass { box-shadow: none !important; border: 1px solid rgba(255,255,255,.10); }
+
+/* D. topbar 布局：左侧 logo + 深色切换，右侧导航靠右 */
+.topbar { display: flex; align-items: center; }
+.topbar .brand { order: 0; }
+.topbar-actions { order: 1; margin-left: 6px; }
+.nav-items { order: 2; margin-left: auto; }
