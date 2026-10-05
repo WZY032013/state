@@ -49,7 +49,7 @@ function applyLazyImages(e){const t=e||document;t.querySelectorAll&&t.querySelec
   }
   function onOut(e) {
     var el = e.target && e.target.closest ? e.target.closest(SEL) : null;
-    if (el === cur) { clearEl(cur); cur = null; if (raf) { cancelAnimationFrame(raf); raf = 0; } pend = false; }
+    if (el && el === cur) { clearEl(cur); cur = null; if (raf) { cancelAnimationFrame(raf); raf = 0; } pend = false; }
   }
   window.addEventListener('pointermove', onMove, { passive: true });
   window.addEventListener('pointerout', onOut, { passive: true });
