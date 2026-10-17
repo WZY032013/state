@@ -1,0 +1,245 @@
+/* ============================================================
+   Stating · Liquid Glass 动效层 lg-motion.css
+   ------------------------------------------------------------
+   载入顺序：style.css → lg.css → css/loading.css
+            → css/lg-material.css → 本文件
+   定位：只管「动效」，不管材质（材质见 lg-material.css）
+
+   物理依据（WWDC · Designing Fluid Interfaces）：
+   1. 弹簧默认临界阻尼（damping = 1.0），无过冲。弹跳（damping ≈ 0.7~0.8）
+      只留给「有动量来源」的场景（抽屉甩动、骰子、开关拨动）。
+   2. 按下即反馈，不等松手。pointer-down 立刻给视觉响应。
+   3. 只动画 transform 和 opacity —— 两者可被合成器接管，不触发布局。
+      filter: blur() 与 box-shadow 会触发重绘，玻璃材质的入场动画里
+      改用 opacity + scale 代替 filter: blur()。
+
+   曲线来源：css/../test/gen-spring.js 按弹簧解析解采样生成，
+   非拍脑袋的 bezier。同一 response 下临界阻尼曲线自相似，
+   故 UI 档只保留一条 (0.35s)，用 duration 区分节奏。
+   ============================================================ */
+
+:root {
+  /* —— 临界阻尼弹簧（response 0.35s），UI 默认：不过冲、不回摆 —— */
+  --lgx-spring: linear(0.0, 0.1084, 0.3072, 0.4991, 0.6536, 0.7676, 0.8475, 0.9016, 0.9373, 0.9605, 0.9753, 0.9847, 0.9905, 0.9942, 0.9965, 0.9978, 0.9987, 0.9992, 1.0);
+
+  /* —— 快按压（response 0.22s）：按下到位的短促跟进 —— */
+  --lgx-press: linear(0.0, 0.1084, 0.3072, 0.4991, 0.6536, 0.7676, 0.8475, 0.9016, 0.9373, 0.9605, 0.9753, 0.9847, 0.9905, 0.9942, 0.9965, 0.9978, 0.9987, 0.9992, 1.0);
+
+  /* —— 抽屉 / Sheet（damping 0.8，1.49% 微过冲）：有动量来源，允许轻弹 —— */
+  --lgx-sheet: linear(0.0, 0.0607, 0.1969, 0.3586, 0.5164, 0.6546, 0.7671, 0.8534, 0.916, 0.9589, 0.9866, 1.003, 1.0115, 1.0148, 1.0149, 1.0134, 1.0111, 1.0086, 1.0063, 1.0044, 1.0029, 1.0017, 1.0009, 1.0004, 1.0001, 0.9999, 1.0);
+
+  /* —— 动量甩动（damping 0.7，4.55% 过冲）：只给拖拽类交互 —— */
+  --lgx-momentum: linear(0.0, 0.0622, 0.2053, 0.3792, 0.5512, 0.7025, 0.8244, 0.9154, 0.978, 1.017, 1.0377, 1.0455, 1.0448, 1.0393, 1.0316, 1.0235, 1.0162, 1.01, 1.0053, 1.002, 0.9998, 0.9985, 0.998, 0.9979, 0.9981, 0.9984, 1.0);
+}
+
+/* ============================================================
+   1. linear() 支持探测
+   linear() 是 2023 年才普及的曲线函数。不支持时（老 Safari、
+   部分国产内核）整条 transition-timing-function 会被丢弃，
+   退化为浏览器默认 ease —— 可接受，但显式兜底更可控。
+   ============================================================ */
+@supports not (transition-timing-function: linear(0, 1)) {
+  :root {
+    --lgx-spring: cubic-bezier(.22, 1, .36, 1);
+    --lgx-press: cubic-bezier(.3, .8, .4, 1);
+    --lgx-sheet: cubic-bezier(.34, 1.2, .64, 1);
+    --lgx-momentum: cubic-bezier(.34, 1.36, .64, 1);
+  }
+}
+
+/* ============================================================
+   2. 按压反馈：按下即响应，不等松手
+   Apple 要点：反馈在手势全程连续，而非只在结束时出现一次。
+   因此 :active 承担「按下」，:focus-visible 承担「键盘可见焦点」。
+   ============================================================ */
+.nav-item,
+.composer-btn,
+.send-btn,
+.icon-btn,
+.quick-btn,
+.group-menu-btn,
+.msg-ctx-menu .ctx-item,
+.multi-menu-item,
+.multi-select-bar .msb-btn,
+.chat-header .back-btn,
+.topbar-actions button {
+  transition:
+    transform var(--lgx-press) 0.22s,
+    opacity 0.15s linear;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-item:active,
+.composer-btn:active,
+.send-btn:active,
+.icon-btn:active,
+.quick-btn:active,
+.group-menu-btn:active,
+.msg-ctx-menu .ctx-item:active,
+.multi-menu-item:active,
+.multi-select-bar .msb-btn:active,
+.chat-header .back-btn:active,
+.topbar-actions button:active {
+  transform: scale(.90);
+}
+/* 键盘可达性：焦点环必须可见，且不能被 :active 的缩放吃掉 */
+.nav-item:focus-visible,
+.composer-btn:focus-visible,
+.send-btn:focus-visible,
+.icon-btn:focus-visible,
+.quick-btn:focus-visible,
+.group-menu-btn:focus-visible,
+.msg-ctx-menu .ctx-item:focus-visible,
+.multi-menu-item:focus-visible,
+.multi-select-bar .msb-btn:focus-visible,
+.chat-header .back-btn:focus-visible,
+.topbar-actions button:focus-visible {
+  outline: 2px solid var(--lg-primary, #0a84ff);
+  outline-offset: 2px;
+  transform: none;
+}
+
+/* ============================================================
+   3. 浮层入场：只用 transform + opacity
+   lg.css 原有 lg-fuse 用了 filter: blur(8px) 做入场，那是重绘
+   密集操作（大面积模糊每帧都要重新合成纹理）。改为纯合成属性。
+   ============================================================ */
+@keyframes lgx-sheet-in {
+  from { opacity: 0; transform: translateY(14px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes lgx-sheet-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(10px) scale(.98); }
+}
+.lg-sheet,
+.lg-auth-card,
+.bio-card {
+  animation: lgx-sheet-in 0.34s var(--lgx-sheet) both;
+}
+.lg-overlay.closing .lg-sheet { animation: lgx-sheet-out 0.18s cubic-bezier(.4, 0, 1, 1) both; }
+
+/* 动画结束后释放 will-change，避免长期占用合成层 */
+.lg-sheet,
+.lg-auth-card,
+.bio-card { animation-fill-mode: both; }
+
+/* ============================================================
+   4. 视图切换：淡入 + 轻微位移，不用模糊
+   ============================================================ */
+.view.active {
+  animation: lgx-view-in 0.28s var(--lgx-spring) both;
+}
+@keyframes lgx-view-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ============================================================
+   5. 导航激活指示：滑块用弹簧跟随
+   ============================================================ */
+.lg-seg-thumb,
+.bt-seg-thumb {
+  transition: transform 0.34s var(--lgx-spring);
+}
+
+/* ============================================================
+   6. 开关拨动：临界阻尼，不过冲
+   开关是确定性状态切换，不该有回弹 —— 用 UI 档而非 momentum 档。
+   ============================================================ */
+.dm-slider {
+  transition: transform 0.3s var(--lgx-spring), background 0.3s var(--lgx-spring);
+}
+
+/* ============================================================
+   7. 消息入场：一次性、单次，不循环
+   ============================================================ */
+@keyframes lgx-msg-in {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+.msg-row:not(.msg-merged) {
+  animation: lgx-msg-in 0.3s var(--lgx-spring) both;
+}
+
+/* ============================================================
+   8. Toast：进出对称，时长成比例
+   ============================================================ */
+@keyframes lgx-toast-in {
+  from { opacity: 0; transform: translateY(12px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+.lg-toast { animation: lgx-toast-in 0.3s var(--lgx-sheet) both; }
+
+/* ============================================================
+   9. 减弱动效：无障碍底线
+   位移动画降级为纯交叉淡化 —— 内容仍然出现，但不移动。
+   注意：不能像 lg.css 那样把 duration 压到 0.001ms，
+   那会让所有元素瞬时跳变，反而造成不适。
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .view.active,
+  .msg-row:not(.msg-merged),
+  .lg-sheet,
+  .lg-auth-card,
+  .bio-card,
+  .lg-toast {
+    animation: lgx-fade-only 0.2s linear both !important;
+  }
+  .lg-overlay.closing .lg-sheet { animation: lgx-fade-out 0.15s linear both !important; }
+
+  /* 所有 transform 类反馈全部停用：缩放、位移、悬停位移 */
+  .nav-item, .composer-btn, .send-btn, .icon-btn, .quick-btn,
+  .group-menu-btn, .msg-ctx-menu .ctx-item, .multi-menu-item,
+  .multi-select-bar .msb-btn, .chat-header .back-btn, .topbar-actions button,
+  .feature-card, .profile-scan-btn, .scanner-close, .scanner-album,
+  .lg-btn, .btn-primary, .btn-ghost, .avatar-upload-btn,
+  .lg-seg-thumb, .bt-seg-thumb, .dm-slider {
+    transition: opacity 0.15s linear, background-color 0.15s linear,
+                color 0.15s linear, border-color 0.15s linear !important;
+    transform: none !important;
+  }
+  .nav-item:active,
+  .composer-btn:active,
+  .send-btn:active,
+  .feature-card:hover,
+  .lg-btn:hover,
+  .btn-primary:hover {
+    transform: none !important;
+  }
+  /* 玻璃动态镜面高光依赖指针跟随，减弱动效下不再追指针 */
+  .topbar::after, .chat-header::after, .online-panel::after,
+  .sec-card::after, .confirm-card::after, .admin-panel::after,
+  .lg-sheet::after, .lg-auth-card::after,
+  .group-menu::after, .multi-menu::after, .emoji-panel::after,
+  .msg-ctx-menu::after, .reaction-picker::after,
+  .multi-select-bar::after, .reply-bar::after, .mention-picker::after {
+    display: none !important;
+  }
+  /* 弹幕/光斑等循环装饰一律停 */
+  .blob, .bg-blobs, .danmaku-layer, .call-bg-gradient, .call-incoming-ring {
+    animation: none !important;
+  }
+}
+@keyframes lgx-fade-only {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes lgx-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* ============================================================
+   10. 合成预算控制
+   同时存在的 backdrop-filter 表面越多，每帧合成越贵。
+   规则：hover 才变化的面板不常驻 will-change；
+   动画期间才提升，动画结束由 fill-mode 保持终态即可。
+   ============================================================ */
+@media (max-width: 768px), (update: slow) {
+  /* 低端/移动设备：浮层入场去掉位移，仅淡化，省一次图层提升 */
+  .lg-sheet, .lg-auth-card, .bio-card {
+    animation-name: lgx-fade-only;
+  }
+  .view.active { animation-name: lgx-fade-only; }
+  .msg-row:not(.msg-merged) { animation-name: lgx-fade-only; }
+}

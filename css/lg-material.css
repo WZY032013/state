@@ -1,0 +1,485 @@
+/* ============================================================
+   Stating · Liquid Glass 材质层 lg-material.css
+   ------------------------------------------------------------
+   载入顺序：style.css → lg.css → css/loading.css → 本文件
+   定位：只管「材质」，不管动效（动效见 lg-motion.css）
+
+   设计依据（HIG · Materials）：
+   1. 材质只给功能层。玻璃属控件层/浮层层，内容层用实色近不透明，
+      避免正文在毛玻璃上对比度不足、也避免轻材质叠轻材质。
+   2. 材质厚度编码层级：clear(最透) < regular(导航) < thick(浮层，最实)。
+   3. 顶边亮线 = 光打在材质上；内缘斜面（bevel）给厚度感。
+   4. 每个自定义色必须给浅色 + 深色两套变体。
+
+   与 lg.css 的关系：
+   lg.css Part 9 把 .glass 系列整体压平成「纯白 + 细线」，其中把
+   浮层（弹窗/抽屉/菜单）也一并压平了 —— 浮层是控件层，应当有玻璃。
+   本文件按层恢复：只给控件层与浮层回玻璃，内容层维持实色。
+   选择器守卫链与 Part 9 对齐（:not × 3 + .lg-opaque 出口），
+   特异性 (0,5,0) 稳定压过 Part 9 的 (0,4,0)。
+   ============================================================ */
+
+/* ============================================================
+   1. 材质 token（浅色 / 深色双套）
+   ============================================================ */
+:root {
+  /* —— 厚度三档：透明度依次升高，模糊依次增强 ——————————————
+     clear   最透：小型悬浮控件（菜单、上下文菜单、反应条）
+     regular 适中：常驻导航控件（顶栏、聊天头部、在线面板）
+     thick   最实：浮层（弹窗、抽屉、卡片式面板）
+     厚玻璃反而更实，因为浮层背后的内容最杂乱，需要压住。 */
+  --lgm-clear-bg: rgba(255, 255, 255, .52);
+  --lgm-regular-bg: rgba(255, 255, 255, .64);
+  --lgm-thick-bg: rgba(255, 255, 255, .74);
+  --lgm-clear-blur: blur(20px) saturate(180%);
+  --lgm-regular-blur: blur(26px) saturate(190%);
+  --lgm-thick-blur: blur(32px) saturate(185%);
+
+  /* —— 边缘：亮顶边（受光）+ 暗底缘（背光）—— */
+  --lgm-edge: rgba(255, 255, 255, .82);
+  --lgm-edge-soft: rgba(255, 255, 255, .38);
+  /* 内缘斜面：顶部 1px 提亮、底部 1px 压暗 → 厚度感 */
+  --lgm-bevel:
+    inset 0 1px 0 rgba(255, 255, 255, .88),
+    inset 0 -1px 0 rgba(31, 45, 80, .06);
+  --lgm-bevel-thick:
+    inset 0 1px 0 rgba(255, 255, 255, .92),
+    inset 0 -1px 1px rgba(31, 45, 80, .07);
+
+  /* —— 阴影：接触阴影（贴地）+ 柔和扩散，二层足够 —— */
+  --lgm-shadow-clear: 0 1px 2px rgba(14, 22, 48, .06), 0 4px 12px rgba(14, 22, 48, .06);
+  --lgm-shadow-regular: 0 1px 2px rgba(14, 22, 48, .07), 0 8px 24px rgba(14, 22, 48, .09);
+  --lgm-shadow-thick: 0 2px 6px rgba(14, 22, 48, .08), 0 18px 48px rgba(14, 22, 48, .16);
+
+  /* —— Vibrancy 文字四档（浮在玻璃上，靠不透明度分层而非换色）—— */
+  --lgm-ink: #15181f;          /* primary   */
+  --lgm-ink-2: rgba(21, 24, 31, .72);  /* secondary 约 72% */
+  --lgm-ink-3: rgba(21, 24, 31, .52);  /* tertiary  约 52% */
+  --lgm-ink-4: rgba(21, 24, 31, .34);  /* placeholder */
+
+  /* —— Specular 镜面高光（静态层，由 script.js 的 --lg-shx/--lg-shy 驱动动态层）—— */
+  --lgm-spec: linear-gradient(160deg, rgba(255, 255, 255, .58) 0%, rgba(255, 255, 255, .12) 30%, transparent 58%);
+  --lgm-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 12%), rgba(255, 255, 255, .30) 0%, rgba(255, 255, 255, 0) 55%);
+}
+
+body.dark {
+  --lgm-clear-bg: rgba(30, 33, 44, .58);
+  --lgm-regular-bg: rgba(26, 29, 40, .66);
+  --lgm-thick-bg: rgba(22, 25, 35, .76);
+  --lgm-clear-blur: blur(20px) saturate(160%);
+  --lgm-regular-blur: blur(26px) saturate(160%);
+  --lgm-thick-blur: blur(32px) saturate(155%);
+
+  --lgm-edge: rgba(255, 255, 255, .16);
+  --lgm-edge-soft: rgba(255, 255, 255, .08);
+  --lgm-bevel:
+    inset 0 1px 0 rgba(255, 255, 255, .20),
+    inset 0 -1px 0 rgba(0, 0, 0, .40);
+  --lgm-bevel-thick:
+    inset 0 1px 0 rgba(255, 255, 255, .24),
+    inset 0 -1px 1px rgba(0, 0, 0, .45);
+
+  --lgm-shadow-clear: 0 1px 2px rgba(0, 0, 0, .40), 0 4px 12px rgba(0, 0, 0, .34);
+  --lgm-shadow-regular: 0 1px 2px rgba(0, 0, 0, .45), 0 8px 24px rgba(0, 0, 0, .40);
+  --lgm-shadow-thick: 0 2px 6px rgba(0, 0, 0, .50), 0 18px 48px rgba(0, 0, 0, .55);
+
+  --lgm-ink: #f2f5fa;
+  --lgm-ink-2: rgba(242, 245, 250, .74);
+  --lgm-ink-3: rgba(242, 245, 250, .54);
+  --lgm-ink-4: rgba(242, 245, 250, .36);
+
+  --lgm-spec: linear-gradient(160deg, rgba(255, 255, 255, .20) 0%, rgba(255, 255, 255, .07) 30%, transparent 58%);
+  --lgm-spec-live: radial-gradient(circle at var(--lg-shx, 50%) var(--lg-shy, 12%), rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, 0) 55%);
+}
+
+/* ============================================================
+   2. 控件层 · regular（常驻导航）
+   顶栏 / 聊天头部 / 在线面板 —— 背后是内容，需看清但不刺眼
+   ============================================================ */
+.topbar,
+.chat-header,
+.online-panel {
+  background: var(--lgm-regular-bg) !important;
+  -webkit-backdrop-filter: var(--lgm-regular-blur) !important;
+  backdrop-filter: var(--lgm-regular-blur) !important;
+  border: 1px solid var(--lgm-edge-soft) !important;
+  box-shadow: var(--lgm-shadow-regular), var(--lgm-bevel) !important;
+}
+/* 深色变体：style.css 存在 `body.dark .topbar{…}` (0,2,1)，
+   高于上面 (0,1,0)，故必须补 body.dark 段 */
+body.dark .topbar,
+body.dark .chat-header,
+body.dark .online-panel {
+  background: var(--lgm-regular-bg) !important;
+  -webkit-backdrop-filter: var(--lgm-regular-blur) !important;
+  backdrop-filter: var(--lgm-regular-blur) !important;
+  border: 1px solid var(--lgm-edge-soft) !important;
+  box-shadow: var(--lgm-shadow-regular), var(--lgm-bevel) !important;
+}
+
+/* ============================================================
+   3. 浮层 · thick（弹窗 / 抽屉 / 面板式卡片）
+   背后内容最杂乱 → 玻璃要更实、更厚，压得住正文
+   ============================================================ */
+/* 守卫链与 lg.css Part 9 对齐：特异性 (0,5,0) > Part 9 的 (0,4,0) */
+.glass:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque).lgm-float,
+.sec-card:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque),
+.confirm-card:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque),
+.admin-panel:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque),
+.admin-msg-panel:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque),
+.sign-card:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque),
+.lg-sheet,
+.lg-auth-card,
+.bio-card,
+.call-panel {
+  background: var(--lgm-thick-bg) !important;
+  -webkit-backdrop-filter: var(--lgm-thick-blur) !important;
+  backdrop-filter: var(--lgm-thick-blur) !important;
+  border: 1px solid var(--lgm-edge) !important;
+  border-top-color: rgba(255, 255, 255, .95) !important;
+  box-shadow: var(--lgm-shadow-thick), var(--lgm-bevel-thick) !important;
+}
+body.dark .call-panel {
+  border-top-color: rgba(255, 255, 255, .26) !important;
+}
+
+/* 深色变体：lg.css Part 9 里存在 `body.dark .glass:not(…)` 规则，
+   其特异性为 (0,5,1)（body + .dark 计入类列），高于上面浅色段的 (0,5,0)。
+   若不补这一段，深色模式下浮层会退回实色，玻璃丢失。
+   这里用同样的守卫链 + body.dark 前缀，取得 (0,6,1) 稳定胜出。 */
+body.dark .glass:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque).lgm-float,
+body.dark .sec-card:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque),
+body.dark .confirm-card:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque),
+body.dark .admin-panel:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque),
+body.dark .admin-msg-panel:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque),
+body.dark .sign-card:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque),
+body.dark .lg-sheet,
+body.dark .lg-auth-card,
+body.dark .bio-card,
+body.dark .call-panel {
+  background: var(--lgm-thick-bg) !important;
+  -webkit-backdrop-filter: var(--lgm-thick-blur) !important;
+  backdrop-filter: var(--lgm-thick-blur) !important;
+  border: 1px solid var(--lgm-edge) !important;
+  border-top-color: rgba(255, 255, 255, .26) !important;
+  box-shadow: var(--lgm-shadow-thick), var(--lgm-bevel-thick) !important;
+}
+
+/* ============================================================
+   4. 浮层 · clear（小型悬浮控件：菜单 / 选择条 / 气泡菜单）
+   体积小 → 玻璃可以更透，减少视觉噪声与合成开销
+   ============================================================ */
+.glass:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque).lgm-float-clear,
+.group-menu,
+.multi-menu,
+.emoji-panel,
+.loc-menu,
+.multi-select-bar,
+.msg-ctx-menu,
+.reaction-picker,
+.reply-bar,
+.mention-picker,
+.search-panel,
+.recording-bar,
+.composer-mode-bar,
+.loc-share-banner,
+.lg-toast {
+  background: var(--lgm-clear-bg) !important;
+  -webkit-backdrop-filter: var(--lgm-clear-blur) !important;
+  backdrop-filter: var(--lgm-clear-blur) !important;
+  border: 1px solid var(--lgm-edge-soft) !important;
+  box-shadow: var(--lgm-shadow-clear), var(--lgm-bevel) !important;
+}
+/* 深色变体：同 Part 9 的 (0,5,1) 冲突，此处补 body.dark 前缀取 (0,6,1) */
+body.dark .glass:not(.home-hero):not(.feature-card):not(.glass-pill):not(.lg-opaque).lgm-float-clear,
+body.dark .group-menu,
+body.dark .multi-menu,
+body.dark .emoji-panel,
+body.dark .loc-menu,
+body.dark .multi-select-bar,
+body.dark .msg-ctx-menu,
+body.dark .reaction-picker,
+body.dark .reply-bar,
+body.dark .mention-picker,
+body.dark .search-panel,
+body.dark .recording-bar,
+body.dark .composer-mode-bar,
+body.dark .loc-share-banner,
+body.dark .lg-toast {
+  background: var(--lgm-clear-bg) !important;
+  -webkit-backdrop-filter: var(--lgm-clear-blur) !important;
+  backdrop-filter: var(--lgm-clear-blur) !important;
+  border: 1px solid var(--lgm-edge-soft) !important;
+  box-shadow: var(--lgm-shadow-clear), var(--lgm-bevel) !important;
+}
+
+/* ============================================================
+   5. Specular 高光层（静态受光带 + 指针动态镜面）
+   仅加在控件层/浮层；内容层不加，避免合成层过多。
+   用 ::before 承载静态带，::after 承载动态镜面（由 script.js 更新
+   --lg-shx/--lg-shy）。均为 inset:0 + border-radius:inherit，
+   不使用 padding 描边（历史上 padding 描边曾致圆角变形）。
+   ============================================================ */
+.topbar::before,
+.chat-header::before,
+.online-panel::before,
+.sec-card::before,
+.confirm-card::before,
+.admin-panel::before,
+.lg-sheet::before,
+.lg-auth-card::before,
+.group-menu::before,
+.multi-menu::before,
+.emoji-panel::before,
+.msg-ctx-menu::before,
+.reaction-picker::before,
+.multi-select-bar::before,
+.reply-bar::before,
+.mention-picker::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+  padding: 0 !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+  background: var(--lgm-spec);
+  opacity: .85;
+}
+
+.topbar::after,
+.chat-header::after,
+.online-panel::after,
+.sec-card::after,
+.confirm-card::after,
+.admin-panel::after,
+.lg-sheet::after,
+.lg-auth-card::after,
+.group-menu::after,
+.multi-menu::after,
+.emoji-panel::after,
+.msg-ctx-menu::after,
+.reaction-picker::after,
+.multi-select-bar::after,
+.reply-bar::after,
+.mention-picker::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 3;
+  padding: 0 !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+  background: var(--lgm-spec-live);
+  opacity: .55;
+  transition: opacity .34s cubic-bezier(.22, .72, .16, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .topbar:hover::after,
+  .chat-header:hover::after,
+  .online-panel:hover::after,
+  .sec-card:hover::after,
+  .confirm-card:hover::after,
+  .admin-panel:hover::after,
+  .lg-sheet:hover::after,
+  .lg-auth-card:hover::after,
+  .group-menu:hover::after,
+  .multi-menu:hover::after,
+  .emoji-panel:hover::after,
+  .msg-ctx-menu:hover::after,
+  .reaction-picker:hover::after,
+  .multi-select-bar:hover::after,
+  .reply-bar:hover::after,
+  .mention-picker:hover::after { opacity: 1; }
+}
+
+/* ============================================================
+   6. 高光层承载前提
+   伪元素高光需要「定位上下文」。绝大多数表面在 style.css 中已带
+   position（absolute/fixed/relative 均有），高光层 ::before/::after
+   用 inset:0 + border-radius:inherit 即自动贴合圆角矩形，
+   不需要 overflow:hidden 裁剪（加了反而会切断 .lg-sheet 的滚动）。
+
+   只为「缺定位」且「非固定定位」的三个表面兜底 —— 绝不覆盖已有的
+   absolute/fixed，否则会把下拉菜单、悬浮条从锚点拽走。
+   ============================================================ */
+.confirm-card,
+.admin-panel,
+.reply-bar {
+  position: relative;
+}
+
+/* ============================================================
+   7. 内容层保持实色（显式声明，防止被后续改动误伤）
+   HIG：内容层不进玻璃层。以下为实色卡片，正文对比度达标优先。
+   ============================================================ */
+.profile-card:not(.lgm-float),
+.my-groups,
+.users-header,
+.fb-header,
+.fb-submit,
+.fb-list-wrap,
+.fb-admin,
+.invite-card,
+.home-hero,
+.feature-card {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+/* 深色内容层同样显式关玻璃（lg.css Part 9 深色段已给实色背景） */
+
+/* ============================================================
+   8. squircle 连续曲率（渐进增强）
+   Edge / Chrome 139+ 支持 corner-shape；老浏览器自动退回普通圆角。
+   ============================================================ */
+@supports (corner-shape: squircle) {
+  .topbar, .chat-header, .online-panel,
+  .sec-card, .confirm-card, .admin-panel, .admin-msg-panel, .sign-card,
+  .lg-sheet, .lg-auth-card, .bio-card, .call-panel,
+  .group-menu, .multi-menu, .emoji-panel, .msg-ctx-menu,
+  .reaction-picker, .multi-select-bar, .reply-bar, .mention-picker {
+    corner-shape: squircle;
+  }
+}
+
+/* ============================================================
+   9. 无障碍与降级
+   ============================================================ */
+
+/* 9a. 降低透明度 → 材质退为实色（文字对比度优先于视觉风格） */
+@media (prefers-reduced-transparency: reduce) {
+  .topbar, .chat-header, .online-panel,
+  .sec-card, .confirm-card, .admin-panel, .admin-msg-panel, .sign-card,
+  .lg-sheet, .lg-auth-card, .bio-card, .call-panel,
+  .group-menu, .multi-menu, .emoji-panel, .msg-ctx-menu,
+  .reaction-picker, .multi-select-bar, .reply-bar, .mention-picker {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: #ffffff !important;
+    border-color: rgba(20, 45, 90, .22) !important;
+    box-shadow: 0 2px 8px rgba(14, 22, 48, .12) !important;
+  }
+  body.dark .topbar, body.dark .chat-header, body.dark .online-panel,
+  body.dark .sec-card, body.dark .confirm-card, body.dark .admin-panel,
+  body.dark .admin-msg-panel, body.dark .sign-card,
+  body.dark .lg-sheet, body.dark .lg-auth-card, body.dark .bio-card,
+  body.dark .call-panel, body.dark .group-menu, body.dark .multi-menu,
+  body.dark .emoji-panel, body.dark .msg-ctx-menu, body.dark .reaction-picker,
+  body.dark .multi-select-bar, body.dark .reply-bar, body.dark .mention-picker {
+    background: #14171f !important;
+    border-color: rgba(255, 255, 255, .22) !important;
+  }
+}
+
+/* 9b. 提高对比度 → 近实色背景 + 明确边框（WCAG 图形边界 ≥ 3:1） */
+@media (prefers-contrast: more) {
+  .topbar, .chat-header, .online-panel,
+  .sec-card, .confirm-card, .admin-panel, .admin-msg-panel, .sign-card,
+  .lg-sheet, .lg-auth-card, .bio-card, .call-panel,
+  .group-menu, .multi-menu, .emoji-panel, .msg-ctx-menu,
+  .reaction-picker, .multi-select-bar, .reply-bar, .mention-picker {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: #ffffff !important;
+    border: 2px solid #1c1c1e !important;
+    box-shadow: none !important;
+  }
+  body.dark .topbar, body.dark .chat-header, body.dark .online-panel,
+  body.dark .sec-card, body.dark .confirm-card, body.dark .admin-panel,
+  body.dark .admin-msg-panel, body.dark .sign-card,
+  body.dark .lg-sheet, body.dark .lg-auth-card, body.dark .bio-card,
+  body.dark .call-panel, body.dark .group-menu, body.dark .multi-menu,
+  body.dark .emoji-panel, body.dark .msg-ctx-menu, body.dark .reaction-picker,
+  body.dark .multi-select-bar, body.dark .reply-bar, body.dark .mention-picker {
+    background: #000000 !important;
+    border-color: #ffffff !important;
+  }
+  .topbar::before, .chat-header::before, .online-panel::before,
+  .sec-card::before, .confirm-card::before, .admin-panel::before,
+  .lg-sheet::before, .lg-auth-card::before,
+  .topbar::after, .chat-header::after, .online-panel::after,
+  .sec-card::after, .confirm-card::after, .admin-panel::after,
+  .lg-sheet::after, .lg-auth-card::after { display: none !important; }
+}
+
+/* 9c. Windows 高对比度模式：交由系统配色接管，玻璃一律让位 */
+@media (forced-colors: active) {
+  .topbar, .chat-header, .online-panel,
+  .sec-card, .confirm-card, .admin-panel, .admin-msg-panel, .sign-card,
+  .lg-sheet, .lg-auth-card, .bio-card, .call-panel,
+  .group-menu, .multi-menu, .emoji-panel, .msg-ctx-menu,
+  .reaction-picker, .multi-select-bar, .reply-bar, .mention-picker {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: Canvas !important;
+    border: 1px solid CanvasText !important;
+    box-shadow: none !important;
+    forced-color-adjust: auto;
+  }
+  .topbar::before, .chat-header::before, .online-panel::before,
+  .sec-card::before, .confirm-card::before, .admin-panel::before,
+  .lg-sheet::before, .lg-auth-card::before,
+  .topbar::after, .chat-header::after, .online-panel::after,
+  .sec-card::after, .confirm-card::after, .admin-panel::after,
+  .lg-sheet::after, .lg-auth-card::after { display: none !important; }
+}
+
+/* 9d. 不支持 backdrop-filter：材质退为高不透明度实色（可读性优先） */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .topbar, .chat-header, .online-panel,
+  .sec-card, .confirm-card, .admin-panel, .admin-msg-panel, .sign-card,
+  .lg-sheet, .lg-auth-card, .bio-card, .call-panel,
+  .group-menu, .multi-menu, .emoji-panel, .msg-ctx-menu,
+  .reaction-picker, .multi-select-bar, .reply-bar, .mention-picker {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: rgba(255, 255, 255, .97) !important;
+  }
+  body.dark .topbar, body.dark .chat-header, body.dark .online-panel,
+  body.dark .sec-card, body.dark .confirm-card, body.dark .admin-panel,
+  body.dark .admin-msg-panel, body.dark .sign-card,
+  body.dark .lg-sheet, body.dark .lg-auth-card, body.dark .bio-card,
+  body.dark .call-panel, body.dark .group-menu, body.dark .multi-menu,
+  body.dark .emoji-panel, body.dark .msg-ctx-menu, body.dark .reaction-picker,
+  body.dark .multi-select-bar, body.dark .reply-bar, body.dark .mention-picker {
+    background: rgba(20, 23, 31, .97) !important;
+  }
+  /* 无 backdrop-filter 时高光层无意义，去掉省合成 */
+  .topbar::before, .chat-header::before, .online-panel::before,
+  .sec-card::before, .confirm-card::before, .admin-panel::before,
+  .lg-sheet::before, .lg-auth-card::before,
+  .topbar::after, .chat-header::after, .online-panel::after,
+  .sec-card::after, .confirm-card::after, .admin-panel::after,
+  .lg-sheet::after, .lg-auth-card::after { display: none !important; }
+}
+
+/* 9e. 移动端降模糊半径：合成成本随半径上升，14px 在小屏视觉差异可忽略 */
+@media (max-width: 768px) {
+  .topbar, .chat-header, .online-panel,
+  .sec-card, .confirm-card, .admin-panel, .admin-msg-panel, .sign-card,
+  .lg-sheet, .lg-auth-card, .bio-card, .call-panel {
+    -webkit-backdrop-filter: blur(18px) saturate(170%) !important;
+    backdrop-filter: blur(18px) saturate(170%) !important;
+  }
+  .group-menu, .multi-menu, .emoji-panel, .msg-ctx-menu,
+  .reaction-picker, .multi-select-bar, .reply-bar, .mention-picker {
+    -webkit-backdrop-filter: blur(16px) saturate(170%) !important;
+    backdrop-filter: blur(16px) saturate(170%) !important;
+  }
+}
+
+/* 9f. 打印：去材质，去装饰 */
+@media print {
+  .topbar, .chat-header, .online-panel,
+  .sec-card, .confirm-card, .admin-panel, .admin-msg-panel, .sign-card,
+  .lg-sheet, .lg-auth-card, .bio-card, .call-panel {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+  }
+}

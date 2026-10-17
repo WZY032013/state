@@ -8,11 +8,12 @@
 <meta name="theme-color" content="#0a0a12" media="(prefers-color-scheme: dark)">
 <title>Stating</title>
 <link rel="preload" href="script.js" as="script">
-<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-<link rel="dns-prefetch" href="https://server.arcgisonline.com">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="lg.css">
+<link rel="stylesheet" href="css/loading.css">
+<link rel="stylesheet" href="css/lg-material.css">
+<link rel="stylesheet" href="css/lg-motion.css">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -21,7 +22,7 @@
 <body>
 <div id="offlineBanner" class="offline-banner" hidden>
 <span class="ob-dot"></span>
-<span>离线模式 · 可浏览与蓝牙通信，无法发送消息</span>
+<span>离线模式 · 页面与消息均需网络，蓝牙直连可用</span>
 </div>
 <div class="bg-blobs" aria-hidden="true">
 <span class="blob b1"></span>
@@ -1285,6 +1286,9 @@
 <div class="mp-list" id="mentionList"></div>
 </div>
 <script src="js/icons-sf.js"></script>
+<script src="js/lg-spring.js"></script>
+<script src="js/loading.js" defer></script>
+<script src="js/data-cache.js" defer></script>
 <script src="script.js" defer></script>
 <script src="js/auth-adapter.js" defer></script>
 <script src="js/bio-unlock.js" defer></script>
