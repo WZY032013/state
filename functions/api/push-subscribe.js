@@ -1,18 +1,1 @@
-// POST /api/push-subscribe 保存推送订阅（VAPID 配置前为占位）
-export async function onRequest(context) {
-  const { request, env } = context;
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ ok: false }), { status: 405, headers: { 'content-type': 'application/json' } });
-  }
-  try {
-    await env.DB.prepare('CREATE TABLE IF NOT EXISTS push_subs (phone TEXT PRIMARY KEY, subJson TEXT DEFAULT \'\', ts INTEGER DEFAULT 0)').run();
-    const body = await request.json().catch(() => ({}));
-    if (body.phone) {
-      await env.DB.prepare('INSERT INTO push_subs (phone, subJson, ts) VALUES (?,?,?) ON CONFLICT(phone) DO UPDATE SET subJson = excluded.subJson, ts = excluded.ts')
-        .bind(body.phone, JSON.stringify(body.sub || {}), Date.now()).run();
-    }
-    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } });
-  } catch (err) {
-    return new Response(JSON.stringify({ ok: false, error: String(err && err.message || err) }), { status: 500, headers: { 'content-type': 'application/json' } });
-  }
-}
+// POST /api/push-subscribe 保存推送订阅（VAPID 配置前为占位）\n// 安全：必须携带有效登录 token，且订阅归属只认 token 所属手机号，\n//      防止未登录写入 / 覆盖他人推送订阅。\nexport async function onRequest(context) {\n  const { request, env } = context;\n  const json = (data, status = 200) =>\n    new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });\n\n  if (request.method !== 'POST') {\n    return json({ ok: false }, 405);\n  }\n  try {\n    const body = await request.json().catch(() => ({}));\n\n    const auth = request.headers.get('Authorization') || '';\n    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';\n    if (!token) return json({ ok: false, error: '未登录' }, 401);\n    const tok = await env.DB.prepare('SELECT * FROM tokens WHERE token = ?').bind(token).first();\n    if (!tok || tok.expires < Date.now()) return json({ ok: false, error: '登录已过期' }, 401);\n    if (body.phone && body.phone !== tok.phone) return json({ ok: false, error: '身份不匹配' }, 403);\n\n    await env.DB.prepare('CREATE TABLE IF NOT EXISTS push_subs (phone TEXT PRIMARY KEY, subJson TEXT DEFAULT \'\', ts INTEGER DEFAULT 0)').run();\n    await env.DB.prepare('INSERT INTO push_subs (phone, subJson, ts) VALUES (?,?,?) ON CONFLICT(phone) DO UPDATE SET subJson = excluded.subJson, ts = excluded.ts')\n      .bind(tok.phone, JSON.stringify(body.sub || {}), Date.now()).run();\n    return json({ ok: true });\n  } catch (err) {\n    return json({ ok: false, error: String(err && err.message || err) }, 500);\n  }\n}\n
