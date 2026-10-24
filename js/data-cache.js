@@ -1,4 +1,124 @@
-/* ============================================================\n   Stating · DataCache v1\n   ------------------------------------------------------------\n   为 /api 提供「分级缓存 + SWR + 降级」，同时保证实时数据永不缓存。\n\n   1) 分级策略（POLICIES 自上而下匹配，第一条命中生效）\n      - no-cache（ttl=0）  实时数据：/me 登录态、/groups/** 群与消息、\n        /near/** 蓝牙、/beat、/users/:p/call。每次都走网络，\n        仅做 in-flight 合并，避免并发重复请求。\n      - SWR（ttl>0）        低频数据：用户列表、我的群聊、反馈、个人资料。\n        新鲜期直接返回；超过 swrAfter 后静默后台重验证（stale-while-revalidate），\n        界面不闪烁、不会出现「半旧半新」的列表。\n      - default             一律不缓存（保守默认：新增接口不会意外被缓存）。\n\n   2) 实时性保证\n      - 任何写操作成功后按规则连带失效相关缓存。\n      - opts.force = true 强制穿透（SSE 断线兜底轮询、进入群聊、重连补齐走它）。\n      - 可按 path / 前缀 / tag 批量失效。\n\n   3) 持久化（降级用）\n      仅 persist:true 的路径写入 localStorage，带总量上限与按时间淘汰。\n      断网或接口失败时命中快照即可直接渲染（降级展示），并广播 stale 事件。\n\n   4) 异常处理\n      - fetch 本身失败 → 判定为断网，切离线态；内存 → 持久化 → 抛「网络错误」\n      - HTTP 5xx 等     → 不伪装成离线；SWR 接口仍可降级到陈旧数据\n      - 401            → 不降级，清 token 并回调 onUnauthorized\n      - 快照过期        → 仍可返回（广播 stale），不阻塞界面\n   ============================================================ */\n(function (global) {\n  'use strict';\n\n  var LS_PREFIX = 'stating_dc:';\n  var LS_MAX_BYTES = 400 * 1024;    // 持久化总上限，超出按最旧淘汰\n  var SWR_AFTER_MAX = 20000;        // 新鲜期上限：20s 内直接返回缓存\n  var INFLIGHT_HOLD = 3000;         // 请求完成后仍保留 3s，吸收连续点击\n  var MEM_MAX_AGE = 10 * 60 * 1000; // 内存条目最长保留 10 分钟\n\n  /* ---------- 策略表 ---------- */\n  var POLICIES = [\n    { tag: 'auth',     re: /^\/me$/,                 ttl: 0,     persist: false, revalidate: false },\n    { tag: 'realtime', re: /^\/groups\//,             ttl: 0,     persist: false, revalidate: false },\n    { tag: 'realtime', re: /^\/(near|beat)(\/|$)/,   ttl: 0,     persist: false, revalidate: false },\n    { tag: 'realtime', re: /^\/users\/[^/]+\/call$/, ttl: 0,     persist: false, revalidate: false },\n    { tag: 'members',  re: /^\/users$/,              ttl: 60000, persist: true,  revalidate: true  },\n    { tag: 'groups',   re: /^\/my-groups$/,          ttl: 60000, persist: true,  revalidate: true  },\n    { tag: 'feedback', re: /^\/feedback$/,           ttl: 60000, persist: true,  revalidate: true  },\n    { tag: 'profile',  re: /^\/users\/[^/]+$/,       ttl: 60000, persist: true,  revalidate: true  },\n    { tag: 'default',  re: /.*/,                     ttl: 0,     persist: false, revalidate: false }\n  ];\n\n  /* ---------- 运行时状态 ---------- */\n  var cfg = {\n    base: '/api',\n    getToken: function () { try { return localStorage.getItem('stating_token') || ''; } catch (e) { return ''; } },\n    onUnauthorized: null,\n    onNetworkState: null,\n    onStale: null\n  };\n\n  var mem = new Map();       // key -> {ts, data, tag}\n  var inflight = new Map();  // key -> {p:Promise}（包装对象，便于识别「已完成但仍在窗口」）\n  var lsIndex = null;        // 懒加载的 localStorage 快照索引\n  var listeners = { invalidate: [], stale: [], refresh: [] };\n  var stats = { hit: 0, miss: 0, staleServed: 0, revalidated: 0, deduped: 0, network: 0, failures: 0 };\n\n  /* ================= 基础工具 ================= */\n\n  function policyOf(path, method) {\n    if ((method || 'GET').toUpperCase() !== 'GET') {\n      return { tag: 'write', ttl: 0, persist: false, revalidate: false };\n    }\n    for (var i = 0; i < POLICIES.length; i++) {\n      if (POLICIES[i].re.test(path)) return POLICIES[i];\n    }\n    return POLICIES[POLICIES.length - 1];\n  }\n\n  function keyOf(path, opts) {\n    var method = (opts.method || 'GET').toUpperCase();\n    if (method === 'GET') return 'GET:' + path;\n    var body = opts.body, raw;\n    if (body == null) raw = '';\n    else if (typeof body === 'string') raw = body;\n    else { try { raw = JSON.stringify(body); } catch (e) { raw = String(body); } }\n    return method + ':' + path + ':' + raw;\n  }\n\n  function pathOfKey(key) { var i = key.indexOf(':'); return i < 0 ? key : key.slice(i + 1); }\n\n  function emit(type, payload) {\n    var arr = listeners[type];\n    if (!arr) return;\n    for (var i = 0; i < arr.length; i++) {\n      try { arr[i](payload); } catch (e) { /* 单个监听器异常不影响主流程 */ }\n    }\n  }\n\n  function idle(fn) {\n    if (typeof global.requestIdleCallback === 'function') global.requestIdleCallback(fn, { timeout: 1500 });\n    else setTimeout(fn, 80);\n  }\n\n  /* ================= 持久化 ================= */\n\n  function loadIndex() {\n    if (lsIndex) return lsIndex;\n    try {\n      lsIndex = JSON.parse(localStorage.getItem('stating_dc_index') || '{}');\n      if (!lsIndex || typeof lsIndex !== 'object') lsIndex = {};\n    } catch (e) { lsIndex = {}; }\n    return lsIndex;\n  }\n\n  function lsRead(key) {\n    var idx = loadIndex();\n    if (!idx[key]) return null;\n    try {\n      var raw = localStorage.getItem(LS_PREFIX + key);\n      if (raw == null) { delete idx[key]; return null; }\n      return { ts: idx[key].ts, data: JSON.parse(raw), tag: idx[key].tag };
+/* ============================================================
+   Stating · DataCache v1
+   ------------------------------------------------------------
+   为 /api 提供「分级缓存 + SWR + 降级」，同时保证实时数据永不缓存。
+
+   1) 分级策略（POLICIES 自上而下匹配，第一条命中生效）
+      - no-cache（ttl=0）  实时数据：/me 登录态、/groups/** 群与消息、
+        /near/** 蓝牙、/beat、/users/:p/call。每次都走网络，
+        仅做 in-flight 合并，避免并发重复请求。
+      - SWR（ttl>0）        低频数据：用户列表、我的群聊、反馈、个人资料。
+        新鲜期直接返回；超过 swrAfter 后静默后台重验证（stale-while-revalidate），
+        界面不闪烁、不会出现「半旧半新」的列表。
+      - default             一律不缓存（保守默认：新增接口不会意外被缓存）。
+
+   2) 实时性保证
+      - 任何写操作成功后按规则连带失效相关缓存。
+      - opts.force = true 强制穿透（SSE 断线兜底轮询、进入群聊、重连补齐走它）。
+      - 可按 path / 前缀 / tag 批量失效。
+
+   3) 持久化（降级用）
+      仅 persist:true 的路径写入 localStorage，带总量上限与按时间淘汰。
+      断网或接口失败时命中快照即可直接渲染（降级展示），并广播 stale 事件。
+
+   4) 异常处理
+      - fetch 本身失败 → 判定为断网，切离线态；内存 → 持久化 → 抛「网络错误」
+      - HTTP 5xx 等     → 不伪装成离线；SWR 接口仍可降级到陈旧数据
+      - 401            → 不降级，清 token 并回调 onUnauthorized
+      - 快照过期        → 仍可返回（广播 stale），不阻塞界面
+   ============================================================ */
+(function (global) {
+  'use strict';
+
+  var LS_PREFIX = 'stating_dc:';
+  var LS_MAX_BYTES = 400 * 1024;    // 持久化总上限，超出按最旧淘汰
+  var SWR_AFTER_MAX = 20000;        // 新鲜期上限：20s 内直接返回缓存
+  var INFLIGHT_HOLD = 3000;         // 请求完成后仍保留 3s，吸收连续点击
+  var MEM_MAX_AGE = 10 * 60 * 1000; // 内存条目最长保留 10 分钟
+
+  /* ---------- 策略表 ---------- */
+  var POLICIES = [
+    { tag: 'auth',     re: /^\/me$/,                 ttl: 0,     persist: false, revalidate: false },
+    { tag: 'realtime', re: /^\/groups\//,             ttl: 0,     persist: false, revalidate: false },
+    { tag: 'realtime', re: /^\/(near|beat)(\/|$)/,   ttl: 0,     persist: false, revalidate: false },
+    { tag: 'realtime', re: /^\/users\/[^/]+\/call$/, ttl: 0,     persist: false, revalidate: false },
+    { tag: 'members',  re: /^\/users$/,              ttl: 60000, persist: true,  revalidate: true  },
+    { tag: 'groups',   re: /^\/my-groups$/,          ttl: 60000, persist: true,  revalidate: true  },
+    { tag: 'feedback', re: /^\/feedback$/,           ttl: 60000, persist: true,  revalidate: true  },
+    { tag: 'profile',  re: /^\/users\/[^/]+$/,       ttl: 60000, persist: true,  revalidate: true  },
+    { tag: 'default',  re: /.*/,                     ttl: 0,     persist: false, revalidate: false }
+  ];
+
+  /* ---------- 运行时状态 ---------- */
+  var cfg = {
+    base: '/api',
+    getToken: function () { try { return localStorage.getItem('stating_token') || ''; } catch (e) { return ''; } },
+    onUnauthorized: null,
+    onNetworkState: null,
+    onStale: null
+  };
+
+  var mem = new Map();       // key -> {ts, data, tag}
+  var inflight = new Map();  // key -> {p:Promise}（包装对象，便于识别「已完成但仍在窗口」）
+  var lsIndex = null;        // 懒加载的 localStorage 快照索引
+  var listeners = { invalidate: [], stale: [], refresh: [] };
+  var stats = { hit: 0, miss: 0, staleServed: 0, revalidated: 0, deduped: 0, network: 0, failures: 0 };
+
+  /* ================= 基础工具 ================= */
+
+  function policyOf(path, method) {
+    if ((method || 'GET').toUpperCase() !== 'GET') {
+      return { tag: 'write', ttl: 0, persist: false, revalidate: false };
+    }
+    for (var i = 0; i < POLICIES.length; i++) {
+      if (POLICIES[i].re.test(path)) return POLICIES[i];
+    }
+    return POLICIES[POLICIES.length - 1];
+  }
+
+  function keyOf(path, opts) {
+    var method = (opts.method || 'GET').toUpperCase();
+    if (method === 'GET') return 'GET:' + path;
+    var body = opts.body, raw;
+    if (body == null) raw = '';
+    else if (typeof body === 'string') raw = body;
+    else { try { raw = JSON.stringify(body); } catch (e) { raw = String(body); } }
+    return method + ':' + path + ':' + raw;
+  }
+
+  function pathOfKey(key) { var i = key.indexOf(':'); return i < 0 ? key : key.slice(i + 1); }
+
+  function emit(type, payload) {
+    var arr = listeners[type];
+    if (!arr) return;
+    for (var i = 0; i < arr.length; i++) {
+      try { arr[i](payload); } catch (e) { /* 单个监听器异常不影响主流程 */ }
+    }
+  }
+
+  function idle(fn) {
+    if (typeof global.requestIdleCallback === 'function') global.requestIdleCallback(fn, { timeout: 1500 });
+    else setTimeout(fn, 80);
+  }
+
+  /* ================= 持久化 ================= */
+
+  function loadIndex() {
+    if (lsIndex) return lsIndex;
+    try {
+      lsIndex = JSON.parse(localStorage.getItem('stating_dc_index') || '{}');
+      if (!lsIndex || typeof lsIndex !== 'object') lsIndex = {};
+    } catch (e) { lsIndex = {}; }
+    return lsIndex;
+  }
+
+  function lsRead(key) {
+    var idx = loadIndex();
+    if (!idx[key]) return null;
+    try {
+      var raw = localStorage.getItem(LS_PREFIX + key);
+      if (raw == null) { delete idx[key]; return null; }
+      return { ts: idx[key].ts, data: JSON.parse(raw), tag: idx[key].tag };
     } catch (e) { delete idx[key]; return null; }
   }
 
@@ -291,4 +411,4 @@
       return s;
     }
   };
-})(typeof window !== 'undefined' ? window : globalThis);\n
+})(typeof window !== 'undefined' ? window : globalThis);

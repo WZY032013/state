@@ -1,0 +1,30 @@
+# 统一行尾符策略
+# 仓库内容以 LF 存储，避免本地开发与 GitHub 网页上传之间的行尾符差异
+# 反复制造整文件伪冲突（diff 显示上千行，实际内容一致）。
+* text=auto eol=lf
+
+# 二进制文件不做行尾符转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.mp3 binary
+*.m4a binary
+*.mp4 binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# 脚本与源码强制 LF
+*.sh text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.sql text eol=lf

@@ -19,3 +19,14 @@ _*test.html
 _probe.html
 audit*.mjs
 audit_out.txt
+
+# 转义中间产物：网页上传脚本把 JS 内容转成字面 \n 单行时留下的临时文件。
+# 这些文件正是远端 sw.js / auth-adapter.js 等变成单行损坏版的原因，不要入库。
+_esc_*.txt
+
+# WorkBuddy 本地记忆与配置（属于本机工作区数据，不属于项目源码）
+.workbuddy/
+
+# 调试截图（临时产物，不入库）
+test-*.png
+_shots/

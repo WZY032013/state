@@ -244,6 +244,36 @@ async function handleAPI(req, parts, body, url) {
   if (!user) return { status: 401, ok: false, error: '未登录或登录已过期' };
 
   try {
+    // ---- 分片上传 / 推送订阅（对齐 functions/api/upload-chunk.js、upload-assemble.js、push-subscribe.js）
+    // 线上是独立 Functions 路由，本地此前完全缺失 → 本地测不出、线上才暴露（mock 漂移）
+    if (parts[0] === 'upload-chunk' && req.method === 'POST') {
+      if (!body.uploadId) return { status: 400, ok: false, error: 'no uploadId' };
+      if (body.phone && body.phone !== user.phone) return { status: 403, ok: false, error: '身份不匹配' };
+      const key = 'uchunk:' + body.uploadId;
+      const ex = kvGet(key);
+      if (ex && ex.phone && ex.phone !== user.phone) return { status: 403, ok: false, error: 'uploadId 不属于当前用户' };
+      const chunks = ex ? ex.chunks.slice() : [];
+      chunks[body.index] = body.data;
+      kvSet(key, { phone: user.phone, name: body.name || '', mime: body.mime || '', size: body.size || 0, totalChunks: body.totalChunks || 0, chunks });
+      return { ok: true, received: chunks.filter(Boolean).length, total: body.totalChunks || 0 };
+    }
+    if (parts[0] === 'upload-assemble' && req.method === 'POST') {
+      if (!body.uploadId) return { status: 400, ok: false, error: 'no uploadId' };
+      const key = 'uchunk:' + body.uploadId;
+      const row = kvGet(key);
+      if (!row) return { status: 404, ok: false, error: 'no upload' };
+      if (row.phone && row.phone !== user.phone) return { status: 403, ok: false, error: 'uploadId 不属于当前用户' };
+      if (row.chunks.length !== row.totalChunks || row.chunks.some(c => !c))
+        return { status: 400, ok: false, error: 'incomplete', have: row.chunks.filter(Boolean).length, need: row.totalChunks };
+      const dataUrl = 'data:' + (row.mime || 'application/octet-stream') + ';base64,' + row.chunks.join('');
+      kvDel(key);
+      return { ok: true, dataUrl, name: row.name, size: row.size };
+    }
+    if (parts[0] === 'push-subscribe' && req.method === 'POST') {
+      if (body.phone && body.phone !== user.phone) return { status: 403, ok: false, error: '身份不匹配' };
+      kvSet('pushsub:' + user.phone, { sub: body.sub || {}, ts: Date.now() });
+      return { ok: true };
+    }
     if (parts[0] === 'me' && parts.length === 1) return { ok: true, user: publicUser(user) };
     // 聊天统计 Q10/Q11：按日期聚合消息数
     if (parts[0] === 'me' && parts[1] === 'chat-stats' && req.method === 'GET') {
@@ -713,7 +743,7 @@ const server = http.createServer(async (req, res) => {
   const ext = path.extname(filePath);
   try {
     const data = fs.readFileSync(filePath);
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'public, max-age=0, must-revalidate' });
     res.end(data);
   } catch {
     res.writeHead(404); res.end('Not found');

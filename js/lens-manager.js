@@ -1,1 +1,185 @@
-/* ============================================================\n   Stating · Liquid Glass 镜头管理器（plus 全量，带性能分级）\n   - 仅 3 个关键表面：顶部胶囊 / 输入胶囊 / 登录卡（玻璃不叠玻璃）\n   - 低端机/省流/reduced-motion/移动默认走 CSS 降级（不加镜头）\n   - WebGL 上下文丢失自动降级\n   ============================================================ */\n'use strict';\n(function () {\n  const instances = [];\n  let started = false;\n\n  const coarse = window.matchMedia('(pointer: coarse)').matches;\n  const narrow = Math.min(window.innerWidth, window.innerHeight) < 700;\n  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;\n  const saveData = !!(navigator.connection && navigator.connection.saveData);\n  const mem = navigator.deviceMemory || 4;\n  // 默认关闭 WebGL 真折射（性能优先走 CSS 玻璃）；仅 URL 显式 ?lens=1 且桌面 + 8 核以上才启用\n  const lensOptIn = /[?&]lens=1/.test(location.search);\n  const cores = navigator.hardwareConcurrency || 1;\n  const plusAllowed = lensOptIn && !coarse && !narrow && !reduce && !saveData && mem >= 4 && cores >= 8;\n  console.info('[liquid-glass lens] ' + (plusAllowed ? 'enabled (opt-in via ?lens=1)' : 'disabled → CSS glass fallback'));\n\n  /**\n   * 元素「真正可见且已布局」判据（与 processs 的 vis() 同口径）。\n   * 不能用 offsetParent 兜底：它在 position:fixed 元素上恒为 null，\n   * 而 .composer 日后要做悬浮胶囊正是要加 position:fixed，\n   * 那样判据会静默失效、白白轮询到超时才放弃。\n   */\n  function vis(node) {\n    if (!node) return false;\n    const cs = window.getComputedStyle(node);\n    if (!cs || cs.display === 'none' || cs.visibility === 'hidden') return false;\n    if (parseFloat(cs.opacity) === 0) return false;\n    const r = node.getBoundingClientRect();\n    return r.width > 0 && r.height > 0;\n  }\n\n  // 多源兜底：仅 esm 分发（项目内无 liquidGL 本地副本、禁止 npm install），\n  // 依次回退 jsDelivr → fastly 镜像，任一失败自动落 CSS 档（lg-no-lens）。\n  // 注意：候选源必须与 _headers 的 CSP script-src 白名单一致，否则会被浏览器直接拦截。\n  const SOURCES = [\n    'https://cdn.jsdelivr.net/npm/liquid-gl@2.2.2/liquidGL.js',\n    'https://fastly.jsdelivr.net/npm/liquid-gl@2.2.2/liquidGL.js'\n  ];\n  function loadLib() {\n    if (window.liquidGL) return Promise.resolve();\n    function trySrc(i) {\n      if (i >= SOURCES.length) return Promise.reject(new Error('liquidGL load fail'));\n      return new Promise((res, rej) => {\n        const s = document.createElement('script');\n        s.type = 'module';\n        s.src = SOURCES[i]; s.async = true;\n        s.onload = () => res();\n        s.onerror = () => { s.remove(); trySrc(i + 1).then(res, rej); };\n        document.body.appendChild(s);\n      });\n    }\n    return trySrc(0);\n  }\n\n  function baseOpts(extra) {\n    return Object.assign({\n      snapshot: 'body',\n      resolution: 1.6,\n      devicePixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),\n      powerPreference: 'high-performance',\n      engine: 'auto',\n      refraction: 0.012,\n      aberration: 0.14,\n      bevelDepth: 0.1,\n      bevelWidth: 0.14,\n      frost: 0.32,\n      shadow: true,\n      specular: true,\n      reveal: 'fade',\n      tilt: false,\n      magnify: 1,\n    }, extra || {});\n  }\n\n  function attach(selector, extra) {\n    const el = document.querySelector(selector);\n    if (!el) return false;\n    const r = el.getBoundingClientRect();\n    if (r.width < 24 || r.height < 12) return false;\n    try {\n      const inst = window.liquidGL(baseOpts(extra));\n      instances.push(inst);\n      el.classList.add('lg-lensed');\n      return true;\n    } catch (e) {\n      console.warn('lens skip', selector, e);\n      return false;\n    }\n  }\n\n  /* liquidGL(target) 按选择器匹配；一个调用可带多个选择器 */\n  function attachSelector(selector, extra) {\n    try {\n      const inst = window.liquidGL(baseOpts(Object.assign({ target: selector }, extra)));\n      instances.push(inst);\n      document.querySelectorAll(selector).forEach(el => el.classList.add('lg-lensed'));\n    } catch (e) { console.warn('lens skip', selector, e); }\n  }\n\n  function start() {\n    if (started) return;\n    started = true;\n    if (!plusAllowed) { document.body.classList.add('lg-no-lens'); return; }\n\n    loadLib().then(() => {\n      // 1) 顶部胶囊（常驻，仅一个顶栏镜头，玻璃不叠玻璃）\n      attachSelector('nav.topbar.glass-pill');\n\n      // 1b) 主页 hero + 功能卡玻璃面（评审要求扩展折射覆盖；hero 为品牌渐变，镜头叠加折射高光）\n      attachSelector('.home-hero.glass');\n      attachSelector('.feature-card.glass');\n\n      // 2) 登录卡（可见时）\n      const authCard = document.getElementById('lgAuthCard');\n      const tryAuth = () => {\n        const auth = document.getElementById('auth');\n        if (auth && !auth.hidden) {\n          // 800ms 内仍可见才挂镜头，避免老脚本引导期间瞬时可见就白挂\n          setTimeout(() => {\n            const a2 = document.getElementById('auth');\n            if (a2 && !a2.hidden && !document.querySelector('#lgAuthCard.lg-lensed')) attachSelector('#lgAuthCard');\n          }, 800);\n        }\n      };\n      const observer = new MutationObserver(tryAuth);\n      observer.observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true });\n      tryAuth();\n\n      // 3) 输入胶囊（房间打开后一次性挂载）\n      let tries = 0;\n      const iv = setInterval(() => {\n        tries++;\n        const c = document.querySelector('.composer.glass-pill');\n        // 用 vis() 判可见，不依赖 offsetParent（对 position:fixed 恒为 null）\n        if (vis(c) && c.getBoundingClientRect().width > 100) {\n          attachSelector('.composer.glass-pill');\n          clearInterval(iv);\n        }\n        if (tries > 240) clearInterval(iv); // 2 分钟未进房放弃（节省轮询）\n      }, 500);\n\n      // 4) 48 帧性能采样：均值过高则整体退回 CSS 档\n      const frames = [];\n      let last = performance.now();\n      function tick(t) {\n        frames.push(t - last); last = t;\n        if (frames.length < 48) requestAnimationFrame(tick);\n        else {\n          const mean = frames.reduce((a, b) => a + b, 0) / frames.length;\n          if (mean > 32) document.body.classList.add('lg-lens-lowfps');\n        }\n      }\n      requestAnimationFrame(tick);\n    }).catch(() => document.body.classList.add('lg-no-lens'));\n\n    // WebGL 上下文丢失 → CSS 档\n    document.addEventListener('webglcontextlost', () => document.body.classList.add('lg-no-lens'));\n    document.addEventListener('visibilitychange', () => {\n      // 标签隐藏时让浏览器自己暂停 rAF；回前台无额外处理\n    });\n  }\n\n  // 进入应用或门禁通过后启动；门禁预载已在 bio-unlock 发起\n  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', kick, { once: true });\n  else kick();\n  function kick() {\n    const ric = window.requestIdleCallback || ((fn) => setTimeout(fn, 2500));\n    // 若生物门禁存在，等门禁揭示后再启动，避免门禁下白做快照\n    const checkGate = setInterval(() => {\n      if (!document.getElementById('bioGate')) {\n        clearInterval(checkGate);\n        ric(start, { timeout: 4000 });\n      }\n    }, 200);\n    setTimeout(() => { clearInterval(checkGate); ric(start, { timeout: 4000 }); }, 15000);\n  }\n\n  window.LGLens = { start, plusAllowed };\n})();\n
+/* ============================================================
+   Stating · Liquid Glass 镜头管理器（plus 全量，带性能分级）
+   - 仅 3 个关键表面：顶部胶囊 / 输入胶囊 / 登录卡（玻璃不叠玻璃）
+   - 低端机/省流/reduced-motion/移动默认走 CSS 降级（不加镜头）
+   - WebGL 上下文丢失自动降级
+   ============================================================ */
+'use strict';
+(function () {
+  const instances = [];
+  let started = false;
+
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  const narrow = Math.min(window.innerWidth, window.innerHeight) < 700;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const saveData = !!(navigator.connection && navigator.connection.saveData);
+  const mem = navigator.deviceMemory || 4;
+  // 默认关闭 WebGL 真折射（性能优先走 CSS 玻璃）；仅 URL 显式 ?lens=1 且桌面 + 8 核以上才启用
+  const lensOptIn = /[?&]lens=1/.test(location.search);
+  const cores = navigator.hardwareConcurrency || 1;
+  const plusAllowed = lensOptIn && !coarse && !narrow && !reduce && !saveData && mem >= 4 && cores >= 8;
+  console.info('[liquid-glass lens] ' + (plusAllowed ? 'enabled (opt-in via ?lens=1)' : 'disabled → CSS glass fallback'));
+
+  /**
+   * 元素「真正可见且已布局」判据（与 processs 的 vis() 同口径）。
+   * 不能用 offsetParent 兜底：它在 position:fixed 元素上恒为 null，
+   * 而 .composer 日后要做悬浮胶囊正是要加 position:fixed，
+   * 那样判据会静默失效、白白轮询到超时才放弃。
+   */
+  function vis(node) {
+    if (!node) return false;
+    const cs = window.getComputedStyle(node);
+    if (!cs || cs.display === 'none' || cs.visibility === 'hidden') return false;
+    if (parseFloat(cs.opacity) === 0) return false;
+    const r = node.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  }
+
+  // 多源兜底：仅 esm 分发（项目内无 liquidGL 本地副本、禁止 npm install），
+  // 依次回退 jsDelivr → fastly 镜像，任一失败自动落 CSS 档（lg-no-lens）。
+  // 注意：候选源必须与 _headers 的 CSP script-src 白名单一致，否则会被浏览器直接拦截。
+  const SOURCES = [
+    'https://cdn.jsdelivr.net/npm/liquid-gl@2.2.2/liquidGL.js',
+    'https://fastly.jsdelivr.net/npm/liquid-gl@2.2.2/liquidGL.js'
+  ];
+  function loadLib() {
+    if (window.liquidGL) return Promise.resolve();
+    function trySrc(i) {
+      if (i >= SOURCES.length) return Promise.reject(new Error('liquidGL load fail'));
+      return new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.type = 'module';
+        s.src = SOURCES[i]; s.async = true;
+        s.onload = () => res();
+        s.onerror = () => { s.remove(); trySrc(i + 1).then(res, rej); };
+        document.body.appendChild(s);
+      });
+    }
+    return trySrc(0);
+  }
+
+  function baseOpts(extra) {
+    return Object.assign({
+      snapshot: 'body',
+      resolution: 1.6,
+      devicePixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
+      powerPreference: 'high-performance',
+      engine: 'auto',
+      refraction: 0.012,
+      aberration: 0.14,
+      bevelDepth: 0.1,
+      bevelWidth: 0.14,
+      frost: 0.32,
+      shadow: true,
+      specular: true,
+      reveal: 'fade',
+      tilt: false,
+      magnify: 1,
+    }, extra || {});
+  }
+
+  function attach(selector, extra) {
+    const el = document.querySelector(selector);
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width < 24 || r.height < 12) return false;
+    try {
+      const inst = window.liquidGL(baseOpts(extra));
+      instances.push(inst);
+      el.classList.add('lg-lensed');
+      return true;
+    } catch (e) {
+      console.warn('lens skip', selector, e);
+      return false;
+    }
+  }
+
+  /* liquidGL(target) 按选择器匹配；一个调用可带多个选择器 */
+  function attachSelector(selector, extra) {
+    try {
+      const inst = window.liquidGL(baseOpts(Object.assign({ target: selector }, extra)));
+      instances.push(inst);
+      document.querySelectorAll(selector).forEach(el => el.classList.add('lg-lensed'));
+    } catch (e) { console.warn('lens skip', selector, e); }
+  }
+
+  function start() {
+    if (started) return;
+    started = true;
+    if (!plusAllowed) { document.body.classList.add('lg-no-lens'); return; }
+
+    loadLib().then(() => {
+      // 1) 顶部胶囊（常驻，仅一个顶栏镜头，玻璃不叠玻璃）
+      attachSelector('nav.topbar.glass-pill');
+
+      // 1b) 主页 hero + 功能卡玻璃面（评审要求扩展折射覆盖；hero 为品牌渐变，镜头叠加折射高光）
+      attachSelector('.home-hero.glass');
+      attachSelector('.feature-card.glass');
+
+      // 2) 登录卡（可见时）
+      const authCard = document.getElementById('lgAuthCard');
+      const tryAuth = () => {
+        const auth = document.getElementById('auth');
+        if (auth && !auth.hidden) {
+          // 800ms 内仍可见才挂镜头，避免老脚本引导期间瞬时可见就白挂
+          setTimeout(() => {
+            const a2 = document.getElementById('auth');
+            if (a2 && !a2.hidden && !document.querySelector('#lgAuthCard.lg-lensed')) attachSelector('#lgAuthCard');
+          }, 800);
+        }
+      };
+      const observer = new MutationObserver(tryAuth);
+      observer.observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true });
+      tryAuth();
+
+      // 3) 输入胶囊（房间打开后一次性挂载）
+      let tries = 0;
+      const iv = setInterval(() => {
+        tries++;
+        const c = document.querySelector('.composer.glass-pill');
+        // 用 vis() 判可见，不依赖 offsetParent（对 position:fixed 恒为 null）
+        if (vis(c) && c.getBoundingClientRect().width > 100) {
+          attachSelector('.composer.glass-pill');
+          clearInterval(iv);
+        }
+        if (tries > 240) clearInterval(iv); // 2 分钟未进房放弃（节省轮询）
+      }, 500);
+
+      // 4) 48 帧性能采样：均值过高则整体退回 CSS 档
+      const frames = [];
+      let last = performance.now();
+      function tick(t) {
+        frames.push(t - last); last = t;
+        if (frames.length < 48) requestAnimationFrame(tick);
+        else {
+          const mean = frames.reduce((a, b) => a + b, 0) / frames.length;
+          if (mean > 32) document.body.classList.add('lg-lens-lowfps');
+        }
+      }
+      requestAnimationFrame(tick);
+    }).catch(() => document.body.classList.add('lg-no-lens'));
+
+    // WebGL 上下文丢失 → CSS 档
+    document.addEventListener('webglcontextlost', () => document.body.classList.add('lg-no-lens'));
+    document.addEventListener('visibilitychange', () => {
+      // 标签隐藏时让浏览器自己暂停 rAF；回前台无额外处理
+    });
+  }
+
+  // 进入应用或门禁通过后启动；门禁预载已在 bio-unlock 发起
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', kick, { once: true });
+  else kick();
+  function kick() {
+    const ric = window.requestIdleCallback || ((fn) => setTimeout(fn, 2500));
+    // 若生物门禁存在，等门禁揭示后再启动，避免门禁下白做快照
+    const checkGate = setInterval(() => {
+      if (!document.getElementById('bioGate')) {
+        clearInterval(checkGate);
+        ric(start, { timeout: 4000 });
+      }
+    }, 200);
+    setTimeout(() => { clearInterval(checkGate); ric(start, { timeout: 4000 }); }, 15000);
+  }
+
+  window.LGLens = { start, plusAllowed };
+})();
