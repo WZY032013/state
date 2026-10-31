@@ -70,7 +70,7 @@
 <div class="auth-card glass">
 <div class="auth-logo">
 <div class="logo-badge" data-icon="logo"></div>
-<h1>Stating</h1>
+<h2>Stating</h2>
 <p>与世界，轻轻对话</p>
 </div>
 <div class="auth-tabs glass-pill">
@@ -159,8 +159,7 @@
 <div id="adminKeyScreen" class="auth-screen" hidden>
 <div class="auth-card glass">
 <div class="auth-logo">
-<div class="logo-badge">🔐</div>
-<h1>管理员验证</h1>
+<h2 class="title-row"><span class="logo-badge">🔐</span>管理员验证</h2>
 <p>请输入6位管理员密钥</p>
 </div>
 <div class="otp-inputs" id="adminKeyInputs">
@@ -180,18 +179,18 @@
 <div class="auth-card glass qr-confirm-card">
 <div class="qrc-state" id="qrcLoading">
 <div class="qr-spinner"></div>
-<h1>正在验证二维码</h1>
+<h3>正在验证二维码</h3>
 <p>请稍候…</p>
 </div>
 <div class="qrc-state" id="qrcGuest" hidden>
 <div class="logo-badge" data-icon="qr"></div>
-<h1>扫码登录</h1>
+<h3>扫码登录</h3>
 <p>登录 Stating 后，即可授权电脑端登录</p>
 <button class="btn-primary" id="qrcGoLogin">前往登录</button>
 </div>
 <div class="qrc-state" id="qrcAsk" hidden>
 <div class="logo-badge qr-logo-badge" data-icon="qr"></div>
-<h1>确认登录网页版？</h1>
+<h3>确认登录网页版？</h3>
 <p>扫码后请确认是本人操作</p>
 <div class="qrc-user glass-pill">
 <span class="qrc-avatar" id="qrcAvatar">😀</span>
@@ -206,13 +205,12 @@
 </div>
 <div class="qrc-state" id="qrcDone" hidden>
 <div class="qrc-success"><span data-icon="checkDouble"></span></div>
-<h1>登录成功</h1>
+<h3>登录成功</h3>
 <p>请返回电脑端查看，已安全登录</p>
 <button class="btn-primary" id="qrcCloseDone">完成</button>
 </div>
 <div class="qrc-state" id="qrcFail" hidden>
-<div class="logo-badge">⚠️</div>
-<h1 id="qrcFailTitle">操作未完成</h1>
+<h3 id="qrcFailTitle" class="title-row"><span class="logo-badge">⚠️</span>操作未完成</h3>
 <p id="qrcFailText">二维码可能已失效</p>
 <button class="btn-primary" id="qrcCloseFail">关闭</button>
 </div>
@@ -222,7 +220,7 @@
 <div class="sec-card glass">
 <button type="button" class="sec-close" id="dcClose"><span data-icon="close"></span></button>
 <div class="sec-badge"><span data-icon="monitor"></span></div>
-<h1>设备码登录</h1>
+<h3>设备码登录</h3>
 <p class="sec-sub">在任意已登录的 Stating 设备中<br>打开「安全中心 → 设备授权」输入此码</p>
 <div class="dc-code glass" id="dcUserCode">····-····</div>
 <div class="dc-state" id="dcState">等待授权…</div>
@@ -234,7 +232,7 @@
 <div class="sec-card glass">
 <button type="button" class="sec-close" id="pkClose"><span data-icon="close"></span></button>
 <div class="sec-badge"><span data-icon="key"></span></div>
-<h1>安全中心</h1>
+<h3>安全中心</h3>
 <p class="sec-sub">Passkey 钥匙与设备授权</p>
 <div class="pk-list" id="passkeyList"></div>
 <button type="button" class="btn-primary" id="passkeyAddBtn"><span data-icon="plus"></span> 添加 Passkey</button>
@@ -254,7 +252,7 @@
 <div class="sec-card glass lg-flow-card">
 <button type="button" class="sec-close" id="smsCloseBtn"><span data-icon="close"></span></button>
 <div class="sec-badge lg-badge-sms"><span data-icon="phone"></span></div>
-<h1>本机号码登录</h1>
+<h3>本机号码登录</h3>
 <p class="sec-sub">短信验证码核验身份，支持自动读取<br>未注册的手机号验证后自动创建账号</p>
 <div class="lg-flow" data-smsstep="phone">
 <div class="field glass-field">
@@ -288,8 +286,7 @@
 <div id="wxModal" class="sec-overlay" hidden>
 <div class="sec-card glass lg-flow-card">
 <button type="button" class="sec-close" id="wxCloseBtn"><span data-icon="close"></span></button>
-<div class="sec-badge lg-badge-wx"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.74-1.78 6.22.942 2.452 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-3.044-5.837-7.062-6.122zm-2.095 2.98c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/></svg></div>
-<h1>微信登录 / 注册</h1>
+<h3 class="title-row"><span class="sec-badge lg-badge-wx"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.74-1.78 6.22.942 2.452 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-3.044-5.837-7.062-6.122zm-2.095 2.98c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/></svg></span>微信登录 / 注册</h3>
 <p class="sec-sub">微信授权后验证本机手机号<br>老用户直接绑定登录，新用户自动注册</p>
 <div class="lg-flow" data-wxstep="qr">
 <div class="wx-qr glass" id="wxQr"><div class="wx-qr-loading"><div class="loading-spinner"></div></div></div>
@@ -317,7 +314,7 @@
 <div id="bioOnboardModal" class="sec-overlay" hidden>
 <div class="sec-card glass lg-flow-card bio-onboard-card">
 <div class="bio-onboard-orb"><span data-icon="key"></span></div>
-<h1>开启面容 / 触控登录</h1>
+<h3>开启面容 / 触控登录</h3>
 <p class="sec-sub">检测到本机支持系统生物识别（Face ID / 指纹 / Windows Hello）<br>开启后可一键免密登录；授权其他设备登录时，也将强制本机生物验证</p>
 <button type="button" class="btn-primary lg-block-btn" id="bioEnableBtn">立即开启生物登录</button>
 <button type="button" class="btn-ghost lg-block-btn" id="bioLaterBtn">稍后再说</button>
@@ -326,7 +323,7 @@
 <div id="heatmapModal" class="sec-overlay" hidden>
 <div class="sec-card glass lg-flow-card" style="max-width:560px;">
 <button type="button" class="sec-close" id="heatmapClose"><span data-icon="close"></span></button>
-<h1>聊天热力图</h1>
+<h3>聊天热力图</h3>
 <p class="sec-sub">你过去一年的聊天活跃度</p>
 <div id="heatmapGrid" class="heatmap-grid"></div>
 <div class="heatmap-legend"><span>少</span><i class="hl-0"></i><i class="hl-1"></i><i class="hl-2"></i><i class="hl-3"></i><i class="hl-4"></i><span>多</span></div>
@@ -337,7 +334,7 @@
 <div class="sec-card glass lg-flow-card" style="max-width:440px;">
 <button type="button" class="sec-close" id="yearReportClose"><span data-icon="close"></span></button>
 <div class="yr-orb">📊</div>
-<h1>年度聊天报告</h1>
+<h3>年度聊天报告</h3>
 <div id="yrContent" class="yr-content"></div>
 </div>
 </div>
@@ -345,7 +342,7 @@
 <div class="sec-card glass lg-flow-card" style="max-width:440px;">
 <button type="button" class="sec-close" id="bioRoomClose"><span data-icon="close"></span></button>
 <div class="yr-orb">🔐</div>
-<h1>双人生物房间</h1>
+<h3>双人生物房间</h3>
 <p class="sec-sub">双方完成生物验证后进入，关闭后所有消息物理删除</p>
 <div id="bioRoomBody"></div>
 </div>
@@ -354,7 +351,7 @@
 <div class="sec-card glass">
 <button type="button" class="sec-close" id="recClose"><span data-icon="close"></span></button>
 <div class="sec-badge"><span data-icon="lock"></span></div>
-<h1>找回密码</h1>
+<h3>找回密码</h3>
 <div id="recStep1">
 <p class="sec-sub">输入注册手机号，验证身份后重设密码</p>
 <div class="field glass-field">
@@ -393,7 +390,7 @@
 <div class="sec-card glass sec-log-card">
 <button type="button" class="sec-close" id="slClose"><span data-icon="close"></span></button>
 <div class="sec-badge"><span data-icon="monitor"></span></div>
-<h1>安全日志</h1>
+<h3>安全日志</h3>
 <p class="sec-sub">最近的登录与安全事件（最多 50 条）</p>
 <div class="sec-log-list" id="secLogList"></div>
 </div>
@@ -952,7 +949,7 @@
 </div>
 </div>
 <div class="lightbox" id="lightbox" hidden>
-<img id="lightboxImg" src="" alt="图片">
+<img id="lightboxImg" src="assets/logo.svg" alt="图片">
 <button class="lightbox-save-btn" id="lightboxSaveBtn" hidden><span data-icon="download"></span> 保存图片</button>
 </div>
 <input type="file" id="avatarUploadInput" accept="image/*" hidden>

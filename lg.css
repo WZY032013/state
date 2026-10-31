@@ -23,7 +23,7 @@
   --lg-ink-2: #3a404c;
   --lg-ink-3: #77808e;
   --lg-ink-4: #6e7683;
-  --lg-primary: #0a84ff;
+  --lg-primary: #0a6fd8;
   --lg-primary-grad: linear-gradient(160deg, #1f6ad0 0%, #0f6fdc 55%, #0a5fd0 100%);
   --lg-face: rgba(255, 255, 255, .55);
   --lg-face-strong: rgba(255, 255, 255, .72);
@@ -99,7 +99,7 @@ body.dark .lg-auth-card {
   box-shadow: 0 10px 26px rgba(10,110,235,.38);
 }
 .lg-brand-name {
-  font-size: 28px; font-weight: 800; letter-spacing: -.5px;
+  font-size: 32px; font-weight: 800; letter-spacing: -.5px;
   color: var(--lg-primary, #2f8bff);
 }
 
@@ -295,7 +295,7 @@ body.dark .bio-card {
   width: 76px; height: 76px; border-radius: 22px;
   display: flex; align-items: center; justify-content: center;
   color: #fff; margin-bottom: 6px;
-  background: var(--lg-primary-grad, linear-gradient(160deg,#5aa6ff,#0a84ff));
+  background: var(--lg-primary-grad, linear-gradient(160deg,#5aa6ff,#0a6ad8));
   box-shadow: 0 12px 30px rgba(10,110,235,.4), inset 0 1px 0 rgba(255,255,255,.55);
 }
 .bio-glyph svg { width: 42px; height: 42px; }
@@ -304,7 +304,7 @@ body.dark .bio-card {
 body.dark #bioSub { color: #959eac; }
 .bio-spinner {
   width: 26px; height: 26px; border-radius: 50%;
-  border: 3px solid rgba(10,132,255,.2); border-top-color: #0a84ff;
+  border: 3px solid rgba(10,132,255,.2); border-top-color: #0a6ad8;
   animation: lg-spin .8s linear infinite;
   margin: 4px 0 10px;
 }
@@ -319,9 +319,9 @@ body.dark #bioSub { color: #959eac; }
    REFRACT → SHADOW → TINT → LIGHT
    ============================================================ */
 :root {
-  --primary: #0a84ff;
+  --primary: #0a6ad8;
   --primary-2: #0a64e8;
-  --primary-grad: linear-gradient(160deg, #5aa6ff 0%, #0a84ff 55%, #0a64e8 100%);
+  --primary-grad: linear-gradient(160deg, #5aa6ff 0%, #0a6ad8 55%, #0a64e8 100%);
   --primary-soft: rgba(10, 132, 255, .14);
   --success: #30d158;
   --warning: #ff9f0a;
@@ -341,7 +341,7 @@ body.dark #bioSub { color: #959eac; }
   /* 折射（CSS 降级档；plus 透镜由 lens-manager 注入真折射） */
   --lg-refract: blur(22px) saturate(170%);
   --lg-refract-strong: blur(26px) saturate(180%);
-  --lg-ease-spring: cubic-bezier(.22, 1, .36, 1);
+  --lg-ease-out: cubic-bezier(.22, 1, .36, 1);
   --lg-ease-press: cubic-bezier(.3, .8, .4, 1);
 }
 body.dark {
@@ -460,7 +460,7 @@ button.glass-pill, .qr-btn {
 .btn-primary { box-shadow: 0 6px 18px rgba(10, 110, 235, .32), inset 0 1px 0 rgba(255, 255, 255, .45); }
 
 /* 开关/分段在交互时强调（老类名复用） */
-.dm-slider, .auth-tab, .auth-tabs { transition: transform .28s var(--lg-ease-spring), background .28s var(--lg-ease-spring), box-shadow .28s var(--lg-ease-spring), color .28s var(--lg-ease-spring); }
+.dm-slider, .auth-tab, .auth-tabs { transition: transform .28s var(--lg-ease-out), background .28s var(--lg-ease-out), box-shadow .28s var(--lg-ease-out), color .28s var(--lg-ease-out); }
 
 /* ---------- 性能：移动端降低降级档模糊 ---------- */
 @media (max-width: 700px) {
@@ -496,16 +496,16 @@ button.glass-pill, .qr-btn {
 /* 弹幕滚动属于环境装饰，关闭循环（保留节点，不影响通话功能） */
 .danmaku-item { animation: none !important; opacity: 0 !important; }
 /* whisper 揭示统一为一次性淡入，不做特殊循环 */
-.whisper-revealed { animation: lg-fade-reveal .35s var(--lg-ease-spring) both; }
+.whisper-revealed { animation: lg-fade-reveal .35s var(--lg-ease-out) both; }
 @keyframes lg-fade-reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-/* 保留的功能性动画（不动）：spin/pulse/recPulse/callRingPulse/typingBounce/qrScanX/
+/* 保留的功能性动画（不动）：spin/pulse/recPulse/callRingPulse/typingWave/qrScanX/
    shake/msgIn/panelIn/menuIn/toastIn/secPop —— 均为状态反馈或一次性转场 */
 
 /* 转场统一弹性曲线（玻璃物理形变，不跳变） */
 .panel, .sec-card, .admin-panel, .confirm-card,
 .msg-ctx-menu, .search-panel, .multi-menu, .group-menu,
-.call-panel, .call-banner { transition-timing-function: var(--lg-ease-spring); }
+.call-panel, .call-banner { transition-timing-function: var(--lg-ease-out); }
 
 /* 一次性入场（替换老页面可能存在的渐上浮循环观感） */
 .view { animation: none; }
@@ -574,7 +574,7 @@ button.glass-pill, .qr-btn {
   backdrop-filter: blur(14px) saturate(160%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 1px 2px rgba(31,45,80,.04);
   margin: 6px 0;
-  transition: background .2s var(--spring);
+  transition: background .2s var(--ease-out);
 }
 #profileView .profile-row:active { background: rgba(255,255,255,.72); }
 body.dark #profileView .profile-row {
@@ -897,7 +897,7 @@ body.dark .nav-item:hover { background: rgba(255,255,255,.08) !important; }
 /* F. 聊天输入框 iMessage 化：蓝实线框 + 纯白/近黑内容底，无重阴影光斑棱镜 */
 .composer {
   background: #fff !important;
-  border: 1.5px solid #0A84FF !important;
+  border: 1.5px solid #0A6AD8 !important;
   border-radius: 24px;
   box-shadow: none !important;
 }

@@ -105,13 +105,23 @@ body.dark .lp-splash { background: #0a0a12; }
   border-radius: 34px;
   border: 1.5px solid rgba(10, 132, 255, .3);
   will-change: transform, opacity;
-  animation: lp-halo 2.4s linear infinite;
+  animation: lp-halo 3.2s ease-in-out infinite;
 }
 
 /* 入场初始态用 scale(.95)，不用 scale(0)，避免"凭空出现" */
 @keyframes lp-mark-in {
   from { opacity: 0; transform: translateY(10px) scale(.95); }
   to   { opacity: 1; transform: none; }
+}
+
+@keyframes lp-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
 }
 
 @keyframes lp-halo {
@@ -168,7 +178,7 @@ body.dark .lp-splash { background: #0a0a12; }
   border-radius: 999px;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .62), transparent);
   will-change: transform;
-  animation: lp-sheen 1.25s linear infinite;
+  animation: lp-breathe 1.8s ease-in-out infinite;
 }
 
 @keyframes lp-sheen {
@@ -223,7 +233,7 @@ body.dark .lp-splash { background: #0a0a12; }
 /* 不确定态：匀速来回扫动，不伪造百分比 */
 .lp-topbar.lp-indeterminate .lp-topbar-fill {
   will-change: transform;
-  animation: lp-slide 1.05s linear infinite;
+  animation: lp-breathe 1.8s ease-in-out infinite;
 }
 
 @keyframes lp-slide {
@@ -384,7 +394,7 @@ body.dark .lp-splash { background: #0a0a12; }
 /* 总字节未知时走不确定态（匀速扫动） */
 .lp-upload.lp-unknown .lp-up-fill {
   will-change: transform;
-  animation: lp-slide-up 1.1s linear infinite;
+  animation: lp-breathe 1.8s ease-in-out infinite;
 }
 
 @keyframes lp-slide-up {
@@ -440,7 +450,7 @@ body.dark .lp-splash { background: #0a0a12; }
 .msg-row.lp-sending > .msg-bubble-col > .msg-meta::after {
   content: "发送中";
   margin-left: 6px;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--lp-ink-2);
   opacity: .9;
   animation: lp-pulse 1.25s var(--lp-ease-io) infinite;

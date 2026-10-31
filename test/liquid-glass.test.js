@@ -168,8 +168,8 @@ for (const c of curves) {
   if (monotonic) ok(peak <= 1.0001, `${name} 单调且不过冲（峰值 ${peak.toFixed(4)}）`);
   else ok(peak > 1 && peak < 1.1, `${name} 有过冲但受控（峰值 ${peak.toFixed(4)}）`);
 }
-// 临界阻尼曲线自相似：--lgx-spring 与 --lgx-press 应完全一致
-const springCurve = MOT.match(/--lgx-spring:\s*linear\(([^)]+)\)/)[1];
+// 临界阻尼曲线自相似：--lgx-ease 与 --lgx-press 应完全一致
+const springCurve = MOT.match(/--lgx-ease:\s*linear\(([^)]+)\)/)[1];
 const pressCurve = MOT.match(/--lgx-press:\s*linear\(([^)]+)\)/)[1];
 ok(springCurve === pressCurve,
   '临界阻尼两档曲线一致（response 只改时长不改形状，符合数学自相似性）');
@@ -178,7 +178,7 @@ ok(springCurve === pressCurve,
 section('11. linear() 不支持时的降级');
 ok(/@supports not \(transition-timing-function: linear\(0, 1\)\)/.test(MOT),
   '提供 @supports not 降级块');
-ok(/--lgx-spring:\s*cubic-bezier/.test(MOT), '降级块给出 bezier 兜底值');
+ok(/--lgx-ease:\s*cubic-bezier/.test(MOT), '降级块给出 bezier 兜底值');
 
 /* ---------- 12. HTML 挂载点与加载顺序 ---------- */
 section('12. index.html 挂载');

@@ -20,7 +20,7 @@
 
 :root {
   /* —— 临界阻尼弹簧（response 0.35s），UI 默认：不过冲、不回摆 —— */
-  --lgx-spring: linear(0.0, 0.1084, 0.3072, 0.4991, 0.6536, 0.7676, 0.8475, 0.9016, 0.9373, 0.9605, 0.9753, 0.9847, 0.9905, 0.9942, 0.9965, 0.9978, 0.9987, 0.9992, 1.0);
+  --lgx-ease: linear(0.0, 0.1084, 0.3072, 0.4991, 0.6536, 0.7676, 0.8475, 0.9016, 0.9373, 0.9605, 0.9753, 0.9847, 0.9905, 0.9942, 0.9965, 0.9978, 0.9987, 0.9992, 1.0);
 
   /* —— 快按压（response 0.22s）：按下到位的短促跟进 —— */
   --lgx-press: linear(0.0, 0.1084, 0.3072, 0.4991, 0.6536, 0.7676, 0.8475, 0.9016, 0.9373, 0.9605, 0.9753, 0.9847, 0.9905, 0.9942, 0.9965, 0.9978, 0.9987, 0.9992, 1.0);
@@ -40,7 +40,7 @@
    ============================================================ */
 @supports not (transition-timing-function: linear(0, 1)) {
   :root {
-    --lgx-spring: cubic-bezier(.22, 1, .36, 1);
+    --lgx-ease: cubic-bezier(.22, 1, .36, 1);
     --lgx-press: cubic-bezier(.3, .8, .4, 1);
     --lgx-sheet: cubic-bezier(.16, 1, .3, 1), .64, 1);
     --lgx-momentum: cubic-bezier(.16, 1, .3, 1), .64, 1);
@@ -127,7 +127,7 @@
    4. 视图切换：淡入 + 轻微位移，不用模糊
    ============================================================ */
 .view.active {
-  animation: lgx-view-in 0.28s var(--lgx-spring) both;
+  animation: lgx-view-in 0.28s var(--lgx-ease) both;
 }
 @keyframes lgx-view-in {
   from { opacity: 0; transform: translateY(6px); }
@@ -139,7 +139,7 @@
    ============================================================ */
 .lg-seg-thumb,
 .bt-seg-thumb {
-  transition: transform 0.34s var(--lgx-spring);
+  transition: transform 0.34s var(--lgx-ease);
 }
 
 /* ============================================================
@@ -147,7 +147,7 @@
    开关是确定性状态切换，不该有回弹 —— 用 UI 档而非 momentum 档。
    ============================================================ */
 .dm-slider {
-  transition: transform 0.3s var(--lgx-spring), background 0.3s var(--lgx-spring);
+  transition: transform 0.3s var(--lgx-ease), background 0.3s var(--lgx-ease);
 }
 
 /* ============================================================
@@ -158,7 +158,7 @@
   to   { opacity: 1; transform: none; }
 }
 .msg-row:not(.msg-merged) {
-  animation: lgx-msg-in 0.3s var(--lgx-spring) both;
+  animation: lgx-msg-in 0.3s var(--lgx-ease) both;
 }
 
 /* ============================================================
@@ -242,4 +242,37 @@
   }
   .view.active { animation-name: lgx-fade-only; }
   .msg-row:not(.msg-merged) { animation-name: lgx-fade-only; }
+}
+/* 安全中心 / 微信登录：徽标与标题同行 */
+.sec-card > .sec-badge {
+  margin: 0 0 8px;
+}
+.sec-card > .sec-badge + h3 {
+  margin-top: 8px;
+}
+
+
+/* ============ 图标与标题并排（图标内联为标题的一部分，
+   避免「图标砖压在标题上方」的通用模板形态） ============ */
+.title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+.title-row .logo-badge,
+.title-row .sec-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  font-size: 20px;
+}
+.title-row .sec-badge svg {
+  width: 22px;
+  height: 22px;
 }

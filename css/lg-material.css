@@ -483,3 +483,35 @@ body.dark .lg-toast {
     box-shadow: none !important;
   }
 }
+body.dark .auth-card .glass-pill,
+body.dark .auth-card .glass-field,
+body.dark .auth-card .qr-card,
+body.dark .auth-card .otp-box {
+  background: rgba(255, 255, 255, .08);
+  box-shadow: none;
+}
+
+/* ============ 登录页：卡片内的次级容器改用描边分层 ============
+   玻璃卡片内再叠玻璃胶囊/玻璃输入框会形成「卡片套卡片」。
+   此处改为透明底 + 细边框，靠间距与描边建立层级。 */
+.auth-card .glass-pill,
+.auth-card .glass-field,
+.auth-card .otp-box {
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+.auth-card .glass-pill,
+.auth-card .glass-field {
+  border: 1px solid rgba(31, 45, 80, .14);
+}
+.auth-card .otp-box {
+  border: 1px solid rgba(31, 45, 80, .16);
+}
+body.dark .auth-card .glass-pill,
+body.dark .auth-card .glass-field,
+body.dark .auth-card .otp-box {
+  background: transparent !important;
+  box-shadow: none !important;
+}

@@ -46,7 +46,7 @@ for (const p of PRESETS) {
   const s = samples(p.response, p.damping, n);
   const body = s.map(fmt).join(', ');
   console.log(`/* ${p.name}  response=${p.response}s  damping=${p.damping} */`);
-  console.log(`--lgx-spring-${String(p.response).replace('.', '')}-${String(p.damping).replace('.', '')}: linear(${body});`);
+  console.log(`--lgx-ease-${String(p.response).replace('.', '')}-${String(p.damping).replace('.', '')}: linear(${body});`);
   // 诊断：过冲峰值与回摆次数
   const peak = Math.max(...s);
   const t0 = s[0];
