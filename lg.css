@@ -60,8 +60,8 @@ body.dark #auth {
   backdrop-filter: var(--lg-blur);
   border: 1px solid transparent;
   box-shadow:
-    0 18px 50px rgba(14,20,44,.18),
-    0 4px 16px rgba(70,100,190,.16);
+    0 18px 50px rgba(46, 46, 46,.18),
+    0 4px 16px rgba(46, 46, 46,.16);
   isolation: isolate;
 }
 body.dark .lg-auth-card {
@@ -96,7 +96,7 @@ body.dark .lg-auth-card {
 .lg-brand-mark {
   width: 64px; height: 64px; border-radius: 18px;
   display: block; object-fit: cover;
-  box-shadow: 0 10px 26px rgba(10,110,235,.38);
+  box-shadow: 0 10px 26px rgba(46, 46, 46,.38);
 }
 .lg-brand-name {
   font-size: 32px; font-weight: 800; letter-spacing: -.5px;
@@ -131,14 +131,14 @@ body.dark .lg-seg-thumb { background: #2a2e38; }
   min-height: 52px; padding: 0 16px;
   border-radius: 14px;
   background: linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,.42));
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.75), inset 0 -1px 2px rgba(20,30,60,.05);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.75), inset 0 -1px 2px rgba(46, 46, 46,.05);
   transition: box-shadow .16s;
 }
 body.dark .lg-field {
   background: linear-gradient(180deg, rgba(40,44,54,.6), rgba(32,36,44,.45));
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.1);
 }
-.lg-field:focus-within { box-shadow: 0 0 0 4px rgba(10,132,255,.16), inset 0 0 0 1px var(--lg-primary); }
+.lg-field:focus-within { box-shadow: 0 0 0 4px rgba(46, 46, 46,.16), inset 0 0 0 1px var(--lg-primary); }
 .lg-field-ic { width: 20px; height: 20px; display: inline-flex; color: var(--lg-ink-3); flex: none; }
 .lg-field-ic svg { width: 20px; height: 20px; }
 .lg-field input { flex: 1; min-width: 0; font-size: 16px; color: var(--lg-ink); background: none; border: 0; outline: 0; }
@@ -154,11 +154,11 @@ body.dark .lg-field {
   user-select: none; -webkit-tap-highlight-color: transparent; cursor: pointer;
 }
 .lg-btn:active { transform: scale(.95); }
-.lg-btn-primary { background: var(--lg-primary-grad); color: #fff; box-shadow: 0 6px 18px rgba(10,110,235,.32), inset 0 1px 0 rgba(255,255,255,.5); }
+.lg-btn-primary { background: var(--lg-primary-grad); color: #fff; box-shadow: 0 6px 18px rgba(46, 46, 46,.32), inset 0 1px 0 rgba(255,255,255,.5); }
 .lg-btn-primary:active { filter: brightness(.96); }
 .lg-btn-ghost {
   background: var(--lg-face); color: var(--lg-ink);
-  box-shadow: inset 0 0 0 1px rgba(18,24,40,.08);
+  box-shadow: inset 0 0 0 1px rgba(46, 46, 46,.08);
   -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
 }
 .lg-btn-block { width: 100%; }
@@ -184,7 +184,7 @@ body.dark .lg-field {
 .lg-auth-alt .lg-btn-text {
   min-height: 52px; padding: 0 16px; border-radius: 14px;
   background: linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,.42));
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.75), inset 0 -1px 2px rgba(20,30,60,.05);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.75), inset 0 -1px 2px rgba(46, 46, 46,.05);
   color: var(--lg-ink); font-size: 16px; font-weight: 600;
   width: 100%; justify-content: flex-start;
 }
@@ -199,7 +199,7 @@ body.dark .lg-field {
   display: flex; align-items: center; justify-content: center;
   border: 0; cursor: pointer;
   background: rgba(255,255,255,.55);
-  box-shadow: inset 0 0 0 1px rgba(18,24,40,.08);
+  box-shadow: inset 0 0 0 1px rgba(46, 46, 46,.08);
   transition: transform .12s, box-shadow .12s;
 }
 .lg-avatar-opt:active { transform: scale(.9); }
@@ -215,7 +215,7 @@ body.dark .lg-field {
   padding: 22px; border-radius: 30px;
   background: var(--lg-face-strong);
   -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
-  box-shadow: 0 20px 54px rgba(14,20,44,.25);
+  box-shadow: 0 20px 54px rgba(46, 46, 46,.25);
   animation: lg-sheet-in .28s var(--lg-ease) both;
 }
 .lg-overlay.closing .lg-scrim { animation: lg-fade .18s ease reverse both; }
@@ -242,7 +242,7 @@ body.dark .lg-field {
   color: var(--lg-ink);
   background: var(--lg-face-strong);
   -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
-  box-shadow: 0 10px 30px rgba(14,20,44,.18);
+  box-shadow: 0 10px 30px rgba(46, 46, 46,.18);
   animation: lg-toast-in .26s var(--lg-ease) both;
   transition: opacity .2s, transform .2s;
 }
@@ -283,7 +283,7 @@ body.dark .bio-gate { background: rgba(10, 12, 18, .72); }
   padding: 34px 26px 28px;
   border-radius: 30px;
   background: var(--lg-face-strong, rgba(255,255,255,.72));
-  box-shadow: 0 24px 60px rgba(14,20,44,.22);
+  box-shadow: 0 24px 60px rgba(46, 46, 46,.22);
   animation: lg-sheet-in .35s cubic-bezier(.25,.85,.25,1) both;
 }
 body.dark .bio-card {
@@ -296,7 +296,7 @@ body.dark .bio-card {
   display: flex; align-items: center; justify-content: center;
   color: #fff; margin-bottom: 6px;
   background: var(--lg-primary-grad, linear-gradient(160deg,#5aa6ff,#0a6ad8));
-  box-shadow: 0 12px 30px rgba(10,110,235,.4), inset 0 1px 0 rgba(255,255,255,.55);
+  box-shadow: 0 12px 30px rgba(46, 46, 46,.4), inset 0 1px 0 rgba(255,255,255,.55);
 }
 .bio-glyph svg { width: 42px; height: 42px; }
 #bioTitle { font-size: 21px; font-weight: 800; margin: 0; }
@@ -337,7 +337,7 @@ body.dark #bioSub { color: #959eac; }
   --lg-edge-line: inset 0 0 0 1px rgba(255, 255, 255, .62);
   --lg-inner-bevel: inset 0 1px 1px rgba(255, 255, 255, .75), inset 0 -1px 2px rgba(20, 35, 70, .05);
   --glass-shadow: var(--lg-contact), var(--lg-bokeh), var(--lg-edge-line), var(--lg-inner-bevel);
-  --glass-shadow-deep: 0 2px 6px rgba(14, 22, 48, .08), 0 18px 50px rgba(14, 22, 48, .18), 0 40px 90px rgba(60, 90, 170, .12), var(--lg-edge-line), var(--lg-inner-bevel);
+  --glass-shadow-deep: 0 2px 6px rgba(46, 46, 46, .08), 0 18px 50px rgba(46, 46, 46, .18), 0 40px 90px rgba(46, 46, 46, .12), var(--lg-edge-line), var(--lg-inner-bevel);
   /* 折射（CSS 降级档；plus 透镜由 lens-manager 注入真折射） */
   --lg-refract: blur(22px) saturate(170%);
   --lg-refract-strong: blur(26px) saturate(180%);
@@ -445,7 +445,7 @@ input.glass, textarea.glass {
 
 /* ---------- 气泡：玻璃气泡边缘高光（仅玻璃款） ---------- */
 .bubble-glass {
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5), 0 6px 18px rgba(14, 22, 48, .12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5), 0 6px 18px rgba(46, 46, 46, .12);
 }
 
 /* ---------- 可点控件交互（Apple：interactive 只给控件） ---------- */
@@ -457,7 +457,7 @@ button.glass-pill, .qr-btn {
 .btn-primary:active, .btn-ghost:active, .btn-logout:active, .btn-sessions:active,
 .composer-btn:active, .call-btn:active, .icon-btn:active, .quick-btn:active,
 .group-menu-btn:active, button.glass-pill:active, .qr-btn:active { transform: scale(.94); }
-.btn-primary { box-shadow: 0 6px 18px rgba(10, 110, 235, .32), inset 0 1px 0 rgba(255, 255, 255, .45); }
+.btn-primary { box-shadow: 0 6px 18px rgba(46, 46, 46, .32), inset 0 1px 0 rgba(255, 255, 255, .45); }
 
 /* 开关/分段在交互时强调（老类名复用） */
 .dm-slider, .auth-tab, .auth-tabs { transition: transform .28s var(--lg-ease-out), background .28s var(--lg-ease-out), box-shadow .28s var(--lg-ease-out), color .28s var(--lg-ease-out); }
@@ -541,7 +541,7 @@ button.glass-pill, .qr-btn {
   gap: 8px;
   -webkit-backdrop-filter: blur(18px) saturate(180%);
   backdrop-filter: blur(18px) saturate(180%);
-  box-shadow: 0 1px 0 rgba(255,255,255,.45) inset, 0 4px 14px rgba(14,20,44,.06);
+  box-shadow: 0 1px 0 rgba(255,255,255,.45) inset, 0 4px 14px rgba(46, 46, 46,.06);
   transition: transform .25s var(--lg-ease), background .25s var(--lg-ease), box-shadow .25s var(--lg-ease), color .25s var(--lg-ease);
 }
 #profileView .btn-sessions:hover,
@@ -572,7 +572,7 @@ button.glass-pill, .qr-btn {
   border: 1px solid rgba(255,255,255,.65);
   -webkit-backdrop-filter: blur(14px) saturate(160%);
   backdrop-filter: blur(14px) saturate(160%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 1px 2px rgba(31,45,80,.04);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 1px 2px rgba(46, 46, 46,.04);
   margin: 6px 0;
   transition: background .2s var(--ease-out);
 }
@@ -666,7 +666,7 @@ body:not(.dark)::before {
 /* 胶囊 / 小控件用轻档，避免过度晕影；基层给果味渐变面（topbar/composer 由 !important 保留强面） */
 .glass-pill {
   background: var(--lg2-face);
-  box-shadow: 0 1px 2px rgba(20,36,80,.10), 0 6px 16px rgba(90,70,150,.12), var(--lg2-bevel);
+  box-shadow: 0 1px 2px rgba(46, 46, 46,.10), 0 6px 16px rgba(46, 46, 46,.12), var(--lg2-bevel);
 }
 
 /* ---------- 4. 高光层：静态高光带 + 环境色 + 高光色散（复用伪元素，无 padding 描边） ---------- */
@@ -702,7 +702,7 @@ body:not(.dark)::before {
   background: rgba(255,255,255,.5);
   border-radius: 18px;
   border-color: rgba(255,255,255,.62);
-  box-shadow: 0 4px 12px rgba(20,40,100,.10);
+  box-shadow: 0 4px 12px rgba(46, 46, 46,.10);
 }
 body.dark .bubble-glass {
   background: rgba(30,34,44,.55);
@@ -765,7 +765,7 @@ body.dark.theme-home {
   --primary-grad: linear-gradient(135deg, #e8d7a6 0%, #d8c07a 55%, #bd9f5f 100%);
   --primary-soft: rgba(216,192,122,.16);
   --nav-grad: linear-gradient(135deg, rgba(232,215,166,.62) 0%, rgba(216,192,122,.62) 55%, rgba(189,159,95,.65) 100%);
-  --nav-shadow: 0 6px 20px rgba(176,148,92,.42);
+  --nav-shadow: 0 6px 20px rgba(46, 46, 46,.42);
 }
 
 /* 6a. 安全区适配（calc 相加保留原 padding，零安全区时无副作用） */
@@ -921,7 +921,7 @@ body.dark .composer { background: #1b1d25 !important; border-color: #3d8dff !imp
   backdrop-filter: none !important;
   border: 1px solid rgba(20,45,90,.16) !important;
   border-top-color: rgba(30,60,120,.32) !important;
-  box-shadow: 0 1px 4px rgba(15,20,45,.06) !important;
+  box-shadow: 0 1px 4px rgba(46, 46, 46,.06) !important;
 }
 body.dark .glass:not(.home-hero):not(.feature-card):not(.glass-pill),
 body.dark .sec-card, body.dark .confirm-card, body.dark .admin-panel,

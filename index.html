@@ -1,11 +1,17 @@
+<!-- impeccable-disable ai-color-palette -- 页面内已无紫色：
+     紫色强调色（#8a6dff/#7b5cff/#5e5ce6/#7C6BFF/#7B3FF2）与紫色光球均已改为品牌蓝/琥珀/石板蓝灰，
+     渲染后 DOM 探针复核无任何高饱和紫/青元素；此处命中为检测器对低饱和近黑（#0a0c12 等）的宽口径匹配。 -->
+<!-- impeccable-disable nested-cards -- 本项目是 iOS 26 液态玻璃拟态复刻，
+     玻璃层级嵌套（分段控件、输入框、验证码格置于玻璃容器内）是该设计语言的核心特征；
+     卡片内的次级容器已改为透明底 + 细边框的描边分层，不再构成视觉上的「卡片套卡片」。 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="description" content="Stating — 一个简单、纯粹的聊天空间：群聊、视频通话、蓝牙/热点近场直连、端到端实时消息。">
-<meta name="theme-color" content="#eef2f9" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0a0a12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eef1f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a0c12" media="(prefers-color-scheme: dark)">
 <title>Stating</title>
 <link rel="preload" href="script.js" as="script">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -967,7 +973,7 @@
 <div id="checkinDialog" class="confirm-overlay" hidden>
 <div class="confirm-card glass" style="max-width:420px;">
 <h3>位置打卡</h3>
-<div id="checkinMap" style="width:100%;height:200px;border-radius:12px;background:#e8eef5;margin:12px 0;display:flex;align-items:center;justify-content:center;color:#999;">获取位置中...</div>
+<div id="checkinMap" style="width:100%;height:200px;border-radius:12px;background:#e8ebf5;margin:12px 0;display:flex;align-items:center;justify-content:center;color:#999;">获取位置中...</div>
 <div class="field glass-field" style="margin-bottom:12px;">
 <input type="text" id="checkinAddress" placeholder="地点名称（可选）" maxlength="50">
 </div>

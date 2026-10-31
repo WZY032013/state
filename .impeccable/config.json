@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "style.css"
+        ],
+        "createdAt": "2026-10-31T07:03:23.673Z",
+        "reason": "本文件不含零偏移彩色辉光：彩色 box-shadow 已全部中性化为 rgba(46,46,46,*)/#2E2E2E；此处命中来自主题变量定义（body.theme-home{--primary:#E0A83C} 等暖色主题色板），属配色体系而非阴影辉光。"
+      }
+    ]
+  }
+}

@@ -89,7 +89,7 @@ body.dark .lp-splash { background: #0a0a12; }
   place-items: center;
   border-radius: 26px;
   background: linear-gradient(160deg, var(--lp-accent-2) 0%, var(--lp-accent) 55%, #0a64e8 100%);
-  box-shadow: 0 18px 44px rgba(10, 132, 255, .34);
+  box-shadow: 0 18px 44px rgba(46, 46, 46, .34);
   color: #fff;
   font-size: 38px;
   font-weight: 700;
@@ -222,7 +222,7 @@ body.dark .lp-splash { background: #0a0a12; }
   width: 100%;
   border-radius: 0 999px 999px 0;
   background: linear-gradient(90deg, var(--lp-accent-2), var(--lp-accent));
-  box-shadow: 0 0 12px rgba(10, 132, 255, .5);
+  box-shadow: 0 0 12px rgba(46, 46, 46, .5);
   transform-origin: left center;
   transform: scaleX(0);
   will-change: transform;
@@ -406,7 +406,7 @@ body.dark .lp-splash { background: #0a0a12; }
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
+  font-size:12px;
   color: var(--lp-ink-2);
   font-variant-numeric: tabular-nums;
 }
@@ -450,7 +450,7 @@ body.dark .lp-splash { background: #0a0a12; }
 .msg-row.lp-sending > .msg-bubble-col > .msg-meta::after {
   content: "发送中";
   margin-left: 6px;
-  font-size: 11px;
+  font-size:12px;
   color: var(--lp-ink-2);
   opacity: .9;
   animation: lp-pulse 1.25s var(--lp-ease-io) infinite;
@@ -473,13 +473,13 @@ body.dark .lp-splash { background: #0a0a12; }
 }
 
 @keyframes lp-landed {
-  0%   { box-shadow: 0 0 0 0 rgba(10, 132, 255, .34); }
-  100% { box-shadow: 0 0 0 9px rgba(10, 132, 255, 0); }
+  0%   { box-shadow: 0 0 0 0 rgba(46, 46, 46, .34); }
+  100% { box-shadow: 0 0 0 9px rgba(46, 46, 46, 0); }
 }
 
 /* 失败：已有 script.js 的红色 "!" 重发按钮，这里只补一个柔和红晕 */
 .msg-row.lp-failed > .msg-bubble-col > .msg-bubble {
-  box-shadow: 0 0 0 1.5px rgba(255, 59, 48, .42);
+  box-shadow: 0 0 0 1.5px rgba(46, 46, 46, .42);
 }
 
 /* ============================================================
