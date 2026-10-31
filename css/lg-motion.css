@@ -42,8 +42,8 @@
   :root {
     --lgx-spring: cubic-bezier(.22, 1, .36, 1);
     --lgx-press: cubic-bezier(.3, .8, .4, 1);
-    --lgx-sheet: cubic-bezier(.34, 1.2, .64, 1);
-    --lgx-momentum: cubic-bezier(.34, 1.36, .64, 1);
+    --lgx-sheet: cubic-bezier(.16, 1, .3, 1), .64, 1);
+    --lgx-momentum: cubic-bezier(.16, 1, .3, 1), .64, 1);
   }
 }
 
